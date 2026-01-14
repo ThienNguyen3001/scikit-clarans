@@ -65,11 +65,11 @@ print("Predictions:", predictions)
 
 - **`n_clusters`** *(int, default=8)*: The number of clusters to form as well as the number of medoids to generate.
 - **`numlocal`** *(int, default=2)*: The number of local minima to find. The algorithm runs the local search `numlocal` times and returns the best result.
-- **`maxneighbor`** *(int, default=None)*: Maximum number of neighbors to examine during local search. If `None`, it is set to $max(250, 1.25\% \times k(n-k))$.
+- **`maxneighbor`** *(int, default=None)*: Maximum number of neighbors to examine during local search. If `None`, it is set to `max(250, 1.25% * k*(n-k))`.
 - **`max_iter`** *(int, default=300)*: Maximum number of hops (swaps) allowed in a single local search to prevent infinite loops.
 - **`init`** *({'random', 'heuristic', 'k-medoids++', 'build', array-like}, default='random')*:
   - `'random'`: Selects $k$ observations at random.
   - `'heuristic'`: Picks $k$ points with smallest sum distance to all other points.
   - `'k-medoids++'`: Smart initialization inspired by k-means++ for better convergence.
-  - `'build'`: Deterministic greedy initialization (like PAM). High quality but slower ($O(N^2)$).
+  - `'build'`: Deterministic greedy initialization (like PAM). High quality but slower (`O(N^2)`).
   - `array-like`: Custom initial centers of shape `(n_clusters, n_features)`.
