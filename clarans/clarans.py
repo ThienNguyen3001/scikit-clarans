@@ -102,11 +102,17 @@ class CLARANS(ClusterMixin, BaseEstimator):
             Fitted estimator.
         """
 
-        if hasattr(self, "_validate_data"):
-            X = self._validate_data(X, ensure_min_samples=2)
-        else:
-            X = check_array(X, ensure_min_samples=2)
-            self.n_features_in_ = X.shape[1]
+        try:
+            # Try using validate_data from sklearn.utils.validation (newer sklearn versions)
+            from sklearn.utils.validation import validate_data
+            X = validate_data(self, X=X, ensure_min_samples=2)
+        except ImportError:
+            # Fallback to _validate_data (older sklearn versions / internal method)
+            if hasattr(self, "_validate_data"):
+                X = self._validate_data(X, ensure_min_samples=2)
+            else:
+                X = check_array(X, ensure_min_samples=2)
+                self.n_features_in_ = X.shape[1]
 
         random_state = check_random_state(self.random_state)
         n_samples, n_features = X.shape
@@ -207,7 +213,7 @@ class CLARANS(ClusterMixin, BaseEstimator):
                             set(range(n_samples)) - set(current_medoids_indices)
                         )
                         if not available_candidates:
-                            break  
+                            break
                         random_non_medoid_candidate = random_state.choice(
                             available_candidates
                         )
@@ -224,7 +230,7 @@ class CLARANS(ClusterMixin, BaseEstimator):
                 if neighbor_cost < current_cost:
                     current_medoids_indices = neighbor_medoids_indices
                     current_cost = neighbor_cost
-                    i = 0  
+                    i = 0
                     iter_count += 1
                 else:
                     i += 1
@@ -260,15 +266,22 @@ class CLARANS(ClusterMixin, BaseEstimator):
         """
         check_is_fitted(self)
 
-        if hasattr(self, "_validate_data"):
-            X = self._validate_data(X, reset=False)
-        else:
-            X = check_array(X)
-            if hasattr(self, "n_features_in_") and X.shape[1] != self.n_features_in_:
-                raise ValueError(
-                    f"X has {X.shape[1]} features, but CLARANS is expecting "
-                    f"{self.n_features_in_} features as input"
-                )
+        try:
+            # Try using validate_data from sklearn.utils.validation (newer sklearn versions)
+            from sklearn.utils.validation import validate_data
+            X = validate_data(self, X=X, reset=False)
+        except ImportError:
+            # Fallback to _validate_data (older sklearn versions / internal method)
+            if hasattr(self, "_validate_data"):
+                X = self._validate_data(X, reset=False)
+            else:
+                X = check_array(X)
+                # Check n_features manually if necessary
+                if hasattr(self, "n_features_in_") and X.shape[1] != self.n_features_in_:
+                    raise ValueError(
+                        f"X has {X.shape[1]} features, but CLARANS is expecting "
+                        f"{self.n_features_in_} features as input"
+                    )
 
         labels, _ = pairwise_distances_argmin_min(
             X, self.cluster_centers_, metric=self.metric
