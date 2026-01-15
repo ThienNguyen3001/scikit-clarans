@@ -6,7 +6,7 @@ def initialize_heuristic(X, n_clusters, metric="euclidean"):
     """
     Picks the n_clusters points with the smallest sum distance to every other point.
     """
-    # This requires O(N^2) complexity to compute all pairwise distances
+    # This requires O(N^2) complexity
     D = pairwise_distances(X, metric=metric)
     dist_sums = np.sum(D, axis=1)
     current_medoids_indices = np.argsort(dist_sums)[:n_clusters]
@@ -21,7 +21,7 @@ def initialize_build(X, n_clusters, metric="euclidean"):
     medoids = []
 
     # Calculate full distance matrix potentially (expensive) or compute on fly
-    # Using euclidean_distances or pairwise_distances
+    # Using euclidean_distances or other metrics in pairwise_distances
     D = pairwise_distances(X, metric=metric)
 
     dist_sums = D.sum(axis=1)

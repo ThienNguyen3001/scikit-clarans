@@ -1,7 +1,3 @@
-"""
-Test suite để kiểm tra tính đúng đắn của logic trong CLARANS algorithm.
-Các test này chỉ kiểm tra logic, không sửa đổi code gốc.
-"""
 import unittest
 import numpy as np
 from sklearn.datasets import make_blobs
@@ -76,7 +72,6 @@ class TestInitializationLogic(unittest.TestCase):
     
     def test_initialize_kmedoids_plusplus_returns_unique_medoids(self):
         """K-medoids++ should return unique medoid indices"""
-        # Test nhiều lần với random state khác nhau
         for seed in range(10):
             rng = np.random.RandomState(seed)
             medoids = initialize_k_medoids_plus_plus(self.X, 3, rng, 'euclidean')
@@ -119,7 +114,6 @@ class TestCostCalculation(unittest.TestCase):
     
     def test_cost_is_zero_when_all_points_are_medoids(self):
         """Cost should be zero when every point is a medoid"""
-        # Tạo dataset nhỏ để mọi điểm đều là medoid
         X_small = np.array([[0, 0], [1, 1], [2, 2]])
         medoids = np.array([0, 1, 2])
         cost = calculate_cost(X_small, medoids, 'euclidean')
@@ -340,8 +334,7 @@ class TestDeterminism(unittest.TestCase):
         clarans2 = CLARANS(n_clusters=3, numlocal=1, maxneighbor=30, random_state=999)
         clarans2.fit(self.X)
         
-        # Results may differ (though not guaranteed)
-        # Just check they both work
+        # Results may differ
         self.assertEqual(len(clarans1.medoid_indices_), 3)
         self.assertEqual(len(clarans2.medoid_indices_), 3)
 
@@ -414,7 +407,7 @@ class TestMaxIterBehavior(unittest.TestCase):
                          max_iter=5, random_state=42)
         clarans.fit(self.X)
         
-        # n_iter_ should be limited by max_iter (times numlocal)
+        # n_iter_ should be limited by max_iter
         # Note: actual implementation may vary
         self.assertTrue(hasattr(clarans, 'n_iter_'))
     

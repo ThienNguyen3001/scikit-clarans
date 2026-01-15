@@ -200,12 +200,11 @@ class CLARANS(ClusterMixin, BaseEstimator):
                 random_medoid_idx = random_state.randint(0, self.n_clusters)
 
                 # Pick a random non-medoid point
-                # Use set for O(1) membership check instead of O(k) list check
                 medoid_set = set(current_medoids_indices)
                 available_candidates = list(set(range(n_samples)) - medoid_set)
                 
                 if not available_candidates:
-                    # Edge case: all points are medoids (should never happen with valid input)
+                    # Edge case: all points are medoids
                     break
                     
                 random_non_medoid_candidate = random_state.choice(available_candidates)
@@ -266,7 +265,6 @@ class CLARANS(ClusterMixin, BaseEstimator):
                 X = self._validate_data(X, reset=False)
             else:
                 X = check_array(X)
-                # Check n_features manually if necessary
                 if hasattr(self, "n_features_in_") and X.shape[1] != self.n_features_in_:
                     raise ValueError(
                         f"X has {X.shape[1]} features, but CLARANS is expecting "
