@@ -187,7 +187,6 @@ class CLARANS(ClusterMixin, BaseEstimator):
             else:
                 raise ValueError(f"Unknown init method: {self.init}")
 
-            current_medoids_indices.sort()
 
             current_cost = calculate_cost(X, current_medoids_indices, self.metric)
 
