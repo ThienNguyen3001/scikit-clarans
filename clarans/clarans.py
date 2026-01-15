@@ -200,24 +200,15 @@ class CLARANS(ClusterMixin, BaseEstimator):
                 random_medoid_idx = random_state.randint(0, self.n_clusters)
 
                 # Pick a random non-medoid point
-                # Safety break to avoid infinite loop
-                candidate_search_attempts = 0
-                max_attempts = 1000
-                while True:
-                    random_non_medoid_candidate = random_state.randint(0, n_samples)
-                    if random_non_medoid_candidate not in current_medoids_indices:
-                        break
-                    candidate_search_attempts += 1
-                    if candidate_search_attempts > max_attempts:
-                        available_candidates = list(
-                            set(range(n_samples)) - set(current_medoids_indices)
-                        )
-                        if not available_candidates:
-                            break
-                        random_non_medoid_candidate = random_state.choice(
-                            available_candidates
-                        )
-                        break
+                # Use set for O(1) membership check instead of O(k) list check
+                medoid_set = set(current_medoids_indices)
+                available_candidates = list(set(range(n_samples)) - medoid_set)
+                
+                if not available_candidates:
+                    # Edge case: all points are medoids (should never happen with valid input)
+                    break
+                    
+                random_non_medoid_candidate = random_state.choice(available_candidates)
 
                 neighbor_medoids_indices = current_medoids_indices.copy()
                 neighbor_medoids_indices[random_medoid_idx] = (
