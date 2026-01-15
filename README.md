@@ -57,7 +57,7 @@ predictions = clarans.predict(new_points)
 print("Predictions:", predictions)
 ```
 
-## API Reference
+## API Reference (Referenced from sklearn_extra.cluster.KMedoids)
 
 ### `CLARANS(n_clusters=8, numlocal=2, maxneighbor=None, max_iter=300, init='random', metric='euclidean', random_state=None)`
 
