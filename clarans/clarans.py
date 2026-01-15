@@ -214,7 +214,6 @@ class CLARANS(ClusterMixin, BaseEstimator):
                 neighbor_medoids_indices[random_medoid_idx] = (
                     random_non_medoid_candidate
                 )
-                neighbor_medoids_indices.sort()
 
                 neighbor_cost = calculate_cost(X, neighbor_medoids_indices, self.metric)
 
