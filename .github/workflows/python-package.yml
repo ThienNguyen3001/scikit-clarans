@@ -12,7 +12,7 @@ jobs:
     strategy:
       fail-fast: false
       matrix:
-        python-version: ["3.6", "3.7", "3.8", "3.9", "3.10", "3.11", "3.12", "3.13", "3.14"]
+        python-version: ["3.9", "3.10", "3.11", "3.12", "3.13"]
 
     steps:
     - uses: actions/checkout@v4
@@ -32,7 +32,7 @@ jobs:
 
     - name: Lint with flake8
       run: |
-        flake8 clarans --count --statistics --max-line-length=100 --extend-ignore=E203, W293, W291
+        flake8 clarans clarans/tests --count --statistics --max-line-length=100 --extend-ignore=E203,W291,W293
 
     - name: Test with pytest and coverage
       run: |
