@@ -187,7 +187,6 @@ class CLARANS(ClusterMixin, BaseEstimator):
             else:
                 raise ValueError(f"Unknown init method: {self.init}")
 
-
             current_cost = calculate_cost(X, current_medoids_indices, self.metric)
 
             i = 0
@@ -201,11 +200,11 @@ class CLARANS(ClusterMixin, BaseEstimator):
                 # Pick a random non-medoid point
                 medoid_set = set(current_medoids_indices)
                 available_candidates = list(set(range(n_samples)) - medoid_set)
-                
+
                 if not available_candidates:
                     # Edge case: all points are medoids
                     break
-                    
+
                 random_non_medoid_candidate = random_state.choice(available_candidates)
 
                 neighbor_medoids_indices = current_medoids_indices.copy()

@@ -7,7 +7,7 @@ import time
 from sklearn.datasets import make_blobs
 from sklearn.metrics import pairwise_distances_argmin_min
 from clarans import CLARANS
-from clarans.initialization import (initialize_build, initialize_heuristic, 
+from clarans.initialization import (initialize_build, initialize_heuristic,
                                     initialize_k_medoids_plus_plus)
 from clarans.utils import calculate_cost
 
@@ -28,7 +28,8 @@ def test_1_basic_functionality():
     assert hasattr(clarans, 'cluster_centers_'), "Missing cluster_centers_"
     assert hasattr(clarans, 'labels_'), "Missing labels_"
     
-    assert len(clarans.medoid_indices_) == 3, f"Expected 3 medoids, got {len(clarans.medoid_indices_)}"
+    assert len(clarans.medoid_indices_) == 3, \
+        f"Expected 3 medoids, got {len(clarans.medoid_indices_)}"
     assert len(clarans.labels_) == 100, f"Expected 100 labels, got {len(clarans.labels_)}"
     
     print(f"[OK] Medoid indices: {clarans.medoid_indices_}")
@@ -82,8 +83,11 @@ def test_3_initialization_methods():
     for method in init_methods:
         print(f"\nTesting init='{method}'...")
         try:
-            clarans = CLARANS(n_clusters=3, numlocal=1, maxneighbor=30, 
-                            init=method, random_state=42)
+            clarans = CLARANS(n_clusters=3, 
+                              numlocal=1, 
+                              maxneighbor=30, 
+                              init=method, 
+                              random_state=42)
             clarans.fit(X)
             
             medoids = clarans.medoid_indices_
@@ -206,7 +210,8 @@ def test_5_cost_calculation():
         
         match = np.isclose(cost, expected_cost)
         status = "OK" if match else "FAIL"
-        print(f"{status} Test case {i+1}: calculated={cost:.4f}, expected={expected_cost:.4f}, match={match}")
+        print(f"{status} Test case {i+1}: calculated={cost:.4f}, "
+              "expected={expected_cost:.4f}, match={match}")
         
         if not match:
             all_correct = False
@@ -235,7 +240,9 @@ def test_6_edge_case_all_same_points():
         print(f"Unique medoids: {unique_medoids}")
         
         if unique_medoids != 3:
-            print(f"[FAIL] TEST 6 FAILED: Only {unique_medoids} unique medoids for identical points")
+            print(
+                f"[FAIL] TEST 6 FAILED: Only {unique_medoids} unique medoids for identical points"
+            )
         assert unique_medoids == 3, "Expected unique medoids even when all points are identical"
         print("[OK] TEST 6 PASSED: Handled identical points correctly")
             
@@ -259,14 +266,16 @@ def test_7_candidate_selection_performance():
     ]
     
     for n_samples, n_clusters in test_configs:
-        X, y = make_blobs(n_samples=n_samples, centers=n_clusters, 
-                         n_features=2, random_state=42)
+        X, y = make_blobs(n_samples=n_samples, 
+                          centers=n_clusters, 
+                          n_features=2, 
+                          random_state=42)
         
         print(f"\nTesting n_samples={n_samples}, n_clusters={n_clusters}...")
         
         start_time = time.time()
         clarans = CLARANS(n_clusters=n_clusters, numlocal=1, maxneighbor=50, 
-                         random_state=42)
+                          random_state=42)
         clarans.fit(X)
         elapsed = time.time() - start_time
         
@@ -292,7 +301,7 @@ def test_8_max_iter_parameter():
     
     for max_iter in max_iter_values:
         clarans = CLARANS(n_clusters=3, numlocal=2, maxneighbor=100, 
-                         max_iter=max_iter, random_state=42)
+                          max_iter=max_iter, random_state=42)
         clarans.fit(X)
         
         print(f"max_iter={str(max_iter):<6} -> n_iter_={clarans.n_iter_}")
@@ -333,7 +342,10 @@ def test_9_predict_consistency():
     labels_new = clarans.predict(X_new)
     
     print(f"[OK] Predict on new data: {labels_new[:10]}")
-    print(f"  All labels in range [0, {clarans.n_clusters-1}]: {np.all((labels_new >= 0) & (labels_new < clarans.n_clusters))}")
+    print(
+        f"All labels in range [0, {clarans.n_clusters-1}]: "
+        f"{np.all((labels_new >= 0) & (labels_new < clarans.n_clusters))}"
+    )
     
     if not match:
         print("\n[FAIL] TEST 9 FAILED")

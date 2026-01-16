@@ -30,7 +30,7 @@ class TestInitializationLogic(unittest.TestCase):
         medoids = initialize_heuristic(self.X, 3, 'euclidean')
         unique_medoids = np.unique(medoids)
         self.assertEqual(len(unique_medoids), 3, 
-                        f"Expected 3 unique medoids, got {len(unique_medoids)}: {medoids}")
+                         f"Expected 3 unique medoids, got {len(unique_medoids)}: {medoids}")
     
     def test_initialize_heuristic_returns_smallest_sum_distance(self):
         """Heuristic should select points with smallest sum distance"""
@@ -39,7 +39,7 @@ class TestInitializationLogic(unittest.TestCase):
         dist_sums = np.sum(D, axis=1)
         expected = np.argsort(dist_sums)[:3]
         np.testing.assert_array_equal(medoids, expected,
-                                     "Heuristic should pick points with smallest distance sums")
+                                      "Heuristic should pick points with smallest distance sums")
     
     def test_initialize_build_returns_correct_count(self):
         """BUILD init should return exactly n_clusters medoids"""
@@ -52,7 +52,7 @@ class TestInitializationLogic(unittest.TestCase):
         medoids = initialize_build(self.X, 3, 'euclidean')
         unique_medoids = np.unique(medoids)
         self.assertEqual(len(unique_medoids), 3,
-                        f"Expected 3 unique medoids, got {len(unique_medoids)}: {medoids}")
+                         f"Expected 3 unique medoids, got {len(unique_medoids)}: {medoids}")
     
     def test_initialize_build_first_medoid_is_most_central(self):
         """BUILD should pick most central point first"""
@@ -60,8 +60,10 @@ class TestInitializationLogic(unittest.TestCase):
         D = pairwise_distances(self.X, metric='euclidean')
         dist_sums = D.sum(axis=1)
         expected_first = np.argmin(dist_sums)
-        self.assertEqual(medoids[0], expected_first,
-                        f"First medoid should be most central: expected {expected_first}, got {medoids[0]}")
+        self.assertEqual(
+            medoids[0], expected_first,
+            f"First medoid should be most central: expected {expected_first}, got {medoids[0]}"
+        )
     
     def test_initialize_kmedoids_plusplus_returns_correct_count(self):
         """K-medoids++ should return exactly n_clusters medoids"""
@@ -76,15 +78,17 @@ class TestInitializationLogic(unittest.TestCase):
             rng = np.random.RandomState(seed)
             medoids = initialize_k_medoids_plus_plus(self.X, 3, rng, 'euclidean')
             unique_medoids = np.unique(medoids)
-            self.assertEqual(len(unique_medoids), 3,
-                            f"Seed {seed}: Expected 3 unique medoids, got {len(unique_medoids)}: {medoids}")
+            self.assertEqual(
+                len(unique_medoids), 3,
+                f"Seed {seed}: Expected 3 unique medoids, got {len(unique_medoids)}: {medoids}"
+            )
     
     def test_initialize_kmedoids_plusplus_indices_in_range(self):
         """K-medoids++ indices should be valid array indices"""
         rng = np.random.RandomState(42)
         medoids = initialize_k_medoids_plus_plus(self.X, 3, rng, 'euclidean')
         self.assertTrue(all(0 <= idx < len(self.X) for idx in medoids),
-                       "All medoid indices should be within valid range")
+                        "All medoid indices should be within valid range")
 
 
 class TestCostCalculation(unittest.TestCase):
@@ -110,7 +114,7 @@ class TestCostCalculation(unittest.TestCase):
         expected_cost = np.sum(min_dists)
         
         self.assertAlmostEqual(cost, expected_cost, places=10,
-                              msg=f"Cost mismatch: got {cost}, expected {expected_cost}")
+                               msg=f"Cost mismatch: got {cost}, expected {expected_cost}")
     
     def test_cost_is_zero_when_all_points_are_medoids(self):
         """Cost should be zero when every point is a medoid"""
@@ -129,7 +133,7 @@ class TestCostCalculation(unittest.TestCase):
             _, min_dists = pairwise_distances_argmin_min(self.X, medoid_points, metric=metric)
             expected = np.sum(min_dists)
             self.assertAlmostEqual(cost, expected, places=10,
-                                  msg=f"Cost mismatch for {metric} metric")
+                                   msg=f"Cost mismatch for {metric} metric")
 
 
 class TestCLARANSAlgorithmLogic(unittest.TestCase):
@@ -145,13 +149,13 @@ class TestCLARANSAlgorithmLogic(unittest.TestCase):
         
         for idx in clarans.medoid_indices_:
             self.assertTrue(0 <= idx < len(self.X), 
-                           f"Medoid index {idx} out of range")
+                            f"Medoid index {idx} out of range")
         
         # Verify cluster_centers_ are actual rows from X
         for i, center in enumerate(clarans.cluster_centers_):
             medoid_idx = clarans.medoid_indices_[i]
             np.testing.assert_array_equal(center, self.X[medoid_idx],
-                                         f"Cluster center {i} doesn't match X[{medoid_idx}]")
+                                          f"Cluster center {i} doesn't match X[{medoid_idx}]")
     
     def test_medoids_are_unique(self):
         """All medoids should be unique"""
@@ -161,7 +165,7 @@ class TestCLARANSAlgorithmLogic(unittest.TestCase):
             
             unique_count = len(np.unique(clarans.medoid_indices_))
             self.assertEqual(unique_count, 3,
-                            f"Seed {seed}: Expected 3 unique medoids, got {unique_count}")
+                             f"Seed {seed}: Expected 3 unique medoids, got {unique_count}")
     
     def test_labels_are_valid(self):
         """Labels should be in range [0, n_clusters)"""
@@ -169,7 +173,7 @@ class TestCLARANSAlgorithmLogic(unittest.TestCase):
         clarans.fit(self.X)
         
         self.assertTrue(all(0 <= label < 3 for label in clarans.labels_),
-                       "All labels should be in valid range")
+                        "All labels should be in valid range")
     
     def test_predict_matches_labels_on_training_data(self):
         """predict(X) on training data should match labels_"""
@@ -178,7 +182,7 @@ class TestCLARANSAlgorithmLogic(unittest.TestCase):
         
         predicted = clarans.predict(self.X)
         np.testing.assert_array_equal(predicted, clarans.labels_,
-                                     "predict(X) should match labels_ on training data")
+                                      "predict(X) should match labels_ on training data")
     
     def test_local_search_improves_or_maintains_cost(self):
         """Each numlocal iteration should find local minimum"""
@@ -186,10 +190,6 @@ class TestCLARANSAlgorithmLogic(unittest.TestCase):
         clarans.fit(self.X)
         
         final_cost = calculate_cost(self.X, clarans.medoid_indices_, 'euclidean')
-        
-        # Cost should be less than or equal to random initialization
-        random_medoids = np.random.RandomState(99).choice(100, 3, replace=False)
-        random_cost = calculate_cost(self.X, random_medoids, 'euclidean')
         
         # Final cost should generally be better (lower)
         # Note: This is probabilistic, so we just check it's reasonable
@@ -204,8 +204,10 @@ class TestCLARANSAlgorithmLogic(unittest.TestCase):
         clarans.fit(self.X)
         
         expected_maxneighbor = max(250, int(0.0125 * n_clusters * (n_samples - n_clusters)))
-        self.assertEqual(clarans.maxneighbor_, expected_maxneighbor,
-                        f"maxneighbor_ should be {expected_maxneighbor}, got {clarans.maxneighbor_}")
+        self.assertEqual(
+            clarans.maxneighbor_, expected_maxneighbor,
+            f"maxneighbor_ should be {expected_maxneighbor}, got {clarans.maxneighbor_}"
+        )
     
     def test_maxneighbor_custom_value(self):
         """Custom maxneighbor should be used when provided"""
@@ -214,7 +216,7 @@ class TestCLARANSAlgorithmLogic(unittest.TestCase):
         clarans.fit(self.X)
         
         self.assertEqual(clarans.maxneighbor_, custom_maxneighbor,
-                        f"maxneighbor_ should be {custom_maxneighbor}")
+                         f"maxneighbor_ should be {custom_maxneighbor}")
 
 
 class TestEdgeCases(unittest.TestCase):
@@ -230,7 +232,7 @@ class TestEdgeCases(unittest.TestCase):
         # Should have 3 unique medoid indices (even if points are identical)
         unique_medoids = len(np.unique(clarans.medoid_indices_))
         self.assertEqual(unique_medoids, 3, 
-                        f"Should have 3 unique medoids, got {unique_medoids}")
+                         f"Should have 3 unique medoids, got {unique_medoids}")
     
     def test_two_clusters(self):
         """Algorithm should work with 2 clusters"""
@@ -322,9 +324,9 @@ class TestDeterminism(unittest.TestCase):
         clarans2.fit(self.X)
         
         np.testing.assert_array_equal(clarans1.medoid_indices_, clarans2.medoid_indices_,
-                                     "Same random_state should give same medoids")
+                                      "Same random_state should give same medoids")
         np.testing.assert_array_equal(clarans1.labels_, clarans2.labels_,
-                                     "Same random_state should give same labels")
+                                      "Same random_state should give same labels")
     
     def test_different_random_state_may_give_different_results(self):
         """Different random_state may give different results"""
@@ -352,25 +354,25 @@ class TestInitializationConsistency(unittest.TestCase):
         for method in init_methods:
             with self.subTest(init=method):
                 clarans = CLARANS(n_clusters=3, numlocal=2, maxneighbor=50, 
-                                 init=method, random_state=42)
+                                  init=method, random_state=42)
                 clarans.fit(self.X)
                 
                 # Check medoids are valid
                 self.assertEqual(len(clarans.medoid_indices_), 3,
-                               f"{method}: Should have 3 medoids")
+                                 f"{method}: Should have 3 medoids")
                 self.assertEqual(len(np.unique(clarans.medoid_indices_)), 3,
-                               f"{method}: Medoids should be unique")
+                                 f"{method}: Medoids should be unique")
                 
                 # Check labels are valid
                 self.assertEqual(len(clarans.labels_), 100,
-                               f"{method}: Should have 100 labels")
-                self.assertTrue(all(0 <= l < 3 for l in clarans.labels_),
-                              f"{method}: Labels should be in [0, 3)")
+                                 f"{method}: Should have 100 labels")
+                self.assertTrue(all(0 <= _ < 3 for _ in clarans.labels_),
+                                f"{method}: Labels should be in [0, 3)")
                 
                 # Check clustering quality (silhouette score should be reasonable)
                 score = silhouette_score(self.X, clarans.labels_)
                 self.assertGreater(score, -0.5,  # Very loose bound
-                                 f"{method}: Silhouette score too low: {score}")
+                                   f"{method}: Silhouette score too low: {score}")
 
 
 class TestK_MedoidsPlusPlusLogic(unittest.TestCase):
@@ -392,7 +394,7 @@ class TestK_MedoidsPlusPlusLogic(unittest.TestCase):
         
         self.assertEqual(len(medoids), 3)
         self.assertEqual(len(np.unique(medoids)), 3, 
-                        "Should have 3 unique medoids even with identical points")
+                         "Should have 3 unique medoids even with identical points")
 
 
 class TestMaxIterBehavior(unittest.TestCase):
@@ -404,7 +406,7 @@ class TestMaxIterBehavior(unittest.TestCase):
     def test_max_iter_limits_iterations(self):
         """max_iter should limit the number of improvements"""
         clarans = CLARANS(n_clusters=3, numlocal=1, maxneighbor=1000, 
-                         max_iter=5, random_state=42)
+                          max_iter=5, random_state=42)
         clarans.fit(self.X)
         
         # n_iter_ should be limited by max_iter
@@ -414,7 +416,7 @@ class TestMaxIterBehavior(unittest.TestCase):
     def test_none_max_iter_allows_unlimited(self):
         """max_iter=None should allow unlimited iterations"""
         clarans = CLARANS(n_clusters=3, numlocal=1, maxneighbor=50, 
-                         max_iter=None, random_state=42)
+                          max_iter=None, random_state=42)
         clarans.fit(self.X)
         
         # Should complete without error
