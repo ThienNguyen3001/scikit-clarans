@@ -1,5 +1,5 @@
 import numpy as np
-from sklearn.metrics import pairwise_distances, pairwise_distances_argmin_min
+from sklearn.metrics import pairwise_distances
 
 
 def initialize_heuristic(X, n_clusters, metric="euclidean"):
@@ -26,7 +26,7 @@ def initialize_build(X, n_clusters, metric="euclidean"):
 
     dist_sums = D.sum(axis=1)
     first_medoid = np.argmin(dist_sums)
-    medoids.append(int(first_medoid)) 
+    medoids.append(int(first_medoid))
 
     dist_to_nearest = D[:, first_medoid]
 
@@ -53,7 +53,11 @@ def initialize_build(X, n_clusters, metric="euclidean"):
     return np.array(medoids)
 
 
-def initialize_k_medoids_plus_plus(X, n_clusters, random_state, metric="euclidean", n_local_trials=None):
+def initialize_k_medoids_plus_plus(X,
+                                   n_clusters,
+                                   random_state,
+                                   metric="euclidean",
+                                   n_local_trials=None):
     """
     Initialize medoids using k-medoids++.
     Refactored to match the robust scikit-learn implementation (Arthur & Vassilvitskii)
@@ -65,33 +69,25 @@ def initialize_k_medoids_plus_plus(X, n_clusters, random_state, metric="euclidea
     if n_local_trials is None:
         n_local_trials = 2 + int(np.log(n_clusters))
 
-    # 1. Choose first center uniformly
     first_medoid = random_state.randint(0, n_samples)
     medoid_indices[0] = first_medoid
 
-    # Initialize shortest distances (squared)
-    # shape (n_samples,)
-    closest_dist_sq = pairwise_distances(X, X[first_medoid].reshape(1, -1), metric=metric).flatten() ** 2
+    closest_dist_sq = pairwise_distances(X,
+                                         X[first_medoid].reshape(1, -1),
+                                         metric=metric).flatten() ** 2
     current_pot = closest_dist_sq.sum()
 
     for c in range(1, n_clusters):
-        # Generate candidate seeds
         rand_vals = random_state.random_sample(n_local_trials) * current_pot
-        
-        # Cumulative sum of probabilities
+
         cumsum_dist = np.cumsum(closest_dist_sq)
-        
+
         candidate_ids = np.searchsorted(cumsum_dist, rand_vals)
-        # Clip to be safe
         np.clip(candidate_ids, 0, n_samples - 1, out=candidate_ids)
 
         # Compute distances from candidates to all points
-        # shape (n_local_trials, n_features)
         candidates_X = X[candidate_ids]
-        
-        # We need distances from these candidates to all points in X to compute new potential
-        # This is n_local_trials * N calculations.
-        # Result shape: (n_local_trials, n_samples)
+
         dists_candidates = pairwise_distances(candidates_X, X, metric=metric) ** 2
 
         best_candidate = None
