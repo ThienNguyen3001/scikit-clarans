@@ -9,7 +9,7 @@ def initialize_heuristic(X, n_clusters, metric="euclidean"):
     # This requires O(N^2) complexity
     D = pairwise_distances(X, metric=metric)
     dist_sums = np.sum(D, axis=1)
-    current_medoids_indices = np.argsort(dist_sums)[:n_clusters]
+    current_medoids_indices = np.argpartition(dist_sums, n_clusters - 1)[:n_clusters]
     return current_medoids_indices
 
 
@@ -53,36 +53,62 @@ def initialize_build(X, n_clusters, metric="euclidean"):
     return np.array(medoids)
 
 
-def initialize_k_medoids_plus_plus(X, n_clusters, random_state, metric="euclidean"):
+def initialize_k_medoids_plus_plus(X, n_clusters, random_state, metric="euclidean", n_local_trials=None):
     """
     Initialize medoids using k-medoids++.
-    Refactored to be vectorized and avoid redundant distance calculations.
+    Refactored to match the robust scikit-learn implementation (Arthur & Vassilvitskii)
+    with local trials for better convergence, while keeping memory efficiency.
     """
     n_samples, _ = X.shape
-    medoid_indices = []
+    medoid_indices = np.empty(n_clusters, dtype=int)
 
+    if n_local_trials is None:
+        n_local_trials = 2 + int(np.log(n_clusters))
+
+    # 1. Choose first center uniformly
     first_medoid = random_state.randint(0, n_samples)
-    medoid_indices.append(first_medoid)
+    medoid_indices[0] = first_medoid
 
-    dists = pairwise_distances(X, X[first_medoid].reshape(1, -1), metric=metric).flatten()
-    min_dists = dists
+    # Initialize shortest distances (squared)
+    # shape (n_samples,)
+    closest_dist_sq = pairwise_distances(X, X[first_medoid].reshape(1, -1), metric=metric).flatten() ** 2
+    current_pot = closest_dist_sq.sum()
 
-    for _ in range(1, n_clusters):
-        d2 = min_dists**2
-        total_d2 = np.sum(d2)
+    for c in range(1, n_clusters):
+        # Generate candidate seeds
+        rand_vals = random_state.random_sample(n_local_trials) * current_pot
+        
+        # Cumulative sum of probabilities
+        cumsum_dist = np.cumsum(closest_dist_sq)
+        
+        candidate_ids = np.searchsorted(cumsum_dist, rand_vals)
+        # Clip to be safe
+        np.clip(candidate_ids, 0, n_samples - 1, out=candidate_ids)
 
-        if total_d2 == 0:
-            candidates = list(set(range(n_samples)) - set(medoid_indices))
-            if not candidates:
-                break
-            next_medoid = random_state.choice(candidates)
-        else:
-            probs = d2 / total_d2
-            next_medoid = random_state.choice(n_samples, p=probs)
+        # Compute distances from candidates to all points
+        # shape (n_local_trials, n_features)
+        candidates_X = X[candidate_ids]
+        
+        # We need distances from these candidates to all points in X to compute new potential
+        # This is n_local_trials * N calculations.
+        # Result shape: (n_local_trials, n_samples)
+        dists_candidates = pairwise_distances(candidates_X, X, metric=metric) ** 2
 
-        medoid_indices.append(next_medoid)
+        best_candidate = None
+        best_pot = None
+        best_dist_sq = None
 
-        new_dists = pairwise_distances(X, X[next_medoid].reshape(1, -1), metric=metric).flatten()
-        min_dists = np.minimum(min_dists, new_dists)
+        for i in range(n_local_trials):
+            new_dist_sq = np.minimum(closest_dist_sq, dists_candidates[i])
+            new_pot = new_dist_sq.sum()
 
-    return np.array(medoid_indices)
+            if best_candidate is None or new_pot < best_pot:
+                best_candidate = candidate_ids[i]
+                best_pot = new_pot
+                best_dist_sq = new_dist_sq
+
+        medoid_indices[c] = best_candidate
+        current_pot = best_pot
+        closest_dist_sq = best_dist_sq
+
+    return medoid_indices
