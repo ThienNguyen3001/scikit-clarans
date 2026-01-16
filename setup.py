@@ -32,6 +32,6 @@ setup(
     keywords="clustering sklearn scikit-learn clarans k-medoids",
     packages=find_packages(),
     install_requires=["numpy", "scikit-learn", "scipy"],
-    python_requires=">=3.6",
+    python_requires=">=3.8",
     test_suite="clarans.tests",
 )
