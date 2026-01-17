@@ -3,8 +3,11 @@ import warnings
 import numpy as np
 from sklearn.base import BaseEstimator, ClusterMixin
 from sklearn.metrics import pairwise_distances_argmin_min
-from sklearn.utils.validation import (check_array, check_is_fitted,
-                                      check_random_state)
+from sklearn.utils.validation import (
+    check_array,
+    check_is_fitted,
+    check_random_state,
+)
 
 from .initialization import (initialize_build, initialize_heuristic,
                              initialize_k_medoids_plus_plus)
@@ -18,37 +21,42 @@ class CLARANS(ClusterMixin, BaseEstimator):
     Parameters
     ----------
     n_clusters : int, default=8
-        The number of clusters to form as well as the number of
-        medoids to generate.
+        The number of clusters to form (also the number of medoids to
+        generate).
 
     numlocal : int, default=2
-        Number of local minima to find.
+        The number of local searches to perform.
+        CLARANS runs the search process ``numlocal`` times starting from
+        different random nodes to reduce the chance of getting stuck in
+        poor local minima. Increasing this improves solution quality but
+        increases runtime.
 
     maxneighbor : int, default=None
-        Maximum number of neighbors to examine. If None, it is set to
-        max(250, 1.25% of k*(n-k)) where k is n_clusters and n is n_samples.
+        The maximum number of neighbors (random swaps) to examine during
+        each step. If ``None``, it defaults to ``max(250, 1.25% of k*(n-k))``.
+        Higher values make the algorithm behave more like PAM (checking
+        more neighbors); lower values make it faster but more random.
 
     max_iter : int, default=300
-        Maximum number of hops (improvements) allowed in a local search.
-        This prevents infinite loops in case the algorithm keeps finding better solutions.
+        The maximum number of successful swaps (improvements) allowed per
+        local search. This acts as a safeguard against infinite loops.
 
     init : {'random', 'heuristic', 'k-medoids++', 'build', array-like}, default='random'
-        Method for initialization:
-        'random': choose k observations (rows) at random from data for
-        the initial centroids.
-        'heuristic': picks the n_clusters points with the smallest sum distance to
-        every other point.
-        'k-medoids++': selects initial cluster centers for k-medoid clustering
-        in a smart way to speed up convergence.
-        'build': greedy initialization of the medoids used in the original PAM algorithm.
-        Often 'build' is more efficient but slower than other initializations on big datasets,
-        and it is also very non-robust to outliers.
-        If an ndarray is passed, it should be of shape (n_clusters, n_features)
-        and gives the initial centers.
+        Strategy for selecting initial medoids:
+        
+        - ``'random'``: Selects ``n_clusters`` random points. Fast but can
+          result in poor starting points.
+        - ``'heuristic'``: Selects points that are "central" to the data
+          (minimizing distance to all others).
+        - ``'k-medoids++'``: Optimized probabilistic initialization (similar
+          to k-means++) for faster convergence.
+        - ``'build'``: The greedy initialization from the original PAM
+          algorithm. High quality but slow (O(N^2)).
 
     metric : str or callable, default='euclidean'
-        Metric used for calculating dissimilarity between observations.
-        Supported metrics are those supported by sklearn.metrics.pairwise_distances.
+        The distance metric to use. Supports all metrics from
+        ``sklearn.metrics.pairwise_distances`` (e.g., 'euclidean',
+        'manhattan', 'cosine').
 
     random_state : int, RandomState instance or None, default=None
         Determines random number generation for centroid initialization.

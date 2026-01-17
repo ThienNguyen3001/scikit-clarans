@@ -1,75 +1,62 @@
 # scikit-clarans
 
-> A scikit-learn compatible implementation of the CLARANS (Clustering Large Applications based on RANdomized Search) algorithm.
+> A scikit-learn compatible implementation of the **CLARANS** (Clustering Large Applications based on RANdomized Search) algorithm.
 
-CLARANS is a partitioning clustering algorithm that extends the k-medoids approach (like PAM) to handle large datasets effectively. It views the process of finding $k$ medoids as searching through a graph where each node is a potential set of $k$ medoids. By randomized search, CLARANS avoids the computational cost of checking every neighbor as PAM does, while avoiding the local minima issues of CLARA.
+[![License](https://img.shields.io/github/license/ThienNguyen3001/scikit-clarans)](LICENSE)
+[![Python Version](https://img.shields.io/badge/python-3.8+-blue.svg)](https://www.python.org/downloads/)
 
-## Key Features
+**CLARANS** acts as a bridge between the high quality of **PAM (k-medoids)** and the speed required for large datasets. By using randomized search instead of exhaustive search, it finds high-quality medoids efficiently without exploring the entire graph of solutions.
 
-- **Scikit-learn Compatible**: Inherits from `BaseEstimator` and `ClusterMixin`, fully passing `check_estimator` tests.
-- **Flexible Initialization**: Supports multiple initialization strategies including `random`, `heuristic`, `k-medoids++`, and `build` (Greedy).
-- **Custom Metrics**: Supports all distance metrics available in `sklearn.metrics.pairwise_distances` (e.g., euclidean, manhattan, cosine).
-- **Reproducibility**: Fully deterministic when `random_state` is provided.
+---
+
+## Features
+
+*   **Scikit-Learn Native**: Use it just like `KMeans` or `DBSCAN`. Drop-in compatibility for pipelines and cross-validation.
+*   **Scalable**: Designed to handle datasets where standard PAM/k-medoids is too slow.
+*   **Flexible**: Choose from multiple initialization strategies (`k-medoids++`, `build`, etc.) and distance metrics (`euclidean`, `manhattan`, `cosine`, etc.).
+*   **Robust**: `numlocal` parameter allows restarting searches to avoid local minima.
 
 ## Installation
 
-### From Source
-
-Ensure you have `numpy` and `scikit-learn` installed. You can install this package directly from the source:
+Install simply via pip:
 
 ```bash
-git clone https://github.com/ThienNguyen3001/scikit-clarans.git
-cd scikit-clarans
 pip install .
 ```
 
-For development (editable mode):
-
-```bash
-pip install -e .
-```
+*Note: Requires `numpy` and `scikit-learn`.*
 
 ## Quick Start
 
 ```python
 from clarans import CLARANS
 from sklearn.datasets import make_blobs
-import matplotlib.pyplot as plt
 
-# 1. Generate sample data
-X, y = make_blobs(n_samples=500, centers=4, n_features=2, random_state=42)
+# 1. Create dummy data
+X, _ = make_blobs(n_samples=1000, centers=5, random_state=42)
 
 # 2. Initialize CLARANS
-# Uses 'k-medoids++' for smarter initialization
-clarans = CLARANS(n_clusters=4, numlocal=3, maxneighbor=None, init='k-medoids++', random_state=42)
+#    - n_clusters: 5 clusters
+#    - numlocal: 3 restarts for better quality
+#    - init: 'k-medoids++' for smart starting points
+clarans = CLARANS(n_clusters=5, numlocal=3, init='k-medoids++', random_state=42)
 
-# 3. Fit the model
+# 3. Fit
 clarans.fit(X)
 
-# 4. Access results
-print("Cluster Medoid Indices:", clarans.medoid_indices_)
-print("Cluster Centers (Coordinates):", clarans.cluster_centers_)
-print("Labels:", clarans.labels_[:10])
-
-# 5. Predict new points
-new_points = [[0, 0], [10, 10]]
-predictions = clarans.predict(new_points)
-print("Predictions:", predictions)
+# 4. Results
+print("Medoid Indices:", clarans.medoid_indices_)
+print("Labels:", clarans.labels_)
 ```
 
-## API Reference (Referenced from sklearn_extra.cluster.KMedoids)
+## Documentation
 
-### `CLARANS(n_clusters=8, numlocal=2, maxneighbor=None, max_iter=300, init='random', metric='euclidean', random_state=None)`
+For full API reference and usage guides, please see the [Documentation Folder](./docs).
 
-#### Parameters
+## Contributing
 
-- **`n_clusters`** *(int, default=8)*: The number of clusters to form as well as the number of medoids to generate.
-- **`numlocal`** *(int, default=2)*: The number of local minima to find. The algorithm runs the local search `numlocal` times and returns the best result.
-- **`maxneighbor`** *(int, default=None)*: Maximum number of neighbors to examine during local search. If `None`, it is set to `max(250, 1.25% * k*(n-k))`.
-- **`max_iter`** *(int, default=300)*: Maximum number of hops (swaps) allowed in a single local search to prevent infinite loops.
-- **`init`** *({'random', 'heuristic', 'k-medoids++', 'build', array-like}, default='random')*:
-  - `'random'`: Selects $k$ observations at random.
-  - `'heuristic'`: Picks $k$ points with smallest sum distance to all other points.
-  - `'k-medoids++'`: Smart initialization inspired by k-means++ for better convergence.
-  - `'build'`: Deterministic greedy initialization (like PAM). High quality but slower (`O(N^2)`).
-  - `array-like`: Custom initial centers of shape `(n_clusters, n_features)`.
+Contributions are welcome! Please check out [CONTRIBUTING.md](CONTRIBUTING.md) for guidelines.
+
+## License
+
+This project is licensed under the MIT License - see the [LICENSE](LICENSE) file for details.

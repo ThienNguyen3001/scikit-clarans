@@ -1,10 +1,34 @@
 import numpy as np
 from sklearn.metrics import pairwise_distances
+from sklearn.utils import check_random_state
 
 
 def initialize_heuristic(X, n_clusters, metric="euclidean"):
     """
+    Initialize medoids using a heuristic approach.
+    
     Picks the n_clusters points with the smallest sum distance to every other point.
+    
+    Parameters
+    ----------
+    X : {array-like, sparse matrix} of shape (n_samples, n_features)
+        The input samples.
+
+    n_clusters : int
+        The number of clusters to form.
+
+    metric : str or callable, default='euclidean'
+        The metric to use when calculating distance between instances in a feature array.
+
+    Returns
+    -------
+    current_medoids_indices : ndarray of shape (n_clusters,), dtype int
+        Indices of the selected medoids in the dataset.
+
+    Notes
+    -----
+    This method computes the full pairwise distance matrix and therefore has
+    O(n^2) time and memory complexity.
     """
     # This requires O(N^2) complexity
     D = pairwise_distances(X, metric=metric)
@@ -15,7 +39,26 @@ def initialize_heuristic(X, n_clusters, metric="euclidean"):
 
 def initialize_build(X, n_clusters, metric="euclidean"):
     """
-    Implement PAM BUILD initialization.
+    Initialize medoids using the PAM BUILD step.
+    
+    Greedily selects the first medoid that minimizes total distance, then
+    subsequently adds medoids that maximally decrease the total cost.
+    
+    Parameters
+    ----------
+    X : {array-like, sparse matrix} of shape (n_samples, n_features)
+        The input samples.
+
+    n_clusters : int
+        The number of clusters to form.
+
+    metric : str or callable, default='euclidean'
+        The metric to use when calculating distance between instances in a feature array.
+
+    Returns
+    -------
+    medoids : ndarray of shape (n_clusters,), dtype int
+        Indices of the selected medoids in the dataset.
     """
     n_samples = X.shape[0]
     medoids = []
@@ -53,17 +96,45 @@ def initialize_build(X, n_clusters, metric="euclidean"):
     return np.array(medoids)
 
 
-def initialize_k_medoids_plus_plus(X,
-                                   n_clusters,
-                                   random_state,
-                                   metric="euclidean",
+def initialize_k_medoids_plus_plus(X, 
+                                   n_clusters, 
+                                   random_state=None, 
+                                   metric="euclidean", 
                                    n_local_trials=None):
     """
-    Initialize medoids using k-medoids++.
-    Refactored to match the robust scikit-learn implementation (Arthur & Vassilvitskii)
-    with local trials for better convergence, while keeping memory efficiency.
+    Initialize medoids using k-medoids++ (similar to k-means++).
+
+    Parameters
+    ----------
+    X : {array-like, sparse matrix} of shape (n_samples, n_features)
+        The input samples.
+
+    n_clusters : int
+        The number of clusters to form.
+
+    random_state : int, RandomState instance or None, default=None
+        Determines random number generation for centroid initialization.
+
+    metric : str or callable, default='euclidean'
+        The metric to use when calculating distance between instances in a feature array.
+
+    n_local_trials : int, default=None
+        The number of seeding trials for each center (except the first),
+        of which the one reducing inertia the most is greedily chosen.
+        If None, the function uses a small logarithmic default.
+
+    Returns
+    -------
+    medoids : ndarray of shape (n_clusters,), dtype int
+        Indices of the selected medoids in the dataset.
+
+    Notes
+    -----
+    This implementation follows the k-means++ style seeding but uses distances
+    squared and picks medoids (data indices) rather than centroids.
     """
-    n_samples, _ = X.shape
+    random_state = check_random_state(random_state)
+    n_samples = X.shape[0]
     medoid_indices = np.empty(n_clusters, dtype=int)
 
     if n_local_trials is None:
@@ -72,9 +143,13 @@ def initialize_k_medoids_plus_plus(X,
     first_medoid = random_state.randint(0, n_samples)
     medoid_indices[0] = first_medoid
 
-    closest_dist_sq = pairwise_distances(X,
-                                         X[first_medoid].reshape(1, -1),
-                                         metric=metric).flatten() ** 2
+    closest = pairwise_distances(
+        X,
+        X[first_medoid].reshape(1, -1),
+        metric=metric,
+    ).flatten()
+
+    closest_dist_sq = closest ** 2
     current_pot = closest_dist_sq.sum()
 
     for c in range(1, n_clusters):
