@@ -96,7 +96,11 @@ def initialize_build(X, n_clusters, metric="euclidean"):
     return np.array(medoids)
 
 
-def initialize_k_medoids_plus_plus(X, n_clusters, random_state=None, metric="euclidean", n_local_trials=None):
+def initialize_k_medoids_plus_plus(X, 
+                                   n_clusters, 
+                                   random_state=None, 
+                                   metric="euclidean", 
+                                   n_local_trials=None):
     """
     Initialize medoids using k-medoids++ (similar to k-means++).
 
@@ -139,9 +143,13 @@ def initialize_k_medoids_plus_plus(X, n_clusters, random_state=None, metric="euc
     first_medoid = random_state.randint(0, n_samples)
     medoid_indices[0] = first_medoid
 
-    closest_dist_sq = pairwise_distances(X,
-                                         X[first_medoid].reshape(1, -1),
-                                         metric=metric).flatten() ** 2
+    closest = pairwise_distances(
+        X,
+        X[first_medoid].reshape(1, -1),
+        metric=metric,
+    ).flatten()
+
+    closest_dist_sq = closest ** 2
     current_pot = closest_dist_sq.sum()
 
     for c in range(1, n_clusters):
