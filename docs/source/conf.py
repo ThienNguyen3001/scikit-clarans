@@ -29,6 +29,7 @@ extensions = [
     'sphinx.ext.viewcode',
     'sphinx_autodoc_typehints',
     'sphinx.ext.intersphinx',
+    'sphinx.ext.mathjax',
 ]
 
 templates_path = ['_templates']

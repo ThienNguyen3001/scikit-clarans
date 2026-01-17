@@ -6,7 +6,7 @@ This guide provides a quick introduction to using ``scikit-clarans`` for cluster
 CLARANS Algorithm
 -----------------
 
-CLARANS (Clustering Large Applications based on RANdomized Search) is a partitioning method that searches for $k$ medoids. It is an extension of the PAM (Partitioning Around Medoids) algorithm but uses randomized search to handle larger datasets more efficiently.
+CLARANS (Clustering Large Applications based on RANdomized Search) is a partitioning method that searches for :math:`k` medoids. It is an extension of the PAM (Partitioning Around Medoids) algorithm but uses randomized search to handle larger datasets more efficiently.
 
 Basic Usage
 -----------
