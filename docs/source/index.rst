@@ -6,13 +6,17 @@
 scikit-clarans Documentation
 ============================
 
-**scikit-clarans** is a Python library that provides a scikit-learn compatible implementation of the CLARANS (Clustering Large Applications based on RANdomized Search) algorithm.
+Welcome to the documentation for **scikit-clarans**, a specialized clustering library for Python.
 
-CLARANS is designed to be more efficient than PAM (k-medoids) for large datasets by employing randomized search strategies within the graph of possible medoid sets.
+**scikit-clarans** brings the power of the CLARANS (Clustering Large Applications based on RANdomized Search) algorithm to the **scikit-learn** ecosystem. It is designed to be:
+
+*   **Efficient**: Optimized for larger datasets where standard k-medoids might struggle.
+*   **Compatible**: A drop-in replacement for scikit-learn clusterers efficiently implementing `fit`, `predict`, and more.
+*   **Flexible**: Supports customizable initialization strategies and distance metrics.
 
 .. toctree::
    :maxdepth: 2
-   :caption: User Guide
+   :caption: Getting Started
 
    installation
    usage

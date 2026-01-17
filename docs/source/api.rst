@@ -1,26 +1,27 @@
 API Reference
 =============
 
-This section documents the API of ``scikit-clarans``.
+Detailed documentation for the classes and functions in ``scikit-clarans``.
 
-CLARANS Estimator
------------------
+Main Estimator
+--------------
+
+The core class you will interact with.
 
 .. autoclass:: clarans.CLARANS
    :members:
    :inherited-members:
    :show-inheritance:
 
-Initialization Methods
-----------------------
+Helper Modules
+--------------
+
+Internal modules for initialization and utilities.
 
 .. automodule:: clarans.initialization
    :members:
    :undoc-members:
    :show-inheritance:
-
-Utilities
----------
 
 .. automodule:: clarans.utils
    :members:

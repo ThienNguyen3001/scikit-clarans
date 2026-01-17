@@ -1,30 +1,38 @@
 Installation
 ============
 
-You can install ``scikit-clarans`` directly from the source code.
+Ready to get started? Installing ``scikit-clarans`` is straightforward.
 
-Requirements
-------------
+Prerequisites
+-------------
 
-scikit-clarans requires:
+Ensure you have the following installed:
 
-- Python >= 3.8
-- NumPy
-- Scikit-learn
+*   **Python** (>= 3.8)
+*   **NumPy**
+*   **Scikit-learn**
 
-From Source
------------
+Installing from Source
+----------------------
 
-To install the latest version from GitHub:
+Currently, the best way to install is directly from the source code on GitHub.
 
-.. code-block:: bash
+1.  **Clone the repository:**
 
-    git clone https://github.com/ThienNguyen3001/scikit-clarans.git
-    cd scikit-clarans
-    pip install .
+    .. code-block:: bash
 
-For development (editable install):
+        git clone https://github.com/ThienNguyen3001/scikit-clarans.git
+        cd scikit-clarans
 
-.. code-block:: bash
+2.  **Install the package:**
 
-    pip install -e .
+    .. code-block:: bash
+
+        pip install .
+
+    .. note:: 
+        For developers who want to modify the source code, use editable mode:
+        
+        .. code-block:: bash
+
+            pip install -e .
