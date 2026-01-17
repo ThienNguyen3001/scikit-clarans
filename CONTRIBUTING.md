@@ -1,4 +1,4 @@
-# Contributing to bcpo_feature_selector
+# Contributing to scikit-clarans
 
 Thank you for your interest in contributing to `scikit-clarans`! We welcome contributions from everyone.
 
