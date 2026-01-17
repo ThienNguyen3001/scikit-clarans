@@ -4,4 +4,5 @@ myst-parser
 numpy
 scikit-learn
 scipy
+sphinx-autodoc-typehints
 .
