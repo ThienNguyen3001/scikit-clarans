@@ -22,8 +22,13 @@ def initialize_heuristic(X, n_clusters, metric="euclidean"):
 
     Returns
     -------
-    current_medoids_indices : ndarray of shape (n_clusters,)
+    current_medoids_indices : ndarray of shape (n_clusters,), dtype int
         Indices of the selected medoids in the dataset.
+
+    Notes
+    -----
+    This method computes the full pairwise distance matrix and therefore has
+    O(n^2) time and memory complexity.
     """
     # This requires O(N^2) complexity
     D = pairwise_distances(X, metric=metric)
@@ -52,7 +57,7 @@ def initialize_build(X, n_clusters, metric="euclidean"):
 
     Returns
     -------
-    medoids : list of int
+    medoids : ndarray of shape (n_clusters,), dtype int
         Indices of the selected medoids in the dataset.
     """
     n_samples = X.shape[0]
@@ -112,13 +117,17 @@ def initialize_k_medoids_plus_plus(X, n_clusters, random_state=None, metric="euc
     n_local_trials : int, default=None
         The number of seeding trials for each center (except the first),
         of which the one reducing inertia the most is greedily chosen.
-        Set to None to make the number of trials depend logarithmically
-        on the number of centers.
+        If None, the function uses a small logarithmic default.
 
     Returns
     -------
-    medoids : ndarray of shape (n_clusters,)
+    medoids : ndarray of shape (n_clusters,), dtype int
         Indices of the selected medoids in the dataset.
+
+    Notes
+    -----
+    This implementation follows the k-means++ style seeding but uses distances
+    squared and picks medoids (data indices) rather than centroids.
     """
     random_state = check_random_state(random_state)
     n_samples = X.shape[0]
