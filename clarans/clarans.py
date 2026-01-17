@@ -84,6 +84,15 @@ class CLARANS(ClusterMixin, BaseEstimator):
         self.metric = metric
         self.random_state = random_state
 
+    def __sklearn_tags__(self):
+        """Declare estimator capabilities for scikit-learn's check_estimator.
+
+        CLARANS can accept CSR/CSC sparse matrices as input.
+        """
+        tags = super().__sklearn_tags__()
+        tags.input_tags.sparse = True
+        return tags
+
     def fit(self, X, y=None):
         """
         Compute CLARANS clustering.
@@ -105,13 +114,19 @@ class CLARANS(ClusterMixin, BaseEstimator):
         try:
             # Try using validate_data from sklearn.utils.validation (newer sklearn versions)
             from sklearn.utils.validation import validate_data
-            X = validate_data(self, X=X, ensure_min_samples=2)
+            X = validate_data(
+                self, X=X, ensure_min_samples=2, accept_sparse=["csr", "csc"]
+            )
         except ImportError:
             # Fallback to _validate_data (older sklearn versions / internal method)
             if hasattr(self, "_validate_data"):
-                X = self._validate_data(X, ensure_min_samples=2)
+                X = self._validate_data(
+                    X, ensure_min_samples=2, accept_sparse=["csr", "csc"]
+                )
             else:
-                X = check_array(X, ensure_min_samples=2)
+                X = check_array(
+                    X, ensure_min_samples=2, accept_sparse=["csr", "csc"]
+                )
                 self.n_features_in_ = X.shape[1]
 
         random_state = check_random_state(self.random_state)
@@ -256,13 +271,13 @@ class CLARANS(ClusterMixin, BaseEstimator):
         try:
             # Try using validate_data from sklearn.utils.validation (newer sklearn versions)
             from sklearn.utils.validation import validate_data
-            X = validate_data(self, X=X, reset=False)
+            X = validate_data(self, X=X, reset=False, accept_sparse=["csr", "csc"])
         except ImportError:
             # Fallback to _validate_data (older sklearn versions / internal method)
             if hasattr(self, "_validate_data"):
-                X = self._validate_data(X, reset=False)
+                X = self._validate_data(X, reset=False, accept_sparse=["csr", "csc"])
             else:
-                X = check_array(X)
+                X = check_array(X, accept_sparse=["csr", "csc"])
                 if hasattr(self, "n_features_in_") and X.shape[1] != self.n_features_in_:
                     raise ValueError(
                         f"X has {X.shape[1]} features, but CLARANS is expecting "
