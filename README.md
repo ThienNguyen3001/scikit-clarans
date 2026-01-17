@@ -1,6 +1,5 @@
 # scikit-clarans
 
-> **Scalable Clustering for Python.**  
 > A scikit-learn compatible implementation of the **CLARANS** (Clustering Large Applications based on RANdomized Search) algorithm.
 
 [![License](https://img.shields.io/github/license/ThienNguyen3001/scikit-clarans)](LICENSE)
@@ -10,14 +9,14 @@
 
 ---
 
-## ✨ Features
+## Features
 
 *   **Scikit-Learn Native**: Use it just like `KMeans` or `DBSCAN`. Drop-in compatibility for pipelines and cross-validation.
 *   **Scalable**: Designed to handle datasets where standard PAM/k-medoids is too slow.
 *   **Flexible**: Choose from multiple initialization strategies (`k-medoids++`, `build`, etc.) and distance metrics (`euclidean`, `manhattan`, `cosine`, etc.).
 *   **Robust**: `numlocal` parameter allows restarting searches to avoid local minima.
 
-## 🚀 Installation
+## Installation
 
 Install simply via pip:
 
@@ -27,7 +26,7 @@ pip install .
 
 *Note: Requires `numpy` and `scikit-learn`.*
 
-## ⚡ Quick Start
+## Quick Start
 
 ```python
 from clarans import CLARANS
@@ -50,14 +49,14 @@ print("Medoid Indices:", clarans.medoid_indices_)
 print("Labels:", clarans.labels_)
 ```
 
-## 📚 Documentation
+## Documentation
 
 For full API reference and usage guides, please see the [Documentation Folder](./docs).
 
-## 🤝 Contributing
+## Contributing
 
 Contributions are welcome! Please check out [CONTRIBUTING.md](CONTRIBUTING.md) for guidelines.
 
-## 📄 License
+## License
 
 This project is licensed under the MIT License - see the [LICENSE](LICENSE) file for details.
