@@ -71,3 +71,5 @@ Tips for Best Results
 
 *   **Initialization matters:** Using ``init='k-medoids++'`` or ``'build'`` often converges faster to better solutions than pure random.
 *   **Tuning numlocal:** If your results vary too much between runs, try increasing ``numlocal`` to explore more local minima.
+
+For more hands-on recipes and runnable examples (including a Jupyter notebook with interactive demos), see :doc:`examples`.

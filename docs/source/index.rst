@@ -20,6 +20,7 @@ Welcome to the documentation for **scikit-clarans**, a specialized clustering li
 
    installation
    usage
+   examples
 
 .. toctree::
    :maxdepth: 2

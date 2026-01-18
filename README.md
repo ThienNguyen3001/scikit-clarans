@@ -49,6 +49,12 @@ print("Medoid Indices:", clarans.medoid_indices_)
 print("Labels:", clarans.labels_)
 ```
 
+## Examples
+
+This repository includes a number of runnable examples in the `examples/` folder showing common usage patterns, integrations and a Jupyter notebook (`examples/clarans_examples.ipynb`) with many interactive recipes. Run any example with::
+
+    python examples/01_quick_start.py
+
 ## Documentation
 
 For full API reference and usage guides, please see the [Documentation Folder](./docs).
