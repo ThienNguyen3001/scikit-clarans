@@ -194,7 +194,9 @@ class CLARANS(ClusterMixin, BaseEstimator):
                         "Filling duplicates with random points."
                     )
                     remaining = self.n_clusters - len(current_medoids_indices)
-                    available = np.setdiff1d(all_indices, current_medoids_indices, assume_unique=True)
+                    available = np.setdiff1d(all_indices, 
+                                             current_medoids_indices, 
+                                             assume_unique=True)
                     
                     if len(available) < remaining:
                         raise ValueError(
