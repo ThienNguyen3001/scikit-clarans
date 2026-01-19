@@ -6,9 +6,10 @@ Fit CLARANS on training data and demonstrate predicting cluster labels for new p
 Run: python examples/06_predict_new_data.py
 """
 
-from clarans import CLARANS
-from sklearn.datasets import make_blobs
 import numpy as np
+from sklearn.datasets import make_blobs
+
+from clarans import CLARANS
 
 
 def main():

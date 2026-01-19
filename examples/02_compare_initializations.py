@@ -8,11 +8,13 @@ Run with: python examples/02_compare_initializations.py
 """
 
 import time
+
+import matplotlib.pyplot as plt
 import numpy as np
+from sklearn.datasets import make_blobs
+
 from clarans import CLARANS
 from clarans.utils import calculate_cost
-from sklearn.datasets import make_blobs
-import matplotlib.pyplot as plt
 
 
 def main():

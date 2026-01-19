@@ -17,7 +17,7 @@ setup(
     long_description_content_type="text/markdown",
     url="https://github.com/ThienNguyen3001/scikit-clarans",
     author="ThienNguyen3001",
-    author_email="thiennguyen03001@gmail.com", 
+    author_email="thiennguyen03001@gmail.com",
     license="MIT",
     classifiers=[
         "Development Status :: 3 - Alpha",

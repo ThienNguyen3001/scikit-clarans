@@ -8,9 +8,11 @@ Run: python examples/08_performance_tuning.py
 """
 
 import time
+
+from sklearn.datasets import make_blobs
+
 from clarans import CLARANS
 from clarans.utils import calculate_cost
-from sklearn.datasets import make_blobs
 
 
 def main():
@@ -24,12 +26,19 @@ def main():
 
     for c in combinations:
         t0 = time.time()
-        model = CLARANS(n_clusters=5, numlocal=c["numlocal"], maxneighbor=c["maxneighbor"], random_state=0)
+        model = CLARANS(
+            n_clusters=5,
+            numlocal=c["numlocal"],
+            maxneighbor=c["maxneighbor"],
+            random_state=0,
+        )
         model.fit(X)
         t1 = time.time()
 
         cost = calculate_cost(X, model.medoid_indices_)
-        print(f"numlocal={c['numlocal']:2d}  maxneighbor={c['maxneighbor']:4d}  time={t1-t0:.3f}s  cost={cost:.2f}")
+        print(
+            f"numlocal={c['numlocal']:2d}  maxneighbor={c['maxneighbor']:4d}  time={t1-t0:.3f}s  cost={cost:.2f}"
+        )
 
 
 if __name__ == "__main__":

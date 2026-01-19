@@ -54,11 +54,7 @@ class TestCLARANS(unittest.TestCase):
         """Test initialization with precomputed array."""
         init_centers = self.X[[0, 10, 20]]
         clarans = CLARANS(
-            n_clusters=3,
-            numlocal=1,
-            maxneighbor=10,
-            init=init_centers,
-            random_state=42
+            n_clusters=3, numlocal=1, maxneighbor=10, init=init_centers, random_state=42
         )
         clarans.fit(self.X)
         self.assertEqual(len(clarans.cluster_centers_), 3)
@@ -86,7 +82,7 @@ class TestCLARANS(unittest.TestCase):
         with self.assertRaises(ValueError):
             clarans.fit(self.X)
 
-        clarans = CLARANS(n_clusters=3, init=self.X[:2])  
+        clarans = CLARANS(n_clusters=3, init=self.X[:2])
         with self.assertRaises(ValueError):
             clarans.fit(self.X)
 
