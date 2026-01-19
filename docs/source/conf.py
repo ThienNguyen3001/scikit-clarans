@@ -30,7 +30,12 @@ extensions = [
     "sphinx_autodoc_typehints",
     "sphinx.ext.intersphinx",
     "sphinx.ext.mathjax",
+    "sphinx_copybutton",
 ]
+
+# Copybutton settings: strip Python/terminal prompts when copying
+copybutton_prompt_text = r"^>>> |^\.\.\. |^\$ "
+copybutton_prompt_is_regexp = True
 
 templates_path = ["_templates"]
 exclude_patterns = ["_build", "Thumbs.db", ".DS_Store"]
@@ -49,10 +54,16 @@ intersphinx_mapping = {
 # -- Options for HTML output -------------------------------------------------
 # https://www.sphinx-doc.org/en/master/usage/configuration.html#options-for-html-output
 
-try:
-    import sphinx_rtd_theme
+import sphinx_rtd_theme
 
-    html_theme = "sphinx_rtd_theme"
-except Exception:
-    html_theme = "alabaster"
+html_theme = "sphinx_rtd_theme"
 html_static_path = ["_static"]
+
+# Add custom CSS and JS for the gallery page
+html_css_files = [
+    "gallery.css",
+]
+
+html_js_files = [
+    "gallery.js",
+]

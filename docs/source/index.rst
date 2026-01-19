@@ -28,6 +28,15 @@ Welcome to the documentation for **scikit-clarans**, a specialized clustering li
 
    api
 
+.. toctree::
+   :maxdepth: 3
+   :caption: Gallery
+
+   gallery/2d_clustering
+   gallery/comparison
+   gallery/quality_vs_k
+   gallery/performance
+
 Indices and tables
 ==================
 

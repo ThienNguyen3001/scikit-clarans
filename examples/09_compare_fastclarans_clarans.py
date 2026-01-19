@@ -45,7 +45,7 @@ def run_benchmark():
     print("BENCHMARK: SPEED vs MEMORY (CLARANS vs FastCLARANS)")
     print("=" * 60)
 
-    N_SAMPLES = 1000
+    N_SAMPLES = 10000
     N_CLUSTERS = 20
     N_FEATURES = 20
     RANDOM_STATE = 42
@@ -63,14 +63,14 @@ def run_benchmark():
         random_state=RANDOM_STATE,
     )
 
-    clarans = CLARANS(n_clusters=N_CLUSTERS, numlocal=2, random_state=RANDOM_STATE)
+    clarans = CLARANS(n_clusters=N_CLUSTERS, numlocal=1, random_state=RANDOM_STATE)
     time_orig, mem_orig, medoids_orig = run_algorithm_profile(
         "CLARANS (Original)", clarans, X
     )
     cost_orig = calculate_total_cost(X, medoids_orig)
 
     fast_clarans = FastCLARANS(
-        n_clusters=N_CLUSTERS, numlocal=2, random_state=RANDOM_STATE
+        n_clusters=N_CLUSTERS, numlocal=1, random_state=RANDOM_STATE
     )
     time_fast, mem_fast, medoids_fast = run_algorithm_profile(
         "FastCLARANS", fast_clarans, X
