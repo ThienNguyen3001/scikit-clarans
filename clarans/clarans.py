@@ -118,15 +118,12 @@ class CLARANS(ClusterMixin, BaseEstimator):
         self
             Fitted estimator.
         """
-
         try:
-            # Try using validate_data from sklearn.utils.validation (newer sklearn versions)
             from sklearn.utils.validation import validate_data
             X = validate_data(
                 self, X=X, ensure_min_samples=2, accept_sparse=["csr", "csc"]
             )
         except ImportError:
-            # Fallback to _validate_data (older sklearn versions / internal method)
             if hasattr(self, "_validate_data"):
                 X = self._validate_data(
                     X, ensure_min_samples=2, accept_sparse=["csr", "csc"]
@@ -151,8 +148,10 @@ class CLARANS(ClusterMixin, BaseEstimator):
             self.maxneighbor_ = self.maxneighbor
 
         best_cost = np.inf
-        best_medoids = None
+        best_medoids = np.empty(self.n_clusters, dtype=int) 
         self.n_iter_ = 0
+
+        all_indices = np.arange(n_samples)
 
         for loc_idx in range(self.numlocal):
             if isinstance(self.init, str) and self.init == "random":
@@ -171,69 +170,68 @@ class CLARANS(ClusterMixin, BaseEstimator):
                     X, self.n_clusters, self.metric
                 )
             elif isinstance(self.init, str) and self.init == "build":
-                # Implement greedy initialization used in the original PAM algorithm.
                 current_medoids_indices = initialize_build(
                     X, self.n_clusters, self.metric
                 )
             elif hasattr(self.init, "__array__") or isinstance(self.init, list):
-                # User provided array of centers
                 init_centers = check_array(self.init)
                 if init_centers.shape != (self.n_clusters, n_features):
                     raise ValueError(
                         f"init array must be of shape ({self.n_clusters}, {n_features})"
                     )
 
-                # Find indices of closest points in X to use as medoids
-                current_medoids_indices = pairwise_distances_argmin_min(
+                current_medoids_indices, _ = pairwise_distances_argmin_min(
                     init_centers, X, metric=self.metric
-                )[0]
+                )
+                
+                current_medoids_indices = np.array(current_medoids_indices, dtype=int)
 
-                # Ensure unique
-                if len(set(current_medoids_indices)) < self.n_clusters:
+                current_medoids_indices = np.unique(current_medoids_indices)
+                
+                if len(current_medoids_indices) < self.n_clusters:
                     warnings.warn(
                         "Provided init centers map to duplicate points in X. "
                         "Filling duplicates with random points."
                     )
-                    current_medoids_indices = list(set(current_medoids_indices))
                     remaining = self.n_clusters - len(current_medoids_indices)
-                    available = list(
-                        set(range(n_samples)) - set(current_medoids_indices)
-                    )
+                    available = np.setdiff1d(all_indices, 
+                                             current_medoids_indices, 
+                                             assume_unique=True)
+                    
                     if len(available) < remaining:
                         raise ValueError(
                             "Not enough unique points to fill up to n_clusters."
                         )
-                    current_medoids_indices.extend(
-                        random_state.choice(available, remaining, replace=False)
-                    )
-                    current_medoids_indices = np.array(current_medoids_indices)
+                    
+                    fillers = random_state.choice(available, remaining, replace=False)
+                    current_medoids_indices = np.concatenate([current_medoids_indices, fillers])
             else:
                 raise ValueError(f"Unknown init method: {self.init}")
+
+            current_medoids_indices = np.array(current_medoids_indices, dtype=int)
 
             current_cost = calculate_cost(X, current_medoids_indices, self.metric)
 
             i = 0
             iter_count = 0
+            
             while i < self.maxneighbor_:
                 if self.max_iter is not None and iter_count >= self.max_iter:
                     break
 
-                random_medoid_idx = random_state.randint(0, self.n_clusters)
+                random_medoid_pos = random_state.randint(0, self.n_clusters)
+                               
+                mask = np.ones(n_samples, dtype=bool)
+                mask[current_medoids_indices] = False
+                available_candidates = np.flatnonzero(mask)
 
-                # Pick a random non-medoid point
-                medoid_set = set(current_medoids_indices)
-                available_candidates = list(set(range(n_samples)) - medoid_set)
-
-                if not available_candidates:
-                    # Edge case: all points are medoids
+                if available_candidates.size == 0:
                     break
 
                 random_non_medoid_candidate = random_state.choice(available_candidates)
 
                 neighbor_medoids_indices = current_medoids_indices.copy()
-                neighbor_medoids_indices[random_medoid_idx] = (
-                    random_non_medoid_candidate
-                )
+                neighbor_medoids_indices[random_medoid_pos] = random_non_medoid_candidate
 
                 neighbor_cost = calculate_cost(X, neighbor_medoids_indices, self.metric)
 
@@ -277,11 +275,9 @@ class CLARANS(ClusterMixin, BaseEstimator):
         check_is_fitted(self)
 
         try:
-            # Try using validate_data from sklearn.utils.validation (newer sklearn versions)
             from sklearn.utils.validation import validate_data
             X = validate_data(self, X=X, reset=False, accept_sparse=["csr", "csc"])
         except ImportError:
-            # Fallback to _validate_data (older sklearn versions / internal method)
             if hasattr(self, "_validate_data"):
                 X = self._validate_data(X, reset=False, accept_sparse=["csr", "csc"])
             else:
