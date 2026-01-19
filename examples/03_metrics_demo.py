@@ -7,9 +7,10 @@ Run with: python examples/03_metrics_demo.py
 """
 
 import matplotlib.pyplot as plt
+from sklearn.datasets import make_blobs
+
 from clarans import CLARANS
 from clarans.utils import calculate_cost
-from sklearn.datasets import make_blobs
 
 
 def main():
@@ -19,7 +20,9 @@ def main():
     costs = []
     models = []
     for metric in metrics:
-        model = CLARANS(n_clusters=4, numlocal=3, init="k-medoids++", metric=metric, random_state=42)
+        model = CLARANS(
+            n_clusters=4, numlocal=3, init="k-medoids++", metric=metric, random_state=42
+        )
         model.fit(X)
         cost = calculate_cost(X, model.medoid_indices_, metric=metric)
         costs.append(cost)
@@ -30,7 +33,13 @@ def main():
     fig, axes = plt.subplots(1, len(metrics), figsize=(15, 4))
     for ax, metric, model in zip(axes, metrics, models):
         ax.scatter(X[:, 0], X[:, 1], c=model.labels_, cmap="tab10", s=20)
-        ax.scatter(model.cluster_centers_[:, 0], model.cluster_centers_[:, 1], c="black", marker="*", s=150)
+        ax.scatter(
+            model.cluster_centers_[:, 0],
+            model.cluster_centers_[:, 1],
+            c="black",
+            marker="*",
+            s=150,
+        )
         ax.set_title(metric)
     plt.suptitle("Effect of distance metric on CLARANS clustering")
     plt.tight_layout()

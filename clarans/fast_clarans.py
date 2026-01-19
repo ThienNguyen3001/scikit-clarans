@@ -1,35 +1,131 @@
-import numpy as np
+"""FastCLARANS implementation.
+
+Provides a faster variant of CLARANS by using delta-cost updates and
+caching the full pairwise distance matrix. This implementation accepts
+dense arrays and CSR/CSC sparse matrices via scikit-learn's distance
+functions. Note that precomputing the full distance matrix can be
+memory-intensive for large datasets.
+"""
+
+from __future__ import annotations
+
 import warnings
+from typing import TYPE_CHECKING, Any, Sequence, Tuple
+
+import numpy as np
+from numpy.typing import ArrayLike
 from sklearn.metrics import pairwise_distances, pairwise_distances_argmin_min
-from sklearn.utils.validation import check_random_state, check_array
-from clarans.clarans import CLARANS 
-from clarans.initialization import *
+from sklearn.utils.validation import check_array, check_random_state
+
+from clarans.clarans import CLARANS
+from clarans.initialization import (
+    initialize_build,
+    initialize_heuristic,
+    initialize_k_medoids_plus_plus,
+)
+
+if TYPE_CHECKING:
+    from scipy.sparse import spmatrix
+
 
 class FastCLARANS(CLARANS):
     """
-    FastCLARANS: A variant of CLARANS using delta cost computation logic 
-    from FastPAM for faster O(k) runtime.
-    
+    FastCLARANS: Fast variant of the CLARANS clustering algorithm.
+
+    Parameters
+    ----------
+    n_clusters : int, default=8
+        The number of clusters to form (also the number of medoids).
+
+    numlocal : int, default=2
+        The number of local searches to perform. More local searches
+        increase the chance of finding a better minimum at the cost of
+        additional runtime.
+
+    maxneighbor : int or None, default=None
+        The maximum number of neighbors (random swaps) to examine per
+        local search. If ``None`` a sensible default is used.
+
+    max_iter : int or None, default=300
+        Maximum number of successful swaps (improvements) allowed per
+        local search. Use ``None`` to disable this safeguard.
+
+    init : {'random', 'heuristic', 'k-medoids++', 'build', array-like}, default='random'
+        Method for initialization. If an array-like is provided it should
+        be of shape (n_clusters, n_features) and will be snapped to the
+        nearest points in X.
+
+    metric : str or callable, default='euclidean'
+        The distance metric passed to scikit-learn pairwise utilities.
+
+    random_state : int, RandomState instance or None, default=None
+        Controls random number generation for reproducibility.
+
+    Attributes
+    ----------
+    medoid_indices_ : ndarray of shape (n_clusters,)
+        Indices of the selected medoids in the training set.
+
+    cluster_centers_ : ndarray of shape (n_clusters, n_features)
+        Coordinates of the medoids (rows from the training data).
+
+    labels_ : ndarray of shape (n_samples,)
+        Labels of each point indicating the nearest medoid.
+
+    Notes
+    -----
+    This implementation precomputes the full pairwise distance matrix
+    and uses nearest/second-nearest caches to compute swap deltas
+    efficiently. It thus trades off higher memory usage (O(n^2)) for
+    faster swap evaluation when compared to a naive recomputation.
+
     References
     ----------
-    Schubert, E., & Rousseeuw, P. J. (2021). Fast and eager k-medoids clustering: 
-    O(k) runtime improvement of the PAM, CLARA, and CLARANS algorithms. 
-    Information Systems, 101, 101804.
+    Schubert, E., & Rousseeuw, P. J. (2021). Fast and eager k-medoids
+    clustering: O(k) runtime improvement of the PAM, CLARA, and CLARANS
+    algorithms. Information Systems, 101, 101804.
     """
 
-    def fit(self, X, y=None):
+    def fit(self, X: ArrayLike | "spmatrix", y: Any = None) -> "FastCLARANS":
         """
-        Perform FastCLARANS clustering.
+        Fit the FastCLARANS model to X.
+
+        Parameters
+        ----------
+        X : array-like or sparse matrix of shape (n_samples, n_features)
+            Training instances to cluster. Accepts CSR/CSC sparse matrices.
+
+        y : Ignored
+            Not used, present for API consistency.
+
+        Returns
+        -------
+        self : FastCLARANS
+            The fitted estimator. Attributes set on the estimator include
+            ``medoid_indices_``, ``cluster_centers_`` and ``labels_``.
+
+        Raises
+        ------
+        ValueError
+            If ``n_clusters >= n_samples`` or if an explicit ``init`` array
+            is provided with an incompatible shape or there are not enough
+            unique points to form the requested number of medoids.
+
+        Notes
+        -----
+        The algorithm precomputes the full pairwise distance matrix which
+        uses O(n^2) memory. Consider using the original CLARANS for very
+        large datasets to avoid excessive memory usage.
         """
         X = check_array(X, accept_sparse=["csr", "csc"])
         self.n_features_in_ = X.shape[1]
+
         random_state = check_random_state(self.random_state)
         n_samples, _ = X.shape
 
         if self.n_clusters >= n_samples:
             raise ValueError("n_clusters must be less than n_samples")
 
-        # default maxneighbor if not specified
         if self.maxneighbor is None:
             self.maxneighbor_ = max(
                 250, int(0.0125 * self.n_clusters * (n_samples - self.n_clusters))
@@ -41,22 +137,17 @@ class FastCLARANS(CLARANS):
         best_medoids = None
         self.n_iter_ = 0
 
-        # precompute full distance matrix (may be memory intensive)
+        # Full pairwise distance matrix (may be memory intensive)
         D = pairwise_distances(X, metric=self.metric)
 
-        # --- Local Search loop (numlocal) ---
         for loc_idx in range(self.numlocal):
-            # 1. Initialize medoids (supports same options as CLARANS)
             if isinstance(self.init, str) and self.init == "random":
                 current_medoids_indices = random_state.choice(
                     n_samples, self.n_clusters, replace=False
                 )
             elif isinstance(self.init, str) and self.init == "k-medoids++":
                 current_medoids_indices = initialize_k_medoids_plus_plus(
-                    X,
-                    self.n_clusters,
-                    random_state,
-                    self.metric,
+                    X, self.n_clusters, random_state, self.metric
                 )
             elif isinstance(self.init, str) and self.init == "heuristic":
                 current_medoids_indices = initialize_heuristic(
@@ -84,7 +175,9 @@ class FastCLARANS(CLARANS):
                     )
                     current_medoids_indices = list(set(current_medoids_indices))
                     remaining = self.n_clusters - len(current_medoids_indices)
-                    available = list(set(range(n_samples)) - set(current_medoids_indices))
+                    available = list(
+                        set(range(n_samples)) - set(current_medoids_indices)
+                    )
                     if len(available) < remaining:
                         raise ValueError(
                             "Not enough unique points to fill up to n_clusters."
@@ -95,75 +188,75 @@ class FastCLARANS(CLARANS):
                     current_medoids_indices = np.array(current_medoids_indices)
             else:
                 raise ValueError(f"Unknown init method: {self.init}")
-            
-            # Ensure medoids are a sorted numpy array for consistent indexing
+
             current_medoids_indices.sort()
 
-            # Compute nearest and second-nearest medoid information for all points
-            # Returns: near_idx_map (index in current_medoids_indices), near_dist, second_dist
-            near_idx_map, near_dist, second_dist = self._update_cache(n_samples, current_medoids_indices, D)
+            near_idx_map, near_dist, second_dist = self._update_cache(
+                n_samples, current_medoids_indices, D
+            )
             current_cost = np.sum(near_dist)
 
             i = 0
             iter_count = 0
-            
-            # --- Neighbor loop (maxneighbor) ---
-            # Sample non-medoid candidates and evaluate swap deltas
+
             while i < self.maxneighbor_:
                 if self.max_iter is not None and iter_count >= self.max_iter:
                     break
 
-                # Select a random non-medoid candidate
+                # Choose a random non-medoid candidate
                 while True:
                     candidate_idx = random_state.randint(0, n_samples)
                     if candidate_idx not in current_medoids_indices:
                         break
 
-                # Distances from candidate to all points
                 d_xc = D[candidate_idx]
 
-                # FastPAM-style delta computations
-                # removal_loss: cost increase if a medoid is removed
                 removal_loss = np.zeros(self.n_clusters)
                 diff = second_dist - near_dist
-                removal_loss += np.bincount(near_idx_map, weights=diff, minlength=self.n_clusters)
+                removal_loss += np.bincount(
+                    near_idx_map, weights=diff, minlength=self.n_clusters
+                )
 
-                # Benefit if candidate becomes nearest for some points
                 mask_better_than_nearest = d_xc < near_dist
-                delta_td_plus_xc = np.sum(d_xc[mask_better_than_nearest] - near_dist[mask_better_than_nearest])
+                delta_td_plus_xc = np.sum(
+                    d_xc[mask_better_than_nearest] - near_dist[mask_better_than_nearest]
+                )
 
-                # total_delta initialized with removal_loss + global benefit
                 total_delta = removal_loss + delta_td_plus_xc
 
-                # Adjust per-medoid contributions (two cases)
                 mask_better_than_second = d_xc < second_dist
 
-                term1 = near_dist[mask_better_than_nearest] - second_dist[mask_better_than_nearest]
+                term1 = (
+                    near_dist[mask_better_than_nearest]
+                    - second_dist[mask_better_than_nearest]
+                )
                 idx1 = near_idx_map[mask_better_than_nearest]
-                total_delta += np.bincount(idx1, weights=term1, minlength=self.n_clusters)
+                total_delta += np.bincount(
+                    idx1, weights=term1, minlength=self.n_clusters
+                )
 
                 mask_case2 = (~mask_better_than_nearest) & mask_better_than_second
                 term2 = d_xc[mask_case2] - second_dist[mask_case2]
                 idx2 = near_idx_map[mask_case2]
-                total_delta += np.bincount(idx2, weights=term2, minlength=self.n_clusters)
+                total_delta += np.bincount(
+                    idx2, weights=term2, minlength=self.n_clusters
+                )
 
-                # 5. Find the best medoid to swap
                 min_delta_idx = np.argmin(total_delta)
                 min_delta = total_delta[min_delta_idx]
 
                 if min_delta < 0:
-                    # Found improvement! Swap!
-                    # Swap medoid at position min_delta_idx with candidate
                     current_medoids_indices[min_delta_idx] = candidate_idx
-                    current_medoids_indices.sort() # Sort again for consistency
-                    
+                    current_medoids_indices.sort()
+
                     current_cost += min_delta
-                    
-                    # Update cache (must update entire cache after swap)
-                    # Although O(n*k), swaps are less frequent than checks.
-                    near_idx_map, near_dist, second_dist = self._update_cache(n_samples, current_medoids_indices, D)
-                    
-                    i = 0 # Reset counter as in original CLARANS
+
+                    # Update nearest/second caches after an accepted swap
+                    near_idx_map, near_dist, second_dist = self._update_cache(
+                        n_samples, current_medoids_indices, D
+                    )
+
+                    i = 0
                     iter_count += 1
                 else:
                     i += 1
@@ -174,30 +267,48 @@ class FastCLARANS(CLARANS):
                 best_cost = current_cost
                 best_medoids = current_medoids_indices.copy()
 
-        # End, assign results
         self.medoid_indices_ = best_medoids
         self.cluster_centers_ = X[self.medoid_indices_]
-        
-        # Final label assignment
+
         self.labels_, _ = pairwise_distances_argmin_min(
             X, self.cluster_centers_, metric=self.metric
         )
-        
+
         return self
 
-    def _update_cache(self, n_samples, medoids_indices, D):
+    def _update_cache(
+        self, n_samples: int, medoids_indices: Sequence[int], D: np.ndarray
+    ) -> Tuple[np.ndarray, np.ndarray, np.ndarray]:
         """
-        Helper to compute nearest and second-nearest medoid distances for all points.
+        Compute nearest and second-nearest medoid information for all points.
 
-        Returns:
-            near_idx_map: (n_samples,) indices in medoids_indices (0..k-1)
-            near_dist: (n_samples,) distance to nearest medoid
-            second_dist: (n_samples,) distance to second nearest medoid
+        Parameters
+        ----------
+        n_samples : int
+            Number of samples in the dataset.
+
+        medoids_indices : array-like of shape (n_clusters,)
+            Indices of the current medoids.
+
+        D : ndarray of shape (n_samples, n_samples)
+            Full pairwise distance matrix.
+
+        Returns
+        -------
+        near_idx_map : ndarray of shape (n_samples,)
+            For each sample, the index (0..k-1) of the nearest medoid in
+            ``medoids_indices``.
+
+        near_dist : ndarray of shape (n_samples,)
+            Distance from each sample to its nearest medoid.
+
+        second_dist : ndarray of shape (n_samples,)
+            Distance from each sample to its second nearest medoid. If
+            ``n_clusters == 1`` this will be an array filled with
+            ``np.inf``.
         """
-        # Extract distances to current medoids (submatrix)
         subD = D[:, medoids_indices]
 
-        # Find two smallest distances per row efficiently using argpartition
         if self.n_clusters >= 2:
             partitioned_idx = np.argpartition(subD, 1, axis=1)
             smallest_idx = partitioned_idx[:, 0]
@@ -207,7 +318,6 @@ class FastCLARANS(CLARANS):
             second_dist = subD[np.arange(n_samples), second_smallest_idx]
             near_idx_map = smallest_idx
         else:
-            # k = 1 case
             near_dist = subD[:, 0]
             second_dist = np.full(n_samples, np.inf)
             near_idx_map = np.zeros(n_samples, dtype=int)

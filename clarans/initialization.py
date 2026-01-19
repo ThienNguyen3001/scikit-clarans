@@ -6,9 +6,9 @@ from sklearn.utils import check_random_state
 def initialize_heuristic(X, n_clusters, metric="euclidean"):
     """
     Initialize medoids using a heuristic approach.
-    
+
     Picks the n_clusters points with the smallest sum distance to every other point.
-    
+
     Parameters
     ----------
     X : {array-like, sparse matrix} of shape (n_samples, n_features)
@@ -40,10 +40,10 @@ def initialize_heuristic(X, n_clusters, metric="euclidean"):
 def initialize_build(X, n_clusters, metric="euclidean"):
     """
     Initialize medoids using the PAM BUILD step.
-    
+
     Greedily selects the first medoid that minimizes total distance, then
     subsequently adds medoids that maximally decrease the total cost.
-    
+
     Parameters
     ----------
     X : {array-like, sparse matrix} of shape (n_samples, n_features)
@@ -96,11 +96,9 @@ def initialize_build(X, n_clusters, metric="euclidean"):
     return np.array(medoids)
 
 
-def initialize_k_medoids_plus_plus(X, 
-                                   n_clusters, 
-                                   random_state=None, 
-                                   metric="euclidean", 
-                                   n_local_trials=None):
+def initialize_k_medoids_plus_plus(
+    X, n_clusters, random_state=None, metric="euclidean", n_local_trials=None
+):
     """
     Initialize medoids using k-medoids++ (similar to k-means++).
 
@@ -149,7 +147,7 @@ def initialize_k_medoids_plus_plus(X,
         metric=metric,
     ).flatten()
 
-    closest_dist_sq = closest ** 2
+    closest_dist_sq = closest**2
     current_pot = closest_dist_sq.sum()
 
     for c in range(1, n_clusters):

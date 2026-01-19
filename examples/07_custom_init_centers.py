@@ -7,6 +7,7 @@ Run: python examples/07_custom_init_centers.py
 """
 
 import numpy as np
+
 from clarans import CLARANS
 
 

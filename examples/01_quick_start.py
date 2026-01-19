@@ -11,9 +11,10 @@ A compact, runnable example showing a simple CLARANS workflow:
 Run this script with: python examples/01_quick_start.py
 """
 
-from clarans import CLARANS
-from sklearn.datasets import make_blobs
 import matplotlib.pyplot as plt
+from sklearn.datasets import make_blobs
+
+from clarans import CLARANS
 
 
 def main():

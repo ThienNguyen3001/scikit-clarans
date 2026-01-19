@@ -6,10 +6,11 @@ Show that CLARANS accepts sparse CSR matrices as input.
 Run with: python examples/04_sparse_input.py
 """
 
-from scipy import sparse
-from clarans import CLARANS
-from sklearn.datasets import make_blobs
 import numpy as np
+from scipy import sparse
+from sklearn.datasets import make_blobs
+
+from clarans import CLARANS
 
 
 def main():
