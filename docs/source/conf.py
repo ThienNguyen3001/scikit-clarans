@@ -67,3 +67,13 @@ html_css_files = [
 html_js_files = [
     "gallery.js",
 ]
+
+# Show the global table of contents (master toctree) in the sidebar on every page
+html_sidebars = {
+    '**': [
+        'globaltoc.html',
+        'relations.html',
+        'sourcelink.html',
+        'searchbox.html',
+    ]
+}

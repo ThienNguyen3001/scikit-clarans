@@ -37,10 +37,17 @@ Welcome to the documentation for **scikit-clarans**, a specialized clustering li
    gallery/quality_vs_k
    gallery/performance
 
+.. toctree::
+   :maxdepth: 3
+   :caption: Project
+
+   project
+   contributing
+   license
+
 Indices and tables
 ==================
 
 * :ref:`genindex`
 * :ref:`modindex`
-* :ref:`search`
 
