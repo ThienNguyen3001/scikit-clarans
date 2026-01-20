@@ -4,6 +4,7 @@
 
 [![License](https://img.shields.io/github/license/ThienNguyen3001/scikit-clarans)](LICENSE)
 [![Python Version](https://img.shields.io/badge/python-3.8+-blue.svg)](https://www.python.org/downloads/)
+[![CI](https://github.com/ThienNguyen3001/scikit-clarans/actions/workflows/python-package.yml/badge.svg)](https://github.com/ThienNguyen3001/scikit-clarans/actions/workflows/python-package.yml)
 <a target="_blank" href="https://colab.research.google.com/drive/1JdgVaZcbS1uwY7kPQZM8DtX97R9ga31d?usp=sharing">
   <img src="https://colab.research.google.com/assets/colab-badge.svg" alt="Open In Colab"/>
 </a>
