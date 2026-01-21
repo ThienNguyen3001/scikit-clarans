@@ -20,6 +20,7 @@ Welcome to the documentation for **scikit-clarans**, a specialized clustering li
 
    installation
    usage
+   examples
 
 .. toctree::
    :maxdepth: 2
@@ -27,10 +28,26 @@ Welcome to the documentation for **scikit-clarans**, a specialized clustering li
 
    api
 
+.. toctree::
+   :maxdepth: 3
+   :caption: Gallery
+
+   gallery/2d_clustering
+   gallery/comparison
+   gallery/quality_vs_k
+   gallery/performance
+
+.. toctree::
+   :maxdepth: 3
+   :caption: Project
+
+   project
+   contributing
+   license
+
 Indices and tables
 ==================
 
 * :ref:`genindex`
 * :ref:`modindex`
-* :ref:`search`
 

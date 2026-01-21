@@ -3,12 +3,16 @@ API Reference
 
 Detailed documentation for the classes and functions in ``scikit-clarans``.
 
-Main Estimator
+CLARANS
 --------------
 
 The core class you will interact with.
 
 .. autoclass:: clarans.CLARANS
+   :members:
+   :inherited-members:
+   :show-inheritance:
+.. autoclass:: clarans.FastCLARANS
    :members:
    :inherited-members:
    :show-inheritance:

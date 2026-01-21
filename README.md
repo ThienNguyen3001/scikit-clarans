@@ -4,6 +4,10 @@
 
 [![License](https://img.shields.io/github/license/ThienNguyen3001/scikit-clarans)](LICENSE)
 [![Python Version](https://img.shields.io/badge/python-3.8+-blue.svg)](https://www.python.org/downloads/)
+[![CI](https://github.com/ThienNguyen3001/scikit-clarans/actions/workflows/python-package.yml/badge.svg)](https://github.com/ThienNguyen3001/scikit-clarans/actions/workflows/python-package.yml)
+<a target="_blank" href="https://colab.research.google.com/drive/1JdgVaZcbS1uwY7kPQZM8DtX97R9ga31d?usp=sharing">
+  <img src="https://colab.research.google.com/assets/colab-badge.svg" alt="Open In Colab"/>
+</a>
 
 **CLARANS** acts as a bridge between the high quality of **PAM (k-medoids)** and the speed required for large datasets. By using randomized search instead of exhaustive search, it finds high-quality medoids efficiently without exploring the entire graph of solutions.
 
@@ -48,6 +52,12 @@ clarans.fit(X)
 print("Medoid Indices:", clarans.medoid_indices_)
 print("Labels:", clarans.labels_)
 ```
+
+## Examples
+
+This repository includes a number of runnable examples in the `examples/` folder showing common usage patterns, integrations and a Jupyter notebook (`examples/clarans_examples.ipynb`) with many interactive recipes. Run any example with::
+
+    python examples/01_quick_start.py
 
 ## Documentation
 
