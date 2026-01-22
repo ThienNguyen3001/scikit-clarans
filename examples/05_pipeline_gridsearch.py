@@ -46,7 +46,7 @@ print(f"Best parameters: {grid_search.best_params_}")
 print(f"Best mean silhouette score: {grid_search.best_score_:.4f}")
 
 best_model = grid_search.best_estimator_
-print(f"\nBest model information:")
+print("\nBest model information:")
 print(f"  - Number of medoids found: {len(best_model.medoid_indices_)}")
 print(f"  - Medoid indices: {best_model.medoid_indices_}")
 
