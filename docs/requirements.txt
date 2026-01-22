@@ -5,4 +5,5 @@ numpy
 scikit-learn
 scipy
 sphinx-autodoc-typehints
+sphinx_copybutton
 .
