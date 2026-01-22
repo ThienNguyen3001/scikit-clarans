@@ -79,7 +79,7 @@ fast_model.fit(X)
 
 ## Documentation & Examples
 
-*   **[Full Documentation](./docs)**: API reference, gallery, and detailed user guide.
+*   **[Full Documentation](https://scikit-clarans.readthedocs.io/en/latest/index.html)**: API reference, gallery, and detailed user guide.
 *   **[Examples Folder](./examples)**: Runnable Python scripts showing:
     *   Basic usage & API demos.
     *   Comparison with other algorithms.
