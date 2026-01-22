@@ -1,85 +1,35 @@
-# scikit-clarans
+Examples for scikit-clarans
+===========================
 
-> A scikit-learn compatible implementation of the **CLARANS** (Clustering Large Applications based on RANdomized Search) algorithm.
+This folder contains runnable example scripts showcasing different aspects of
+using the CLARANS implementation.
 
-[![License](https://img.shields.io/github/license/ThienNguyen3001/scikit-clarans)](LICENSE)
-[![Python Version](https://img.shields.io/badge/python-3.8+-blue.svg)](https://www.python.org/downloads/)
-[![CI](https://github.com/ThienNguyen3001/scikit-clarans/actions/workflows/python-package.yml/badge.svg)](https://github.com/ThienNguyen3001/scikit-clarans/actions/workflows/python-package.yml)
-<a target="_blank" href="https://colab.research.google.com/drive/1JdgVaZcbS1uwY7kPQZM8DtX97R9ga31d?usp=sharing">
-  <img src="https://colab.research.google.com/assets/colab-badge.svg" alt="Open In Colab"/>
-</a>
-
-**CLARANS** acts as a bridge between the high quality of **PAM (k-medoids)** and the speed required for large datasets. By using randomized search instead of exhaustive search, it finds high-quality medoids efficiently without exploring the entire graph of solutions.
-
----
-
-## Features
-
-*   **Scikit-Learn Native**: Use it just like `KMeans` or `DBSCAN`. Drop-in compatibility for pipelines and cross-validation.
-*   **Scalable**: Designed to handle datasets where standard PAM/k-medoids is too slow.
-*   **Flexible**: Choose from multiple initialization strategies (`k-medoids++`, `build`, etc.) and distance metrics (`euclidean`, `manhattan`, `cosine`, etc.).
-*   **Robust**: `numlocal` parameter allows restarting searches to avoid local minima.
-
-## Installation
-
-Install simply via pip:
-
-```bash
-pip install .
-```
-
-For development
-```bash
-pip install -e .[dev]
-```
-
-## Quick Start
-
-```python
-from clarans import CLARANS
-from sklearn.datasets import make_blobs
-
-# 1. Create dummy data
-X, _ = make_blobs(n_samples=1000, centers=5, random_state=42)
-
-# 2. Initialize CLARANS
-#    - n_clusters: 5 clusters
-#    - numlocal: 3 restarts for better quality
-#    - init: 'k-medoids++' for smart starting points
-clarans = CLARANS(n_clusters=5, numlocal=3, init='k-medoids++', random_state=42)
-
-# 3. Fit
-clarans.fit(X)
-
-# 4. Results
-print("Medoid Indices:", clarans.medoid_indices_)
-print("Labels:", clarans.labels_)
-```
-## FastCLARANS
-
-For datasets that fit in memory, **FastCLARANS** can provide significant speedups by caching pairwise distances:
-
-```python
-from clarans import FastCLARANS
-
-fast_model = FastCLARANS(n_clusters=5, numlocal=3, random_state=42)
-fast_model.fit(X)
-```
-
-## Examples
-
-This repository includes a number of runnable examples in the `examples/` folder showing common usage patterns, integrations and a Jupyter notebook (`examples/clarans_examples.ipynb`) with many interactive recipes. Run any example with::
+How to run
+----------
+From the repository root, run any example with::
 
     python examples/01_quick_start.py
 
-## Documentation
+List of examples
+----------------
 
-For full API reference and usage guides, please see the [Documentation Folder](https://scikit-clarans.readthedocs.io/en/latest/index.html).
+- 01_quick_start.py: Simple clustering and visualization in 2D.
+- 02_compare_initializations.py: Compare initialization strategies and their cost/runtime.
+- 03_metrics_demo.py: Demonstrate different distance metrics (euclidean, manhattan, cosine).
+- 04_sparse_input.py: Use CLARANS on CSR sparse matrices.
+- 05_pipeline_gridsearch.py: Use CLARANS in a scikit-learn Pipeline and tune with GridSearchCV + silhouette score.
+- 06_predict_new_data.py: Predict cluster labels for new data points.
+- 07_custom_init_centers.py: Pass an array-like init to CLARANS.
+- 08_performance_tuning.py: Demonstrate runtime / quality trade-offs when tuning parameters.
 
-## Contributing
+Notes
+-----
+Some examples produce plots using matplotlib and will open interactive windows when
+run in an environment that supports it. To run in headless environments (CI, servers),
+set the backend::
 
-Contributions are welcome! Please check out [CONTRIBUTING.md](CONTRIBUTING.md) for guidelines.
+    import matplotlib
+    matplotlib.use("Agg")
 
-## License
-
-This project is licensed under the MIT License - see the [LICENSE](LICENSE) file for details.
+If you want an interactive notebook, check the `examples/` folder for a Jupyter
+notebook that demonstrates several of the examples together.
