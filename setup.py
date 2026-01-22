@@ -32,6 +32,24 @@ setup(
     keywords="clustering sklearn scikit-learn clarans k-medoids",
     packages=find_packages(),
     install_requires=["numpy", "scikit-learn", "scipy"],
+    extras_require={
+        "dev": [
+            "pytest",
+            "pytest-cov",
+            "flake8",
+            "sphinx>=5.0",
+            "sphinx-rtd-theme",
+            "sphinx-copybutton",
+            "sphinx-autodoc-typehints",
+        ],
+        "test": ["pytest", "pytest-cov", "flake8"],
+        "docs": [
+            "sphinx>=5.0",
+            "sphinx-rtd-theme",
+            "sphinx-copybutton",
+            "sphinx-autodoc-typehints",
+        ],
+    },
     python_requires=">=3.8",
     test_suite="clarans.tests",
 )
