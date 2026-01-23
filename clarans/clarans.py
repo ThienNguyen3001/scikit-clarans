@@ -91,6 +91,11 @@ class CLARANS(ClusterMixin, TransformerMixin, BaseEstimator):
     - Compared with ``FastCLARANS``, this implementation avoids
       caching the full distance matrix and is more memory-friendly for
       very large datasets at the cost of repeated distance computations.
+    
+    References
+    ----------
+    Ng, R. T., & Han, J. (2002). CLARANS: A method for clustering objects for spatial data mining. 
+    IEEE transactions on knowledge and data engineering, 14(5), 1003-1016.
 
     Examples
     --------

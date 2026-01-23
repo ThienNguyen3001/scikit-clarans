@@ -11,7 +11,7 @@ What is CLARANS?
 Think of it as a middle-ground between:
 
 *   **PAM (Partitioning Around Medoids):** High quality, but slow on large data.
-*   **CLARA:** Faster on large data, but works on fixed samples, potentially missing better clusterings.
+*   **CLARA (Clustering Large Applications):** Faster on large data, but works on fixed samples, potentially missing better clusterings.
 
 CLARANS explores the graph of possible solutions randomly. It doesn't check *every* neighbor of a node (a set of medoids), but only a random subset. This makes it scalable while better avoiding local minima approaches.
 
@@ -70,6 +70,6 @@ Tips for Best Results
 ---------------------
 
 *   **Initialization matters:** Using ``init='k-medoids++'`` or ``'build'`` often converges faster to better solutions than pure random.
-*   **Tuning numlocal:** If your results vary too much between runs, try increasing ``numlocal`` to explore more local minima.
+*   **Tuning parameters:** If your results vary too much between runs, try increasing ``numlocal`` to explore more local minima.
 
 For more hands-on recipes and runnable examples (including a Jupyter notebook with interactive demos), see :doc:`examples`.

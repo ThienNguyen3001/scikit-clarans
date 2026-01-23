@@ -1,3 +1,11 @@
+"""
+05_pipeline_gridsearch.py
+==================
+Demonstrates the CLARANS workflow with scikit-learn's GridSearchCV.
+
+Run with: python examples/05_pipeline_gridsearch.py
+"""
+
 import warnings
 
 import numpy as np
