@@ -59,7 +59,6 @@ import sphinx_rtd_theme
 html_theme = "sphinx_rtd_theme"
 html_static_path = ["_static"]
 
-# Add custom CSS and JS for the gallery page
 html_css_files = [
     "gallery.css",
 ]
@@ -68,7 +67,6 @@ html_js_files = [
     "gallery.js",
 ]
 
-# Show the global table of contents (master toctree) in the sidebar on every page
 html_sidebars = {
     '**': [
         'globaltoc.html',

@@ -40,6 +40,8 @@ Grid-search and pipelines
 .. literalinclude:: ../../examples/05_pipeline_gridsearch.py
    :language: python
 
+Additional examples are available in the examples directory <https://github.com/ThienNguyen3001/scikit-clarans/tree/main/examples>.
+
 Full Jupyter notebook
 ---------------------
 

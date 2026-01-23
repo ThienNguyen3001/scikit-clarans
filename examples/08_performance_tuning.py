@@ -36,9 +36,13 @@ def main():
         t1 = time.time()
 
         cost = calculate_cost(X, model.medoid_indices_)
-        print(
-            f"numlocal={c['numlocal']:2d}  maxneighbor={c['maxneighbor']:4d}  time={t1-t0:.3f}s  cost={cost:.2f}"
+        msg = (
+            f"numlocal={c['numlocal']:2d}  "
+            f"maxneighbor={c['maxneighbor']:4d}  "
+            f"time={t1-t0:.3f}s  "
+            f"cost={cost:.2f}"
         )
+        print(msg)
 
 
 if __name__ == "__main__":

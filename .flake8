@@ -1,4 +1,8 @@
 [flake8]
+filename = *.py
+exclude = .git,__pycache__,docs/source/conf.py,old,build,dist,examples/archive
+
 max-line-length = 100
-extend-ignore = E203, W293, W291
-exclude = .git,__pycache__,docs/source/conf.py,old,build,dist
+extend-ignore = E203,W291,W293
+count = True
+statistics = True

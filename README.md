@@ -9,7 +9,7 @@
   <img src="https://colab.research.google.com/assets/colab-badge.svg" alt="Open In Colab"/>
 </a>
 
-**CLARANS** acts as a bridge between the high quality of **PAM (k-medoids)** and the speed required for large datasets. By using randomized search instead of exhaustive search, it finds high-quality medoids efficiently without exploring the entire graph of solutions.
+**CLARANS** acts as a bridge between the high quality of **PAM (Partition Around Medoids)** and the speed required for large datasets. By using randomized search instead of exhaustive search, it finds high-quality medoids efficiently without exploring the entire graph of solutions.
 
 ---
 
@@ -18,7 +18,6 @@
 *   **Scikit-Learn Native**: Use it just like `KMeans` or `DBSCAN`. Drop-in compatibility for pipelines and cross-validation.
 *   **Scalable**: Designed to handle datasets where standard PAM/k-medoids is too slow.
 *   **Flexible**: Choose from multiple initialization strategies (`k-medoids++`, `build`, etc.) and distance metrics (`euclidean`, `manhattan`, `cosine`, etc.).
-*   **Robust**: `numlocal` parameter allows restarting searches to avoid local minima.
 
 ## Installation
 
@@ -28,10 +27,13 @@ Install simply via pip:
 pip install .
 ```
 
-*Note: Requires `numpy` and `scikit-learn`.*
+For development
+```bash
+pip install -e .[dev]
+```
 
 ## Quick Start
-
+### CLARANS
 ```python
 from clarans import CLARANS
 from sklearn.datasets import make_blobs
@@ -52,6 +54,16 @@ clarans.fit(X)
 print("Medoid Indices:", clarans.medoid_indices_)
 print("Labels:", clarans.labels_)
 ```
+### FastCLARANS
+
+For datasets that fit in memory, **FastCLARANS** can provide significant speedups by caching pairwise distances:
+
+```python
+from clarans import FastCLARANS
+
+fast_model = FastCLARANS(n_clusters=5, numlocal=3, random_state=42)
+fast_model.fit(X)
+```
 
 ## Examples
 
@@ -61,7 +73,7 @@ This repository includes a number of runnable examples in the `examples/` folder
 
 ## Documentation
 
-For full API reference and usage guides, please see the [Documentation Folder](./docs).
+For full API reference and usage guides, please see the [Documentation](https://scikit-clarans.readthedocs.io/en/latest/index.html).
 
 ## Contributing
 

@@ -10,7 +10,6 @@ Run with: python examples/02_compare_initializations.py
 import time
 
 import matplotlib.pyplot as plt
-import numpy as np
 from sklearn.datasets import make_blobs
 
 from clarans import CLARANS

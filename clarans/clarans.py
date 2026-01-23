@@ -5,8 +5,8 @@ from typing import TYPE_CHECKING, Any
 
 import numpy as np
 from numpy.typing import ArrayLike
-from sklearn.base import BaseEstimator, ClusterMixin
-from sklearn.metrics import pairwise_distances_argmin_min
+from sklearn.base import BaseEstimator, ClusterMixin, TransformerMixin
+from sklearn.metrics import pairwise_distances_argmin_min, pairwise_distances
 from sklearn.utils.validation import check_array, check_is_fitted, check_random_state
 
 from .initialization import (
@@ -20,7 +20,7 @@ if TYPE_CHECKING:
     from scipy.sparse import spmatrix
 
 
-class CLARANS(ClusterMixin, BaseEstimator):
+class CLARANS(ClusterMixin, TransformerMixin, BaseEstimator):
     """
     CLARANS (Clustering Large Applications based on RANdomized Search)
 
@@ -91,6 +91,11 @@ class CLARANS(ClusterMixin, BaseEstimator):
     - Compared with ``FastCLARANS``, this implementation avoids
       caching the full distance matrix and is more memory-friendly for
       very large datasets at the cost of repeated distance computations.
+    
+    References
+    ----------
+    Ng, R. T., & Han, J. (2002). CLARANS: A method for clustering objects for spatial data mining. 
+    IEEE transactions on knowledge and data engineering, 14(5), 1003-1016.
 
     Examples
     --------
@@ -359,3 +364,32 @@ class CLARANS(ClusterMixin, BaseEstimator):
             X, self.cluster_centers_, metric=self.metric
         )
         return labels
+
+    def transform(self, X: ArrayLike | "spmatrix") -> np.ndarray:
+        """
+        Transform X to a cluster-distance space.
+
+        In the new space, each dimension is the distance to the cluster centers.
+
+        Parameters
+        ----------
+        X : {array-like, sparse matrix} of shape (n_samples, n_features)
+            New data to transform.
+
+        Returns
+        -------
+        X_new : ndarray of shape (n_samples, n_clusters)
+            X transformed in the new space.
+        """
+        check_is_fitted(self)
+
+        try:
+            from sklearn.utils.validation import validate_data
+            X = validate_data(self, X=X, reset=False, accept_sparse=["csr", "csc"])
+        except ImportError:
+            if hasattr(self, "_validate_data"):
+                X = self._validate_data(X, reset=False, accept_sparse=["csr", "csc"])
+            else:
+                X = check_array(X, accept_sparse=["csr", "csc"])
+
+        return pairwise_distances(X, self.cluster_centers_, metric=self.metric)
