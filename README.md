@@ -9,7 +9,7 @@
   <img src="https://colab.research.google.com/assets/colab-badge.svg" alt="Open In Colab"/>
 </a>
 
-**CLARANS** acts as a bridge between the high quality of **PAM (k-medoids)** and the speed required for large datasets. By using randomized search instead of exhaustive search, it finds high-quality medoids efficiently without exploring the entire graph of solutions.
+**CLARANS** acts as a bridge between the high quality of **PAM (Partition Around Medoids)** and the speed required for large datasets. By using randomized search instead of exhaustive search, it finds high-quality medoids efficiently without exploring the entire graph of solutions.
 
 ---
 
@@ -18,7 +18,6 @@
 *   **Scikit-Learn Native**: Use it just like `KMeans` or `DBSCAN`. Drop-in compatibility for pipelines and cross-validation.
 *   **Scalable**: Designed to handle datasets where standard PAM/k-medoids is too slow.
 *   **Flexible**: Choose from multiple initialization strategies (`k-medoids++`, `build`, etc.) and distance metrics (`euclidean`, `manhattan`, `cosine`, etc.).
-*   **Robust**: `numlocal` parameter allows restarting searches to avoid local minima.
 
 ## Installation
 
@@ -34,7 +33,7 @@ pip install -e .[dev]
 ```
 
 ## Quick Start
-
+### CLARANS
 ```python
 from clarans import CLARANS
 from sklearn.datasets import make_blobs
@@ -55,7 +54,7 @@ clarans.fit(X)
 print("Medoid Indices:", clarans.medoid_indices_)
 print("Labels:", clarans.labels_)
 ```
-## FastCLARANS
+### FastCLARANS
 
 For datasets that fit in memory, **FastCLARANS** can provide significant speedups by caching pairwise distances:
 
