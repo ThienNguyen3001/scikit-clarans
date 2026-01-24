@@ -22,8 +22,6 @@ if TYPE_CHECKING:
 
 class CLARANS(ClusterMixin, TransformerMixin, BaseEstimator):
     """
-    CLARANS (Clustering Large Applications based on RANdomized Search)
-
     Parameters
     ----------
     n_clusters : int, default=8
