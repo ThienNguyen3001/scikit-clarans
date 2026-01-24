@@ -61,10 +61,12 @@ html_static_path = ["_static"]
 
 html_css_files = [
     "gallery.css",
+    "github-link.css",
 ]
 
 html_js_files = [
     "gallery.js",
+    "github-link.js",
 ]
 
 html_sidebars = {

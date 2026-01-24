@@ -1,0 +1,22 @@
+/* Small GitHub icon link to appear near "View page source" */
+.github-link {
+  display: inline-block;
+  margin-left: 8px;
+  vertical-align: middle;
+  color: inherit;
+}
+.github-link svg {
+  width: 18px;
+  height: 18px;
+  vertical-align: middle;
+  fill: currentColor;
+}
+.github-link:hover {
+  opacity: 0.85;
+}
+/* On narrow screens, reduce spacing */
+@media (max-width: 600px) {
+  .github-link {
+    margin-left: 6px;
+  }
+}
