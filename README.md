@@ -23,14 +23,16 @@
 ## Installation
 
 Install simply via pip:
-
+```bash
+pip install scikit-clarans
+```
+Or install from source:
 ```bash
 pip install .
 ```
-
 For development
 ```bash
-pip install -e .[dev]
+pip install -e ".[dev]"
 ```
 
 ## Quick Start
