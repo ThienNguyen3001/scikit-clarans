@@ -11,12 +11,12 @@ with codecs.open(os.path.join(here, "README.md"), encoding="utf-8") as f:
 
 setup(
     name="scikit-clarans",
-    version="0.1.2",
+    version="0.1.3",
     description="A scikit-learn compatible implementation of CLARANS clustering algorithm",
     long_description=long_description,
     long_description_content_type="text/markdown",
     url="https://github.com/ThienNguyen3001/scikit-clarans",
-    author="ThienNguyen3001",
+    author="Ngọc Thiện Nguyễn",
     author_email="thiennguyen03001@gmail.com",
     license="MIT",
     classifiers=[
