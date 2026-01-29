@@ -2,8 +2,6 @@ name: Quality & Sanity Check
 
 on:
   push:
-    branches-ignore:
-      - 'main'
     paths-ignore:
       - 'docs/**'         
       - '**.md'          
