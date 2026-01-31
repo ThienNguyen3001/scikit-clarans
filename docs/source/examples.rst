@@ -40,10 +40,14 @@ Grid-search and pipelines
 .. literalinclude:: ../../examples/05_pipeline_gridsearch.py
    :language: python
 
+Additional Resources
+--------------------
+
 Additional examples are available in the `examples directory <https://github.com/ThienNguyen3001/scikit-clarans/tree/main/examples>`_.
 
-Full Jupyter notebook
----------------------
-
 The examples directory also includes an interactive Jupyter notebook with many
-examples: ``examples/clarans_examples.ipynb``.
+examples:
+
+.. image:: https://colab.research.google.com/assets/colab-badge.svg
+   :target: https://colab.research.google.com/drive/1JdgVaZcbS1uwY7kPQZM8DtX97R9ga31d?usp=sharing
+   :alt: Open In Colab
