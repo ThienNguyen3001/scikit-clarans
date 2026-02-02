@@ -41,7 +41,9 @@ As datasets grow in size and complexity, the need for robust clustering algorith
 # State of the field
 
 In the Python ecosystem, `scikit-learn` [@scikit-learn] is the standard for machine learning. However, its native support for $k$-medoids is limited. 
+
 - **`scikit-learn-extra`** provides a `KMedoids` implementation (typically PAM-based), which offers exact solutions but suffers from the aforementioned performance bottlenecks on large data.
+
 - **`pyclustering`** [@novikov2019pyclustering] offers a wide range of clustering algorithms, including CLARANS. While powerful, its API differs significantly from `scikit-learn`, making integration into existing workflows (e.g., cross-validation, pipelines) less straightforward.
 
 `scikit-clarans` fills this niche by providing a dedicated, `scikit-learn`-native implementation of CLARANS. It strictly adheres to `scikit-learn`'s API design guidelines (regarding state management, parameter validation, and input handling), ensuring it can be used as a drop-in replacement for `KMeans` or other clusterers.

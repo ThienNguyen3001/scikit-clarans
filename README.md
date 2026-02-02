@@ -8,6 +8,7 @@
 [![Docs Build](https://img.shields.io/github/actions/workflow/status/ThienNguyen3001/scikit-clarans/docs-build.yml?branch=main&label=Docs%20Build)](https://github.com/ThienNguyen3001/scikit-clarans/actions/workflows/docs-build.yml)
 [![Test Suite](https://img.shields.io/github/actions/workflow/status/ThienNguyen3001/scikit-clarans/test_suite.yml?branch=main&label=Test%20Suite)](https://github.com/ThienNguyen3001/scikit-clarans/actions/workflows/test_suite.yml)
 [![Quality Check](https://img.shields.io/github/actions/workflow/status/ThienNguyen3001/scikit-clarans/lint_cov_check.yml?branch=main&label=Quality%20Check)](https://github.com/ThienNguyen3001/scikit-clarans/actions/workflows/lint_cov_check.yml)
+[![PyPI version](https://img.shields.io/pypi/v/scikit-clarans.svg)](https://pypi.org/project/scikit-clarans/)
 [![Open In Colab](https://colab.research.google.com/assets/colab-badge.svg)](https://colab.research.google.com/drive/1JdgVaZcbS1uwY7kPQZM8DtX97R9ga31d?usp=sharing)
 
 **CLARANS** acts as a bridge between the high quality of **PAM (Partition Around Medoids)** and the speed required for large datasets. By using randomized search instead of exhaustive search, it finds high-quality medoids efficiently without exploring the entire graph of solutions.
@@ -81,6 +82,21 @@ For full API reference and usage guides, please see the [Documentation](https://
 ## Contributing
 
 Contributions are welcome! Please check out [CONTRIBUTING.md](CONTRIBUTING.md) for guidelines.
+
+## Citation
+
+If you use `scikit-clarans` in your research, please cite:
+
+```bibtex
+@software{scikit_clarans,
+  author       = {Nguyen, Ngoc Thien},
+  title        = {scikit-clarans: A Python Library for CLARANS Clustering},
+  year         = {2026},
+  publisher    = {Zenodo},
+  doi          = {10.5281/zenodo.18366801},
+  url          = {https://github.com/ThienNguyen3001/scikit-clarans}
+}
+```
 
 ## License
 

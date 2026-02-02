@@ -10,10 +10,19 @@ Ensure you have the following installed:
 
 *   **Python** (>= 3.8)
 
+Installing from PyPI (Recommended)
+----------------------------------
+
+The easiest way to install is via pip:
+
+.. code-block:: bash
+
+    pip install scikit-clarans
+
 Installing from Source
 ----------------------
 
-Currently, the best way to install is directly from the source code on GitHub.
+Alternatively, you can install directly from the source code on GitHub.
 
 1.  **Clone the repository:**
 
@@ -33,4 +42,4 @@ Currently, the best way to install is directly from the source code on GitHub.
         
         .. code-block:: bash
 
-            pip install -e .
+            pip install -e ".[dev]"
