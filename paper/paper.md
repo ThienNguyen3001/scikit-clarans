@@ -32,6 +32,7 @@ Designed to be fully compatible with the `scikit-learn` ecosystem [@scikit-learn
 As datasets grow in size and complexity, the need for robust clustering algorithms that can handle non-Euclidean distances and outliers becomes critical. While $k$-means is fast, it is often unsuitable for domains requiring specific dissimilarity measures (e.g., categorical data, biological sequences). Traditional $k$-medoids implementations like PAM provide high quality but become computationally prohibitive as $N$ increases.
 
 `scikit-clarans` targets data scientists, researchers, and students who require:
+
 1.  **Robustness**: A clustering algorithm less sensitive to outliers than $k$-means.
 2.  **Flexibility**: The ability to use arbitrary distance metrics (Manhattan, Cosine, or precomputed distance matrices).
 3.  **Scalability**: A method that scales better than PAM for medium-to-large datasets.
@@ -68,12 +69,14 @@ The library is designed with modularity and usability in mind:
 # Methodology
 
 CLARANS interprets the clustering problem as a search in a graph $G_{n,k}$.
+
 - **Nodes**: Each node represents a set of $k$ medoids.
 - **Edges**: Two nodes are connected if their sets of medoids differ by exactly one object.
 
 Unlike PAM, which evaluates all neighbors of the current node (swapping every medoid with every non-medoid), CLARANS draws a sample of neighbors controlled by the `maxneighbors` parameter. If a neighbor with a lower cost (sum of distances from objects to their nearest medoid) is found, the algorithm moves to that neighbor. This process repeats until a local minimum is found. To avoid getting stuck in poor local optima, the search is repeated `numlocal` times starting from different random nodes.
 
 The algorithm parameters are:
+
 - `n_clusters` ($k$): Number of clusters.
 - `numlocal`: Number of local searches.
 - `maxneighbors`: Maximum number of neighbors examined.
@@ -115,6 +118,7 @@ print(f"Silhouette Score: {score:.3f}") # Based on work by @rousseeuw1987silhoue
 # AI usage disclosure
 
 We acknowledge the use of generative AI tools (specifically GitHub Copilot) in the development of this software and paper. These tools were used for:
+
 1.  **Code Assistance**: Generating boilerplate code, unit tests, and type hints.
 2.  **Documentation**: Assisting in drafting docstrings and refactoring documentation for clarity.
 
