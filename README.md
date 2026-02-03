@@ -60,14 +60,21 @@ print("Labels:", clarans.labels_)
 ```
 ### FastCLARANS
 
-For datasets that fit in memory, **FastCLARANS** can provide significant speedups by caching pairwise distances:
+**FastCLARANS** implements the faster variant from Schubert & Rousseeuw (2021). It evaluates swaps with all k medoids simultaneously using FastPAM1 delta formulas, exploring k edges of the search graph in the time CLARANS explores one:
 
 ```python
 from clarans import FastCLARANS
 
+# FastCLARANS computes distances on-the-fly (memory efficient)
+# and samples 2.5% of non-medoid points per iteration
 fast_model = FastCLARANS(n_clusters=5, numlocal=3, random_state=42)
 fast_model.fit(X)
 ```
+
+**Key differences from CLARANS:**
+- Samples only non-medoid candidates (not medoid-candidate pairs)
+- Evaluates swap with all k medoids at once (O(k) speedup per evaluation)
+- Memory efficient: O(n) instead of O(n²)
 
 ## Examples
 

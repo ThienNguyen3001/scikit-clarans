@@ -72,4 +72,29 @@ Tips for Best Results
 *   **Initialization matters:** Using ``init='k-medoids++'`` or ``'build'`` often converges faster to better solutions than pure random.
 *   **Tuning parameters:** If your results vary too much between runs, try increasing ``numlocal`` to explore more local minima.
 
+FastCLARANS
+-----------
+
+**FastCLARANS** is a faster variant based on Schubert & Rousseeuw (2021). It provides
+significant speedups by using the FastPAM1 optimization strategy.
+
+.. code-block:: python
+
+    from clarans import FastCLARANS
+
+    model = FastCLARANS(n_clusters=4, numlocal=3, random_state=42)
+    model.fit(X)
+
+**Key improvements over CLARANS:**
+
+*   **Smarter sampling:** Instead of sampling random (medoid, non-medoid) pairs, FastCLARANS samples only non-medoid candidates and evaluates swaps with all k medoids at once.
+*   **O(k) speedup:** Each candidate evaluation explores k edges of the search graph in the time CLARANS explores one.
+*   **Memory efficient:** Computes distances on-the-fly (O(n) memory) rather than precomputing a full distance matrix (O(n²)).
+*   **Better quality:** By exploring more of the search space per iteration, FastCLARANS often finds better solutions.
+
+**When to use FastCLARANS vs CLARANS:**
+
+*   Use **FastCLARANS** when you have low-dimensional data with cheap distance metrics (e.g., Euclidean).
+*   Use **CLARANS** when distance computation is very expensive or when you need maximum memory efficiency.
+
 For more hands-on recipes and runnable examples (including a Jupyter notebook with interactive demos), see :doc:`examples`.
