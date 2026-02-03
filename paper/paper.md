@@ -21,7 +21,7 @@ bibliography: paper.bib
 
 # Summary
 
-Clustering is a fundamental technique in data mining and unsupervised machine learning, used to group similar objects into sets. Among clustering methods, partitioning algorithms like $k$-means and $k$-medoids are widely used. While $k$-means is efficient, it is sensitive to outliers and limited to Euclidean distances. $k$-medoids algorithms, such as PAM (Partitioning Around Medoids), are more robust and support arbitrary distance metrics but effectively scale poorly ($O(k(N-k)^2)$) to large datasets [@kaufman1990finding].
+Clustering is a fundamental technique in data mining and unsupervised machine learning, used to group similar objects into sets. Among clustering methods, partitioning algorithms like $k$-means and $k$-medoids are widely used. While $k$-means is efficient, it is sensitive to outliers and limited to Euclidean distances. $k$-medoids algorithms, such as PAM (Partitioning Around Medoids), are more robust and support arbitrary distance metrics but scale poorly ($O(k(N-k)^2)$) to large datasets [@kaufman1990finding].
 
 `scikit-clarans` is a Python library that implements the **CLARANS** (Clustering Large Applications based on RANdomized Search) algorithm [@ng2002clarans]. CLARANS acts as a bridge between the high solution quality of PAM and the efficiency required for larger datasets. It views the process of finding $k$ medoids as searching through a graph where each node is a potential set of medoids. By detecting local minima through randomized search rather than exhaustive enumeration, CLARANS achieves a balance between computational speed and clustering quality.
 
@@ -61,7 +61,7 @@ The library is designed with modularity and usability in mind:
 
 # Research Impact Statement
 
-`scikit-clarans` significant contributions to the research community and data science practitioners:
+`scikit-clarans` makes significant contributions to the research community and data science practitioners:
 
 1.  **Benchmarking & Reproducibility**: By providing a standard-compliant, open-source implementation of CLARANS, the library facilitates fair and reproducible benchmarking against modern clustering algorithms. Researchers can now easily compare their new methods against CLARANS within the same software framework.
 2.  **Educational Tool**: The codebase serves as a clear reference implementation for students and educators teaching randomized algorithms and clustering techniques. Its integration with `scikit-learn` makes it accessible for classroom assignments without complex setup.
@@ -75,13 +75,14 @@ CLARANS interprets the clustering problem as a search in a graph $G_{n,k}$.
 - **Nodes**: Each node represents a set of $k$ medoids.
 - **Edges**: Two nodes are connected if their sets of medoids differ by exactly one object.
 
-Unlike PAM, which evaluates all neighbors of the current node (swapping every medoid with every non-medoid), CLARANS draws a sample of neighbors controlled by the `maxneighbors` parameter. If a neighbor with a lower cost (sum of distances from objects to their nearest medoid) is found, the algorithm moves to that neighbor. This process repeats until a local minimum is found. To avoid getting stuck in poor local optima, the search is repeated `numlocal` times starting from different random nodes.
+Unlike PAM, which evaluates all neighbors of the current node (swapping every medoid with every non-medoid), CLARANS draws a sample of neighbors controlled by the `maxneighbor` parameter. If a neighbor with a lower cost (sum of distances from objects to their nearest medoid) is found, the algorithm moves to that neighbor. This process repeats until a local minimum is found. To avoid getting stuck in poor local optima, the search is repeated `numlocal` times starting from different random nodes.
 
 The algorithm parameters are:
 
 - `n_clusters` ($k$): Number of clusters.
 - `numlocal`: Number of local searches.
-- `maxneighbors`: Maximum number of neighbors examined.
+- `maxneighbor`: Maximum number of neighbors examined by the algorithm. If not provided, it defaults to $\max(250, 0.0125 \times k(N-k))$ where $N$ is the number of samples.
+- `init`: Initialization method for medoids (`random`, `k-medoids++`, `heuristic`, `build` and array-like).
 
 # Example Usage
 
@@ -96,8 +97,7 @@ from sklearn.metrics import silhouette_score
 X, _ = make_blobs(n_samples=1000, centers=5, n_features=2, random_state=42)
 
 # 2. Initialize the model
-# Using 'k-medoids++' initialization for better convergence
-clarans = CLARANS(n_clusters=5, numlocal=3, init='k-medoids++', random_state=42)
+clarans = CLARANS(n_clusters=5, random_state=42)
 
 # 3. Fit the model
 clarans.fit(X)
@@ -108,7 +108,7 @@ print(f"Labels: {clarans.labels_[:10]}...")
 
 # 5. Evaluate
 score = silhouette_score(X, clarans.labels_)
-print(f"Silhouette Score: {score:.3f}") # Based on work by @rousseeuw1987silhouettes
+print(f"Silhouette Score: {score:.3f}") 
 
 # 6. Usage in a Pipeline (optional)
 # from sklearn.pipeline import Pipeline
