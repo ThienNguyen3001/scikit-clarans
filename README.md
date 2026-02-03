@@ -8,6 +8,7 @@
 [![Docs Build](https://img.shields.io/github/actions/workflow/status/ThienNguyen3001/scikit-clarans/docs-build.yml?branch=main&label=Docs%20Build)](https://github.com/ThienNguyen3001/scikit-clarans/actions/workflows/docs-build.yml)
 [![Test Suite](https://img.shields.io/github/actions/workflow/status/ThienNguyen3001/scikit-clarans/test_suite.yml?branch=main&label=Test%20Suite)](https://github.com/ThienNguyen3001/scikit-clarans/actions/workflows/test_suite.yml)
 [![Quality Check](https://img.shields.io/github/actions/workflow/status/ThienNguyen3001/scikit-clarans/lint_cov_check.yml?branch=main&label=Quality%20Check)](https://github.com/ThienNguyen3001/scikit-clarans/actions/workflows/lint_cov_check.yml)
+[![PyPI version](https://img.shields.io/pypi/v/scikit-clarans.svg)](https://pypi.org/project/scikit-clarans/)
 [![Open In Colab](https://colab.research.google.com/assets/colab-badge.svg)](https://colab.research.google.com/drive/1JdgVaZcbS1uwY7kPQZM8DtX97R9ga31d?usp=sharing)
 
 **CLARANS** acts as a bridge between the high quality of **PAM (Partition Around Medoids)** and the speed required for large datasets. By using randomized search instead of exhaustive search, it finds high-quality medoids efficiently without exploring the entire graph of solutions.
@@ -59,14 +60,21 @@ print("Labels:", clarans.labels_)
 ```
 ### FastCLARANS
 
-For datasets that fit in memory, **FastCLARANS** can provide significant speedups by caching pairwise distances:
+**FastCLARANS** implements the faster variant from Schubert & Rousseeuw (2021). It evaluates swaps with all k medoids simultaneously using FastPAM1 delta formulas, exploring k edges of the search graph in the time CLARANS explores one:
 
 ```python
 from clarans import FastCLARANS
 
+# FastCLARANS computes distances on-the-fly (memory efficient)
+# and samples 2.5% of non-medoid points per iteration
 fast_model = FastCLARANS(n_clusters=5, numlocal=3, random_state=42)
 fast_model.fit(X)
 ```
+
+**Key differences from CLARANS:**
+- Samples only non-medoid candidates (not medoid-candidate pairs)
+- Evaluates swap with all k medoids at once (O(k) speedup per evaluation)
+- Memory efficient: O(n) instead of O(n²)
 
 ## Examples
 
@@ -81,6 +89,21 @@ For full API reference and usage guides, please see the [Documentation](https://
 ## Contributing
 
 Contributions are welcome! Please check out [CONTRIBUTING.md](CONTRIBUTING.md) for guidelines.
+
+## Citation
+
+If you use `scikit-clarans` in your research, please cite:
+
+```bibtex
+@software{scikit_clarans,
+  author       = {Nguyen, Ngoc Thien},
+  title        = {scikit-clarans: A Python Library for CLARANS Clustering},
+  year         = {2026},
+  publisher    = {Zenodo},
+  doi          = {10.5281/zenodo.18366801},
+  url          = {https://github.com/ThienNguyen3001/scikit-clarans}
+}
+```
 
 ## License
 

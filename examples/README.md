@@ -21,7 +21,7 @@ List of examples
 - 06_predict_new_data.py: Predict cluster labels for new data points.
 - 07_custom_init_centers.py: Pass an array-like init to CLARANS.
 - 08_performance_tuning.py: Demonstrate runtime / quality trade-offs when tuning parameters.
-- 09_compare_fastclarans_clarans: Comparing CLARANS vs. FastCLARANS speed and memory trade-offs.
+- 09_compare_fastclarans_clarans: Compare CLARANS vs. FastCLARANS (FastPAM1 optimization with on-the-fly distances).
 - 10_transform_data: Testing CLARANS transform method for distance consistency and output shape.
 
 Notes

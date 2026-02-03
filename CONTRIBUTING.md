@@ -32,7 +32,7 @@ You can also help by improving the documentation, whether that's the README, doc
     ```
 3.  **Install** the package in editable mode with development dependencies:
     ```bash
-    pip install -e
+    pip install -e ".[dev]"
     ```
 4.  **Create a branch** for local development:
     ```bash
