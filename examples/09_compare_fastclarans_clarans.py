@@ -42,19 +42,18 @@ def calculate_total_cost(X, medoid_indices):
 def run_benchmark():
     warnings.filterwarnings("ignore")
     print("=" * 60)
-    print("BENCHMARK: SPEED vs MEMORY (CLARANS vs FastCLARANS)")
+    print("BENCHMARK: CLARANS vs FastCLARANS")
+    print("FastCLARANS uses FastPAM1 optimization with on-the-fly distances")
     print("=" * 60)
 
-    N_SAMPLES = 10000
+    N_SAMPLES = 1000
     N_CLUSTERS = 20
     N_FEATURES = 20
     RANDOM_STATE = 42
 
     print(f"Data: {N_SAMPLES} samples, {N_FEATURES} features.")
     print(f"Configuration: k={N_CLUSTERS}, random_state={RANDOM_STATE}")
-    print(
-        f"Estimated full distance matrix size: ~{N_SAMPLES**2 * 8 / (1024**2):.1f} MB"
-    )
+    print("FastCLARANS computes distances on-the-fly (memory efficient)")
 
     X, _ = make_blobs(
         n_samples=N_SAMPLES,
@@ -91,9 +90,10 @@ def run_benchmark():
     print("\nMemory (peak):")
     print(f"  - CLARANS:     {mem_orig:.2f} MB")
     print(f"  - FastCLARANS: {mem_fast:.2f} MB")
-    print(
-        f"  -> FastCLARANS uses {mem_diff:.1f}x more memory (due to full distance caching)"
-    )
+    if mem_diff > 1:
+        print(f"  -> FastCLARANS uses {mem_diff:.1f}x more memory")
+    else:
+        print(f"  -> FastCLARANS uses {1/mem_diff:.1f}x less memory (on-the-fly distances)")
 
     print("\nQuality (Cost - lower is better):")
     print(f"  - CLARANS:     {cost_orig:.2f}")
