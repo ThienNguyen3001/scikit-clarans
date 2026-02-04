@@ -1,3 +1,4 @@
+import warnings
 import numpy as np
 from sklearn.metrics import pairwise_distances
 from sklearn.utils import check_random_state
@@ -30,6 +31,13 @@ def initialize_heuristic(X, n_clusters, metric="euclidean"):
     This method computes the full pairwise distance matrix and therefore has
     O(n^2) time and memory complexity.
     """
+    if X.shape[0] >= 50000:
+        warnings.warn(
+            f"The 'heuristic' initialization involves a full distance matrix calculation "
+            f"for {X.shape[0]} samples. This can be extremely slow and memory-intensive (O(N^2)).",
+            UserWarning,
+        )
+
     # This requires O(N^2) complexity
     D = pairwise_distances(X, metric=metric)
     dist_sums = np.sum(D, axis=1)
@@ -61,6 +69,14 @@ def initialize_build(X, n_clusters, metric="euclidean"):
         Indices of the selected medoids in the dataset.
     """
     n_samples = X.shape[0]
+
+    if n_samples >= 25000:
+        warnings.warn(
+            f"The 'build' initialization involves a full distance matrix calculation "
+            f"for {n_samples} samples. This can be extremely slow and memory-intensive (O(N^2)).",
+            UserWarning,
+        )
+
     medoids = []
 
     # Calculate full distance matrix potentially (expensive) or compute on fly
