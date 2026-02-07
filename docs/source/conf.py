@@ -17,7 +17,7 @@ project = "scikit-clarans"
 copyright = "2026, Nguyễn Ngọc Thiện"
 author = "Nguyễn Ngọc Thiện"
 
-version = release = "0.2.0"
+version = release = "0.2.1"
 
 # -- General configuration ---------------------------------------------------
 # https://www.sphinx-doc.org/en/master/usage/configuration.html#general-configuration
