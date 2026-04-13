@@ -66,7 +66,7 @@ print("Labels:", clarans.labels_)
 from clarans import FastCLARANS
 
 # FastCLARANS computes distances on-the-fly (memory efficient)
-# and samples 2.5% of non-medoid points per iteration
+# and samples max(250, 2.5% of non-medoid points) per iteration
 fast_model = FastCLARANS(n_clusters=5, numlocal=3, random_state=42)
 fast_model.fit(X)
 ```
@@ -78,9 +78,11 @@ fast_model.fit(X)
 
 ## Examples
 
-This repository includes a number of runnable examples in the `examples/` folder showing common usage patterns, integrations and a Jupyter notebook (`examples/clarans_examples.ipynb`) with many interactive recipes. Run any example with::
+This repository includes a number of runnable examples in the `examples/` folder showing common usage patterns and integrations. Run any example with:
 
-    python examples/01_quick_start.py
+```bash
+python examples/01_quick_start.py
+```
 
 ## Documentation
 
