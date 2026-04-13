@@ -120,6 +120,85 @@ class CLARANS(ClusterMixin, TransformerMixin, BaseEstimator):
         self.metric = metric
         self.random_state = random_state
 
+    def _initialize_medoids(self, X, n_samples, n_features, random_state):
+        """Select initial medoid indices according to ``self.init``.
+
+        Parameters
+        ----------
+        X : array-like of shape (n_samples, n_features)
+            The validated data matrix.
+
+        n_samples : int
+            Number of samples in X.
+
+        n_features : int
+            Number of features in X.
+
+        random_state : RandomState
+            The random state instance to use.
+
+        Returns
+        -------
+        current_medoids_indices : ndarray of shape (n_clusters,)
+            Indices of the initial medoids.
+        """
+        all_indices = np.arange(n_samples)
+
+        if isinstance(self.init, str) and self.init == "random":
+            current_medoids_indices = random_state.choice(
+                n_samples, self.n_clusters, replace=False
+            )
+        elif isinstance(self.init, str) and self.init == "k-medoids++":
+            current_medoids_indices = initialize_k_medoids_plus_plus(
+                X, self.n_clusters, random_state, self.metric
+            )
+        elif isinstance(self.init, str) and self.init == "heuristic":
+            current_medoids_indices = initialize_heuristic(
+                X, self.n_clusters, self.metric
+            )
+        elif isinstance(self.init, str) and self.init == "build":
+            current_medoids_indices = initialize_build(
+                X, self.n_clusters, self.metric
+            )
+        elif hasattr(self.init, "__array__") or isinstance(self.init, list):
+            init_centers = check_array(self.init)
+            if init_centers.shape != (self.n_clusters, n_features):
+                raise ValueError(
+                    f"init array must be of shape ({self.n_clusters}, {n_features})"
+                )
+
+            current_medoids_indices, _ = pairwise_distances_argmin_min(
+                init_centers, X, metric=self.metric
+            )
+
+            current_medoids_indices = np.array(current_medoids_indices, dtype=int)
+
+            current_medoids_indices = np.unique(current_medoids_indices)
+
+            if len(current_medoids_indices) < self.n_clusters:
+                warnings.warn(
+                    "Provided init centers map to duplicate points in X. "
+                    "Filling duplicates with random points."
+                )
+                remaining = self.n_clusters - len(current_medoids_indices)
+                available = np.setdiff1d(
+                    all_indices, current_medoids_indices, assume_unique=True
+                )
+
+                if len(available) < remaining:
+                    raise ValueError(
+                        "Not enough unique points to fill up to n_clusters."
+                    )
+
+                fillers = random_state.choice(available, remaining, replace=False)
+                current_medoids_indices = np.concatenate(
+                    [current_medoids_indices, fillers]
+                )
+        else:
+            raise ValueError(f"Unknown init method: {self.init}")
+
+        return np.array(current_medoids_indices, dtype=int)
+
     def __sklearn_tags__(self):
         """Declare estimator capabilities for scikit-learn's check_estimator.
 
@@ -205,63 +284,10 @@ class CLARANS(ClusterMixin, TransformerMixin, BaseEstimator):
         best_medoids = np.empty(self.n_clusters, dtype=int)
         self.n_iter_ = 0
 
-        all_indices = np.arange(n_samples)
-
         for loc_idx in range(self.numlocal):
-            if isinstance(self.init, str) and self.init == "random":
-                current_medoids_indices = random_state.choice(
-                    n_samples, self.n_clusters, replace=False
-                )
-            elif isinstance(self.init, str) and self.init == "k-medoids++":
-                current_medoids_indices = initialize_k_medoids_plus_plus(
-                    X, self.n_clusters, random_state, self.metric
-                )
-            elif isinstance(self.init, str) and self.init == "heuristic":
-                current_medoids_indices = initialize_heuristic(
-                    X, self.n_clusters, self.metric
-                )
-            elif isinstance(self.init, str) and self.init == "build":
-                current_medoids_indices = initialize_build(
-                    X, self.n_clusters, self.metric
-                )
-            elif hasattr(self.init, "__array__") or isinstance(self.init, list):
-                init_centers = check_array(self.init)
-                if init_centers.shape != (self.n_clusters, n_features):
-                    raise ValueError(
-                        f"init array must be of shape ({self.n_clusters}, {n_features})"
-                    )
-
-                current_medoids_indices, _ = pairwise_distances_argmin_min(
-                    init_centers, X, metric=self.metric
-                )
-
-                current_medoids_indices = np.array(current_medoids_indices, dtype=int)
-
-                current_medoids_indices = np.unique(current_medoids_indices)
-
-                if len(current_medoids_indices) < self.n_clusters:
-                    warnings.warn(
-                        "Provided init centers map to duplicate points in X. "
-                        "Filling duplicates with random points."
-                    )
-                    remaining = self.n_clusters - len(current_medoids_indices)
-                    available = np.setdiff1d(
-                        all_indices, current_medoids_indices, assume_unique=True
-                    )
-
-                    if len(available) < remaining:
-                        raise ValueError(
-                            "Not enough unique points to fill up to n_clusters."
-                        )
-
-                    fillers = random_state.choice(available, remaining, replace=False)
-                    current_medoids_indices = np.concatenate(
-                        [current_medoids_indices, fillers]
-                    )
-            else:
-                raise ValueError(f"Unknown init method: {self.init}")
-
-            current_medoids_indices = np.array(current_medoids_indices, dtype=int)
+            current_medoids_indices = self._initialize_medoids(
+                X, n_samples, n_features, random_state
+            )
 
             current_cost = calculate_cost(X, current_medoids_indices, self.metric)
 
@@ -304,6 +330,7 @@ class CLARANS(ClusterMixin, TransformerMixin, BaseEstimator):
                 best_cost = current_cost
                 best_medoids = current_medoids_indices
 
+        self.inertia_ = best_cost
         self.medoid_indices_ = best_medoids
         self.cluster_centers_ = X[self.medoid_indices_]
 
