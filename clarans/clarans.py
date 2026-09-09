@@ -326,7 +326,7 @@ class CLARANS(ClusterMixin, TransformerMixin, BaseEstimator):
 
             if current_cost < best_cost:
                 best_cost = current_cost
-                best_medoids = current_medoids_indices
+                best_medoids = current_medoids_indices.copy()
 
         return self._finalize_fit(X, best_cost, best_medoids)
 

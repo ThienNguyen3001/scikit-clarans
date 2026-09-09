@@ -98,11 +98,20 @@ class TestFastCLARANS(unittest.TestCase):
         np.testing.assert_array_equal(labels, model.labels_)
 
     def test_single_cluster(self):
-        """Test with n_clusters=1 (edge case)."""
+        """Test with n_clusters=1 (edge case) and ensure swap optimizes cost."""
         model = FastCLARANS(n_clusters=1, numlocal=1, maxneighbor=10, random_state=42)
         model.fit(self.X)
         self.assertEqual(len(model.cluster_centers_), 1)
         self.assertTrue(np.all(model.labels_ == 0))
+
+        # Test on 1D data where initial point is suboptimal to verify swap occurs
+        X_1d = np.array([[0.0], [1.0], [10.0]])
+        # random_state=0 initially selects index 2 (10.0) with cost 19.0
+        model_1d = FastCLARANS(n_clusters=1, numlocal=1, maxneighbor=10, random_state=0)
+        model_1d.fit(X_1d)
+        self.assertEqual(model_1d.medoid_indices_[0], 1)
+        self.assertAlmostEqual(model_1d.inertia_, 10.0)
+
 
     def test_inertia_attribute(self):
         """Test that inertia_ is set after fit and is non-negative."""
