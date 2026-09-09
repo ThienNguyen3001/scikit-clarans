@@ -91,16 +91,20 @@ class CLARANS(ClusterMixin, TransformerMixin, BaseEstimator):
 
     Notes
     -----
-    - Time complexity: each local search evaluates up to ``maxneighbor``
-      candidate swaps, and each cost evaluation is O(n * k) (distance
-      to medoids), so the worst-case runtime is roughly
-      O(numlocal * maxneighbor * n * k).
-    - Initialization methods such as ``'heuristic'`` and ``'build'``
-      may compute the full pairwise distance matrix and therefore have
-      O(n^2) time and memory costs.
-    - Compared with ``FastCLARANS``, this implementation avoids
-      caching the full distance matrix and is more memory-friendly for
-      very large datasets at the cost of repeated distance computations.
+    - Time complexity: In each local search, random candidate neighbor swaps
+      are evaluated on the search graph G_{n,k}. The search terminates when
+      ``maxneighbor`` consecutive non-improving swaps are tested. With up to
+      ``max_iter`` successful swaps (S) and distance evaluation cost
+      O(n * k * d), runtime per local search is bounded by
+      O((S + maxneighbor) * n * k * d), repeated ``numlocal`` times.
+    - Memory complexity: Distances are computed on-the-fly, keeping memory
+      usage at O(n) instead of O(n^2). Note that initialization methods
+      such as ``'build'`` and ``'heuristic'`` compute full pairwise distance
+      matrices and therefore have O(n^2) time and memory costs.
+    - Compared with ``FastCLARANS``: This class implements the classic
+      randomized search from Ng & Han (2002). For faster execution on larger
+      datasets, consider ``FastCLARANS``, which tests swaps with all k medoids
+      simultaneously using FastPAM1 delta calculations.
     
     References
     ----------

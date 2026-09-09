@@ -1,6 +1,6 @@
 # scikit-clarans
 
-> A scikit-learn compatible implementation of the **CLARANS** (Clustering Large Applications based on RANdomized Search) algorithm.
+> A scikit-learn compatible implementation of **CLARANS** and **FastCLARANS** for scalable $k$-medoids clustering.
 
 [![License](https://img.shields.io/github/license/ThienNguyen3001/scikit-clarans)](LICENSE)
 [![DOI](https://zenodo.org/badge/DOI/10.5281/zenodo.18366801.svg)](https://doi.org/10.5281/zenodo.18366801)
@@ -11,15 +11,24 @@
 [![PyPI version](https://img.shields.io/pypi/v/scikit-clarans.svg)](https://pypi.org/project/scikit-clarans/)
 [![Open In Colab](https://colab.research.google.com/assets/colab-badge.svg)](https://colab.research.google.com/drive/1JdgVaZcbS1uwY7kPQZM8DtX97R9ga31d?usp=sharing)
 
-**CLARANS** acts as a bridge between the high quality of **PAM (Partition Around Medoids)** and the speed required for large datasets. By using randomized search instead of exhaustive search, it finds high-quality medoids efficiently without exploring the entire graph of solutions.
+**scikit-clarans** brings scalable $k$-medoids clustering to Python with a native scikit-learn API. Unlike $k$-means which computes artificial centroids (means), $k$-medoids picks **actual data points** as cluster centers.
+
+### 💡 Why k-Medoids over k-Means?
+* 🛡️ **Outlier Robust**: Minimizes absolute distance ($\sum d$) rather than squared Euclidean distance ($\sum d^2$), so extreme values won't skew cluster centers.
+* 🧩 **Custom Distance Metrics**: Works with `cosine`, `manhattan`, `euclidean`, or any valid metric—unlike $k$-means which is strictly Euclidean.
+* 🎯 **Directly Interpretable**: Medoids are real observations from your dataset (e.g., representative user profiles, real molecules, exemplary documents).
+
+### ⚡ CLARANS vs. FastCLARANS: Which one to use?
+* **`FastCLARANS` (Recommended for most workloads)**: Uses FastPAM1 delta calculations (Schubert & Rousseeuw, 2021) to evaluate all $k$ medoids at once. Explores $k$ graph edges in the time CLARANS explores one, yielding substantial speedups with $O(n)$ memory.
+* **`CLARANS`**: Classic randomized search (Ng & Han, 2002). Useful as a baseline or for exact reproduction of published benchmarks.
 
 ---
 
 ## Features
 
-*   **Scikit-Learn Native**: Use it just like `KMeans` or `DBSCAN`. Drop-in compatibility for pipelines and cross-validation.
-*   **Scalable**: Designed to handle datasets where standard PAM/k-medoids is too slow.
-*   **Flexible**: Choose from multiple initialization strategies (`k-medoids++`, `build`, etc.) and distance metrics (`euclidean`, `manhattan`, `cosine`, etc.).
+* **Scikit-Learn Native**: Inherits from `BaseEstimator` and `ClusterMixin`. Plug-and-play in scikit-learn `Pipeline`, `GridSearchCV`, and clustering evaluations.
+* **Memory Efficient**: Computes distances on-the-fly ($O(n)$ memory overhead) to easily scale to tens of thousands of samples without blowing up RAM ($O(n^2)$).
+* **Flexible Seeding**: Supports multiple initialization strategies (`k-medoids++`, `build`, `random`).
 
 ## Installation
 
@@ -94,7 +103,7 @@ Contributions are welcome! Please check out [CONTRIBUTING.md](CONTRIBUTING.md) f
 
 ## Citation
 
-If you use `scikit-clarans` in your research, please cite:
+If you use `scikit-clarans` in your software or research, please cite:
 
 ```bibtex
 @software{scikit_clarans,
@@ -106,6 +115,15 @@ If you use `scikit-clarans` in your research, please cite:
   url          = {https://github.com/ThienNguyen3001/scikit-clarans}
 }
 ```
+
+### Academic References
+
+The core algorithms implemented in this package originate from:
+
+* **CLARANS:**
+  > Ng, R. T., & Han, J. (2002). *CLARANS: A method for clustering objects for spatial data mining.* IEEE Transactions on Knowledge and Data Engineering, 14(5), 1003-1016. [doi:10.1109/TKDE.2002.1033770](https://doi.org/10.1109/TKDE.2002.1033770)
+* **FastCLARANS & FastPAM1:**
+  > Schubert, E., & Rousseeuw, P. J. (2021). *Fast and eager k-medoids clustering: O(k) runtime improvement of the PAM, CLARA, and CLARANS algorithms.* Information Systems, 101, 101804. [doi:10.1016/j.is.2021.101804](https://doi.org/10.1016/j.is.2021.101804)
 
 ## License
 
