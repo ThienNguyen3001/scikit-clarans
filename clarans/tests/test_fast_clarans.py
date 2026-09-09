@@ -112,7 +112,6 @@ class TestFastCLARANS(unittest.TestCase):
         self.assertEqual(model_1d.medoid_indices_[0], 1)
         self.assertAlmostEqual(model_1d.inertia_, 10.0)
 
-
     def test_inertia_attribute(self):
         """Test that inertia_ is set after fit and is non-negative."""
         model = FastCLARANS(n_clusters=3, numlocal=2, maxneighbor=50, random_state=42)
