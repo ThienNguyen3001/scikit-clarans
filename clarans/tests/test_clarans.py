@@ -78,7 +78,6 @@ class TestCLARANS(unittest.TestCase):
             clarans.fit(self.X)
             self.assertEqual(len(clarans.cluster_centers_), 3)
 
-
     def test_input_validation_init(self):
         """Test invalid init parameter."""
         clarans = CLARANS(n_clusters=3, init="invalid_method")
@@ -234,7 +233,6 @@ class TestCLARANS(unittest.TestCase):
         clarans = CLARANS(n_clusters=3)
         with self.assertRaises(Exception):
             clarans.predict(self.X)
-
 
 
 class TestCLARANSEdgeCases(unittest.TestCase):
