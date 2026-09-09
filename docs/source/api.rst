@@ -1,17 +1,26 @@
 API Reference
 =============
 
-Detailed documentation for the classes and functions in ``scikit-clarans``.
+Detailed documentation for estimators, initialization strategies, and utility functions in ``scikit-clarans``.
+
+Estimators
+----------
 
 CLARANS
---------------
+^^^^^^^
 
-The core class you will interact with.
+The classic randomized search k-medoids estimator (Ng & Han, 2002).
 
 .. autoclass:: clarans.CLARANS
    :members:
    :inherited-members:
    :show-inheritance:
+
+FastCLARANS
+^^^^^^^^^^^
+
+The accelerated k-medoids estimator using FastPAM1 simultaneous delta updates (Schubert & Rousseeuw, 2021).
+
 .. autoclass:: clarans.FastCLARANS
    :members:
    :inherited-members:
@@ -20,12 +29,20 @@ The core class you will interact with.
 Helper Modules
 --------------
 
-Internal modules for initialization and utilities.
+Initialization
+^^^^^^^^^^^^^^
+
+Internal strategies for seeding medoids (``'k-medoids++'``, ``'build'``, ``'heuristic'``, ``'random'``).
 
 .. automodule:: clarans.initialization
    :members:
    :undoc-members:
    :show-inheritance:
+
+Utilities
+^^^^^^^^^
+
+Distance metrics, objective evaluations, and validation helpers.
 
 .. automodule:: clarans.utils
    :members:

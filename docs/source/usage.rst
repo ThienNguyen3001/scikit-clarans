@@ -1,102 +1,167 @@
 User Guide
 ==========
 
-This guide covers the basics of using **scikit-clarans** for your clustering tasks.
+This guide covers the essentials of clustering with **scikit-clarans**, explaining practical use cases, algorithm selection, parameter tuning, and the core search mechanics.
 
-What is CLARANS?
-----------------
+Why k-Medoids? (k-Medoids vs. k-Means)
+--------------------------------------
 
-**CLARANS** stands for *Clustering Large Applications based on RANdomized Search*. 
+While **k-Means** is widely used, it has fundamental limitations in practical machine learning workflows:
 
-Think of it as a middle-ground between:
+1. **Artificial Centroids vs. Real Data Points**:
+   k-Means averages points in Euclidean space to produce cluster "centroids" that do not exist in the original data. In contrast, **k-medoids** restricts cluster centers (medoids) to **actual data points from your dataset**. This provides immediate interpretability:
+   
+   * In customer analytics: The medoid is a real customer profile.
+   * In text clustering: The medoid is an actual representative document.
+   * In bioinformatics: The medoid is a real sequenced molecule or patient case.
 
-*   **PAM (Partitioning Around Medoids):** High quality, but slow on large data.
-*   **CLARA (Clustering Large Applications):** Faster on large data, but works on fixed samples, potentially missing better clusterings.
+2. **Outlier Robustness**:
+   k-Means minimizes the sum of squared Euclidean distances (:math:`\sum \|x_i - \mu\|^2`). Squaring distances gives extreme outliers disproportionate leverage, dragging centroids away from true cluster bodies. k-Medoids minimizes the sum of absolute pairwise distances:
 
-CLARANS explores the graph of possible solutions randomly. It doesn't check *every* neighbor of a node (a set of medoids), but only a random subset. This makes it scalable while better avoiding local minima approaches.
+   .. math::
+
+      \min_{M \subset X, |M|=k} \sum_{i=1}^n \min_{m \in M} d(x_i, m)
+
+   This gives k-medoids a substantially higher breakdown point against anomalies and noise.
+
+3. **Arbitrary Distance Metrics**:
+   k-Means is geometrically tied to Euclidean distance. k-Medoids works seamlessly with **any valid distance metric** (e.g., Cosine similarity for embeddings, Manhattan distance for grid layouts, or precomputed distance matrices).
+
+.. note::
+
+   **A note on `inertia_`**: In ``scikit-learn``'s ``KMeans``, ``inertia_`` represents the sum of *squared* Euclidean distances. In ``scikit-clarans``, ``inertia_`` represents the sum of *unsquared* distances from each sample to its assigned medoid according to the chosen metric.
 
 Quick Start
 -----------
 
-Here is a complete example to get you clustering in seconds.
+Here is a quick example demonstrating clustering with ``CLARANS``:
 
 .. code-block:: python
 
     from clarans import CLARANS
     from sklearn.datasets import make_blobs
-    import matplotlib.pyplot as plt
 
-    # 1. Prepare your data
-    # We'll generate 500 samples with 4 distinct centers
-    X, _ = make_blobs(n_samples=500, centers=4, n_features=2, random_state=42)
+    # 1. Generate sample data
+    X, _ = make_blobs(n_samples=1000, centers=4, n_features=2, random_state=42)
 
-    # 2. Initialize CLARANS
-    # We want to find 4 clusters. 
+    # 2. Instantiate and fit model
     model = CLARANS(
-        n_clusters=4, 
-        numlocal=3, 
-        init='k-medoids++', 
+        n_clusters=4,
+        numlocal=3,
+        init='k-medoids++',
         random_state=42
     )
-
-    # 3. Fit the model
     model.fit(X)
 
-    # 4. Analyze results
-    print(f"Medoid Indices: {model.medoid_indices_}")
-    print(f"Labels: {model.labels_[:10]}...")
+    # 3. Inspect results
+    print("Medoid Indices:", model.medoid_indices_)
+    print("Medoid Coordinates:\n", model.cluster_centers_)
+    print("Labels (first 10):", model.labels_[:10])
+    print("Inertia (Total Distance Cost):", model.inertia_)
 
-Configuration
--------------
+Choosing an Estimator: CLARANS vs. FastCLARANS
+----------------------------------------------
 
-The ``CLARANS`` class offers several parameters to tune performance vs. quality:
+``scikit-clarans`` provides two main estimators:
 
 .. list-table::
-   :widths: 25 75
+   :widths: 25 35 40
    :header-rows: 1
 
-   * - Parameter
-     - Description
-   * - ``n_clusters``
-     - The number of clusters (medoids) to find.
-   * - ``numlocal``
-     - Number of local optima to search for. Higher usually means better quality but slower execution.
-   * - ``maxneighbor``
-     - Max neighbors to check per node. Defaults to a percentage of dataset size if not set.
-   * - ``init``
-     - Introduction strategy (e.g., ``'k-medoids++'``, ``'build'``, ``'random'``).
+   * - Feature
+     - ``CLARANS``
+     - ``FastCLARANS`` (Recommended)
+   * - **Original Paper**
+     - Ng & Han (2002)
+     - Schubert & Rousseeuw (2021)
+   * - **Sampling Strategy**
+     - Samples random (medoid, non-medoid) pairs
+     - Samples non-medoids; tests all :math:`k` medoids at once
+   * - **Delta Cost Update**
+     - Single swap evaluation per step
+     - FastPAM1 vectorized delta cost across all :math:`k` medoids
+   * - **Memory Footprint**
+     - :math:`O(n)` on-the-fly
+     - :math:`O(n)` on-the-fly
+   * - **Best For**
+     - Baseline / reproduction of Ng & Han (2002)
+     - **Default choice for production & larger datasets**
 
-Tips for Best Results
----------------------
-
-*   **Initialization matters:** Using ``init='k-medoids++'`` or ``'build'`` often converges faster to better solutions than pure random.
-*   **Tuning parameters:** If your results vary too much between runs, try increasing ``numlocal`` to explore more local minima.
-
-FastCLARANS
------------
-
-**FastCLARANS** is a faster variant based on Schubert & Rousseeuw (2021). It provides
-significant speedups by using the FastPAM1 optimization strategy.
+Quick example with ``FastCLARANS``:
 
 .. code-block:: python
 
     from clarans import FastCLARANS
 
-    model = FastCLARANS(n_clusters=4, numlocal=3, random_state=42)
-    model.fit(X)
+    # FastCLARANS evaluates k graph edges per candidate evaluation
+    fast_model = FastCLARANS(n_clusters=4, numlocal=3, random_state=42)
+    fast_model.fit(X)
 
-**Key improvements over CLARANS:**
+Configuration & Hyperparameter Tuning
+-------------------------------------
 
-*   **Smarter sampling:** Instead of sampling random (medoid, non-medoid) pairs, FastCLARANS samples only non-medoid candidates and evaluates swaps with all k medoids at once.
-*   **O(k) speedup:** Each candidate evaluation explores k edges of the search graph in the time CLARANS explores one.
-*   **Memory efficient:** Computes distances on-the-fly (O(n) memory) rather than precomputing a full distance matrix (O(n²)).
-*   **Better quality:** By exploring more of the search space per iteration, FastCLARANS often finds better solutions.
+Both estimators accept key hyperparameters to balance execution speed and clustering quality:
 
-**When to use FastCLARANS vs CLARANS:**
+.. list-table::
+   :widths: 20 20 60
+   :header-rows: 1
 
-*   Use **FastCLARANS** in most practical applications: it evaluates swaps with all k medoids simultaneously using FastPAM1 delta updates, exploring k edges of the search graph per evaluation for substantial speedups.
-*   Use **CLARANS** for strict adherence to the classic Ng & Han (2002) randomized search formulation, or as a baseline for comparing medoid clustering heuristics.
+   * - Parameter
+     - Default
+     - Description
+   * - ``n_clusters``
+     - ``8``
+     - Number of clusters (medoids) to find (:math:`k`).
+   * - ``numlocal``
+     - ``2``
+     - Number of local searches (random restarts). Higher values explore more local minima.
+   * - ``maxneighbor``
+     - Dynamic
+     - Maximum non-improving neighbors to check per search. Defaults to :math:`\max(250, 1.25\% \times k(n-k))` in CLARANS and :math:`\max(250, 2.5\% \times (n-k))` in FastCLARANS.
+   * - ``init``
+     - ``'k-medoids++'``
+     - Initialization strategy (``'k-medoids++'``, ``'build'``, ``'heuristic'``, ``'random'``).
+   * - ``metric``
+     - ``'euclidean'``
+     - Distance metric to use (e.g., ``'euclidean'``, ``'manhattan'``, ``'cosine'``).
 
-Both implementations compute distances on-the-fly to keep memory usage at O(n) instead of O(n²).
+Practical Tuning Tips
+^^^^^^^^^^^^^^^^^^^^^^
 
-For more hands-on recipes and runnable examples (or interactive experimentation via Google Colab), see :doc:`examples`.
+* **Initialization Strategy (``init``)**:
+  
+  * ``'k-medoids++'`` *(Default, recommended)*: Probabilistic seeding proportional to squared distance. Fast and memory-friendly (:math:`O(n \cdot k)`).
+  * ``'build'``: Classic PAM greedy seeding. Excellent solution quality on small datasets, but computes the full pairwise distance matrix (:math:`O(n^2)` time and memory). Avoid on large datasets (:math:`n > 5000`).
+  * ``'random'``: Pure uniform sampling. Very fast, but typically requires increasing ``numlocal`` to achieve comparable clustering quality.
+
+* **Number of Restarts (``numlocal``)**:
+  If cluster assignments fluctuate between runs or the objective value (``inertia_``) is inconsistent, increase ``numlocal`` to 3–5.
+
+* **Candidate Exploration (``maxneighbor``)**:
+  The dynamic default strikes a solid balance for most tabular datasets. If execution is too slow on very large datasets, you can explicitly set ``maxneighbor`` to a smaller fixed integer (e.g., ``maxneighbor=200``).
+
+How It Works (Under the Hood)
+-----------------------------
+
+Understanding the search graph :math:`G_{n,k}` helps developers reason about convergence:
+
+1. **The Search Graph**:
+   The problem space is modeled as an undirected graph :math:`G_{n,k} = (V, E)`.
+   * Each vertex :math:`v \in V` represents a candidate set of :math:`k` medoids (:math:`|V| = \binom{n}{k}`).
+   * Two vertices are connected by an edge if their medoid sets differ by exactly one point (a single swap :math:`(m_j \leftrightarrow x_c)`).
+   * Each node has exactly :math:`k(n-k)` neighbors.
+
+2. **Why Exhaustive PAM is Slow**:
+   Standard PAM examines all :math:`k(n-k)` neighbors at each step to find the steepest descent, costing :math:`O(k(n-k)^2)` per iteration. This becomes intractable for large datasets.
+
+3. **How CLARANS Accelerates Search**:
+   Instead of checking all :math:`k(n-k)` neighbors, CLARANS draws random candidate neighbors. As soon as it finds a neighbor that reduces the clustering cost, it immediately transitions to that node (first-choice hill climbing). If :math:`\text{maxneighbor}` consecutive random neighbors fail to improve the cost, the search terminates at a local optimum. The process repeats :math:`\text{numlocal}` times from new random starts.
+
+4. **How FastCLARANS Improves Exploration**:
+   FastCLARANS utilizes the FastPAM1 formulation: by tracking the nearest and second-nearest medoids for each sample, it computes the swap delta for **all :math:`k` medoids simultaneously** in a single :math:`O(n)` pass over the data. This evaluates :math:`k` graph edges in the time CLARANS evaluates one.
+
+Next Steps
+----------
+
+* Check out the runnable recipes in :doc:`examples` (including Colab notebooks).
+* Review the full parameter specifications in :doc:`api`.
