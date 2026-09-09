@@ -77,6 +77,18 @@ class CLARANS(ClusterMixin, TransformerMixin, BaseEstimator):
     medoid_indices_ : ndarray of shape (n_clusters,)
         Indices of the medoids in the training set X.
 
+    inertia_ : float
+        Sum of distances of samples to their closest cluster center.
+
+    maxneighbor_ : int
+        Actual number of neighbors examined during search.
+
+    n_iter_ : int
+        Total number of iterations (accepted swaps) across all local searches.
+
+    n_features_in_ : int
+        Number of features seen during :term:`fit`.
+
     Notes
     -----
     - Time complexity: each local search evaluates up to ``maxneighbor``
@@ -257,43 +269,7 @@ class CLARANS(ClusterMixin, TransformerMixin, BaseEstimator):
         >>> model = CLARANS(n_clusters=3, random_state=0)
         >>> model.fit(X)
         """
-        if self.n_clusters < 1:
-            raise ValueError(f"n_clusters must be >= 1; got {self.n_clusters}")
-        if self.numlocal < 1:
-            raise ValueError(f"numlocal must be >= 1; got {self.numlocal}")
-        if self.max_iter is not None and self.max_iter < 0:
-            raise ValueError(f"max_iter must be >= 0; got {self.max_iter}")
-        if self.maxneighbor is not None and self.maxneighbor < 1:
-            raise ValueError(f"maxneighbor must be >= 1; got {self.maxneighbor}")
-
-        try:
-            from sklearn.utils.validation import validate_data
-
-            X = validate_data(
-                self, X=X, ensure_min_samples=2, accept_sparse=["csr", "csc"]
-            )
-        except ImportError:
-            if hasattr(self, "_validate_data"):
-                X = self._validate_data(
-                    X, ensure_min_samples=2, accept_sparse=["csr", "csc"]
-                )
-            else:
-                X = check_array(X, ensure_min_samples=2, accept_sparse=["csr", "csc"])
-                self.n_features_in_ = X.shape[1]
-
-        random_state = check_random_state(self.random_state)
-        n_samples, n_features = X.shape
-
-        if self.n_clusters >= n_samples:
-            raise ValueError(
-                f"n_clusters must be less than n_samples ({n_samples}); got {self.n_clusters}"
-            )
-
-        if self.metric == "precomputed" and n_samples != n_features:
-            raise ValueError(
-                f"Precomputed distance matrix must be square "
-                f"(got shape ({n_samples}, {n_features}))"
-            )
+        X, random_state, n_samples, n_features = self._validate_input_and_params(X)
 
         if self.maxneighbor is None:
             self.maxneighbor_ = max(
@@ -352,7 +328,53 @@ class CLARANS(ClusterMixin, TransformerMixin, BaseEstimator):
                 best_cost = current_cost
                 best_medoids = current_medoids_indices
 
-        self.inertia_ = best_cost
+        return self._finalize_fit(X, best_cost, best_medoids)
+
+    def _validate_input_and_params(self, X):
+        """Validate estimator parameters and input data array."""
+        if self.n_clusters < 1:
+            raise ValueError(f"n_clusters must be >= 1; got {self.n_clusters}")
+        if self.numlocal < 1:
+            raise ValueError(f"numlocal must be >= 1; got {self.numlocal}")
+        if self.max_iter is not None and self.max_iter < 0:
+            raise ValueError(f"max_iter must be >= 0; got {self.max_iter}")
+        if self.maxneighbor is not None and self.maxneighbor < 1:
+            raise ValueError(f"maxneighbor must be >= 1; got {self.maxneighbor}")
+
+        try:
+            from sklearn.utils.validation import validate_data
+
+            X = validate_data(
+                self, X=X, ensure_min_samples=2, accept_sparse=["csr", "csc"]
+            )
+        except ImportError:
+            if hasattr(self, "_validate_data"):
+                X = self._validate_data(
+                    X, ensure_min_samples=2, accept_sparse=["csr", "csc"]
+                )
+            else:
+                X = check_array(X, ensure_min_samples=2, accept_sparse=["csr", "csc"])
+                self.n_features_in_ = X.shape[1]
+
+        random_state = check_random_state(self.random_state)
+        n_samples, n_features = X.shape
+
+        if self.n_clusters >= n_samples:
+            raise ValueError(
+                f"n_clusters must be less than n_samples ({n_samples}); got {self.n_clusters}"
+            )
+
+        if self.metric == "precomputed" and n_samples != n_features:
+            raise ValueError(
+                f"Precomputed distance matrix must be square "
+                f"(got shape ({n_samples}, {n_features}))"
+            )
+
+        return X, random_state, n_samples, n_features
+
+    def _finalize_fit(self, X, best_cost, best_medoids):
+        """Set fitted attributes and assign cluster labels."""
+        self.inertia_ = float(best_cost)
         self.medoid_indices_ = best_medoids
         self.cluster_centers_ = X[self.medoid_indices_]
 

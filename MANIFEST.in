@@ -2,5 +2,5 @@ include README.md
 include LICENSE
 include clarans/py.typed
 recursive-include clarans *.py
-recursive-include examples *.py *.ipynb
+recursive-include examples *.py
 recursive-include docs/source *.rst

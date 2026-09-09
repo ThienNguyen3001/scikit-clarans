@@ -12,8 +12,7 @@ from typing import TYPE_CHECKING, Any, Sequence, Tuple
 
 import numpy as np
 from numpy.typing import ArrayLike
-from sklearn.metrics import pairwise_distances, pairwise_distances_argmin_min
-from sklearn.utils.validation import check_array, check_random_state
+from sklearn.metrics import pairwise_distances
 
 from clarans.clarans import CLARANS
 
@@ -70,6 +69,15 @@ class FastCLARANS(CLARANS):
         Sum of distances from each sample to its nearest medoid (total
         cost of the best solution found).
 
+    maxneighbor_ : int
+        Actual number of non-medoid candidates sampled per local search.
+
+    n_iter_ : int
+        Total number of iterations (accepted swaps) across all local searches.
+
+    n_features_in_ : int
+        Number of features seen during :term:`fit`.
+
     Notes
     -----
     This implementation follows the original FastCLARANS paper by computing
@@ -123,43 +131,7 @@ class FastCLARANS(CLARANS):
         is efficient for low-dimensional data with cheap distance metrics
         (e.g., Euclidean distance).
         """
-        if self.n_clusters < 1:
-            raise ValueError(f"n_clusters must be >= 1; got {self.n_clusters}")
-        if self.numlocal < 1:
-            raise ValueError(f"numlocal must be >= 1; got {self.numlocal}")
-        if self.max_iter is not None and self.max_iter < 0:
-            raise ValueError(f"max_iter must be >= 0; got {self.max_iter}")
-        if self.maxneighbor is not None and self.maxneighbor < 1:
-            raise ValueError(f"maxneighbor must be >= 1; got {self.maxneighbor}")
-
-        try:
-            from sklearn.utils.validation import validate_data
-
-            X = validate_data(
-                self, X=X, ensure_min_samples=2, accept_sparse=["csr", "csc"]
-            )
-        except ImportError:
-            if hasattr(self, "_validate_data"):
-                X = self._validate_data(
-                    X, ensure_min_samples=2, accept_sparse=["csr", "csc"]
-                )
-            else:
-                X = check_array(X, ensure_min_samples=2, accept_sparse=["csr", "csc"])
-                self.n_features_in_ = X.shape[1]
-
-        random_state = check_random_state(self.random_state)
-        n_samples, n_features = X.shape
-
-        if self.n_clusters >= n_samples:
-            raise ValueError(
-                f"n_clusters must be less than n_samples ({n_samples}); got {self.n_clusters}"
-            )
-
-        if self.metric == "precomputed" and n_samples != n_features:
-            raise ValueError(
-                f"Precomputed distance matrix must be square "
-                f"(got shape ({n_samples}, {n_features}))"
-            )
+        X, random_state, n_samples, n_features = self._validate_input_and_params(X)
 
         if self.maxneighbor is None:
             # FastCLARANS samples 2.5% of non-medoid points per local search
@@ -280,21 +252,7 @@ class FastCLARANS(CLARANS):
                 best_cost = current_cost
                 best_medoids = current_medoids_indices.copy()
 
-        self.inertia_ = best_cost
-        self.medoid_indices_ = best_medoids
-        self.cluster_centers_ = X[self.medoid_indices_]
-
-        if self.metric == "precomputed":
-            dist_to_medoids = X[:, self.medoid_indices_]
-            if hasattr(dist_to_medoids, "toarray"):
-                dist_to_medoids = dist_to_medoids.toarray()
-            self.labels_ = np.argmin(dist_to_medoids, axis=1)
-        else:
-            self.labels_, _ = pairwise_distances_argmin_min(
-                X, self.cluster_centers_, metric=self.metric
-            )
-
-        return self
+        return self._finalize_fit(X, best_cost, best_medoids)
 
     def _update_cache_onthefly(
         self, X: np.ndarray | spmatrix, medoids_indices: Sequence[int]

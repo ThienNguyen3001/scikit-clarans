@@ -8,7 +8,7 @@ Prerequisites
 
 Ensure you have the following installed:
 
-*   **Python** (>= 3.8)
+*   **Python** (>= 3.9)
 
 Installing from PyPI (Recommended)
 ----------------------------------

@@ -94,7 +94,9 @@ significant speedups by using the FastPAM1 optimization strategy.
 
 **When to use FastCLARANS vs CLARANS:**
 
-*   Use **FastCLARANS** when you have low-dimensional data with cheap distance metrics (e.g., Euclidean).
-*   Use **CLARANS** when distance computation is very expensive or when you need maximum memory efficiency.
+*   Use **FastCLARANS** in most practical applications: it evaluates swaps with all k medoids simultaneously using FastPAM1 delta updates, exploring k edges of the search graph per evaluation for substantial speedups.
+*   Use **CLARANS** for strict adherence to the classic Ng & Han (2002) randomized search formulation, or as a baseline for comparing medoid clustering heuristics.
 
-For more hands-on recipes and runnable examples (including a Jupyter notebook with interactive demos), see :doc:`examples`.
+Both implementations compute distances on-the-fly to keep memory usage at O(n) instead of O(n²).
+
+For more hands-on recipes and runnable examples (or interactive experimentation via Google Colab), see :doc:`examples`.
