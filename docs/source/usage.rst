@@ -135,10 +135,13 @@ Practical Tuning Tips
   * ``'random'``: Pure uniform sampling. Very fast, but typically requires increasing ``numlocal`` to achieve comparable clustering quality.
 
 * **Number of Restarts (``numlocal``)**:
-  If cluster assignments fluctuate between runs or the objective value (``inertia_``) is inconsistent, increase ``numlocal`` to 3–5.
+  If cluster assignments fluctuate between runs or the objective value (``inertia_``) is inconsistent, increase ``numlocal`` to 3–5 when using randomized initialization (``'k-medoids++'`` or ``'random'``).
+  
+  .. note::
+     **Deterministic initialization**: Strategies such as ``'build'``, ``'heuristic'``, or explicit centroid arrays are deterministic. Setting ``numlocal > 1`` with these strategies will start all local searches from the exact same medoids. It is recommended to use ``numlocal=1`` with deterministic initialization to conserve compute resources.
 
 * **Candidate Exploration (``maxneighbor``)**:
-  The dynamic default strikes a solid balance for most tabular datasets. If execution is too slow on very large datasets, you can explicitly set ``maxneighbor`` to a smaller fixed integer (e.g., ``maxneighbor=200``).
+  Leaving ``maxneighbor=None`` (the default) is strongly recommended for almost all use cases. It automatically adapts to the problem geometry based on empirical ratios from the original papers (:math:`1.25\% \times k(n-k)` in CLARANS and :math:`2.5\% \times (n-k)` in FastCLARANS). You only need to explicitly specify ``maxneighbor`` (e.g., ``maxneighbor=200``) if you must enforce a hard upper bound on execution time on very large datasets.
 
 How It Works (Under the Hood)
 -----------------------------

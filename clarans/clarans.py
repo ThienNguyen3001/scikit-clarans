@@ -37,9 +37,11 @@ class CLARANS(ClusterMixin, TransformerMixin, BaseEstimator):
 
     maxneighbor : int, default=None
         The maximum number of neighbors (random swaps) to examine during
-        each step. If ``None``, it defaults to ``max(250, 1.25% of k*(n-k))``.
-        Higher values make the algorithm behave more like PAM (checking
-        more neighbors); lower values make it faster but more random.
+        each step. If ``None``, it defaults to ``max(250, 1.25% of k*(n-k))``
+        as recommended in the original paper (Ng & Han, 2002). This adaptive
+        default balances runtime and solution quality automatically without
+        requiring manual tuning. Higher values make the algorithm behave more
+        like PAM (checking more neighbors); lower values make it faster.
 
     init : {'random', 'heuristic', 'k-medoids++', 'build', array-like}, default='random'
         Strategy for selecting initial medoids:
@@ -130,19 +132,45 @@ class CLARANS(ClusterMixin, TransformerMixin, BaseEstimator):
         self.metric = metric
         self.random_state = random_state
 
-    def _initialize_medoids(self, X, n_samples, n_features, random_state):
+    def _prepare_initial_medoids(self, X, random_state):
+        """Pre-compute initial medoids if the initialization strategy is deterministic.
+
+        For deterministic strategies ('build', 'heuristic', or explicit array),
+        computing initial medoids once before the ``numlocal`` loop avoids costly
+        O(N^2) recalculations across local search restarts.
+        """
+        is_deterministic = (
+            (isinstance(self.init, str) and self.init in ("build", "heuristic"))
+            or hasattr(self.init, "__array__")
+            or isinstance(self.init, list)
+        )
+        if is_deterministic:
+            if self.numlocal > 1:
+                if isinstance(self.init, str):
+                    warnings.warn(
+                        f"The '{self.init}' initialization is deterministic. Running "
+                        f"multiple local searches (numlocal={self.numlocal}) will start "
+                        f"from the exact same initial medoids. Consider using numlocal=1 "
+                        f"or 'k-medoids++' for diverse restarts.",
+                        UserWarning,
+                    )
+                else:
+                    warnings.warn(
+                        f"An explicit init array was provided. Running multiple local "
+                        f"searches (numlocal={self.numlocal}) will start from the exact "
+                        f"same initial medoids.",
+                        UserWarning,
+                    )
+            return self._initialize_medoids(X, random_state)
+        return None
+
+    def _initialize_medoids(self, X, random_state):
         """Select initial medoid indices according to ``self.init``.
 
         Parameters
         ----------
         X : array-like of shape (n_samples, n_features)
             The validated data matrix.
-
-        n_samples : int
-            Number of samples in X.
-
-        n_features : int
-            Number of features in X.
 
         random_state : RandomState
             The random state instance to use.
@@ -152,6 +180,7 @@ class CLARANS(ClusterMixin, TransformerMixin, BaseEstimator):
         current_medoids_indices : ndarray of shape (n_clusters,)
             Indices of the initial medoids.
         """
+        n_samples, n_features = X.shape
         all_indices = np.arange(n_samples)
 
         if isinstance(self.init, str) and self.init == "random":
@@ -232,8 +261,9 @@ class CLARANS(ClusterMixin, TransformerMixin, BaseEstimator):
         X : array-like or sparse matrix of shape (n_samples, n_features)
             Training instances to cluster. Accepts CSR/CSC sparse matrices.
 
-        y : Ignored
-            Not used, present here for API consistency.
+        y : Ignored, default=None
+            Not used, present here for API consistency with scikit-learn
+            pipelines and ClusterMixin.
 
         Returns
         -------
@@ -280,10 +310,13 @@ class CLARANS(ClusterMixin, TransformerMixin, BaseEstimator):
         best_medoids = np.empty(self.n_clusters, dtype=int)
         self.n_iter_ = 0
 
+        deterministic_medoids = self._prepare_initial_medoids(X, random_state)
+
         for loc_idx in range(self.numlocal):
-            current_medoids_indices = self._initialize_medoids(
-                X, n_samples, n_features, random_state
-            )
+            if deterministic_medoids is not None:
+                current_medoids_indices = deterministic_medoids.copy()
+            else:
+                current_medoids_indices = self._initialize_medoids(X, random_state)
 
             current_cost = calculate_cost(X, current_medoids_indices, self.metric)
 

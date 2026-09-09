@@ -474,6 +474,27 @@ class TestCLARANSValidationAndPrecomputed(unittest.TestCase):
             model.fit(self.D)
             self.assertEqual(len(model.medoid_indices_), 3)
 
+    def test_deterministic_init_warning_and_caching(self):
+        """CLARANS should warn when numlocal > 1 with deterministic init and succeed."""
+        import warnings
+        for init_strategy in ["heuristic", "build", self.X[:3]]:
+            with warnings.catch_warnings(record=True) as w:
+                warnings.simplefilter("always")
+                model = CLARANS(
+                    n_clusters=3, numlocal=2, maxneighbor=10, init=init_strategy, random_state=42
+                )
+                model.fit(self.X)
+                self.assertTrue(any(issubclass(warn.category, UserWarning) for warn in w))
+                self.assertEqual(len(model.medoid_indices_), 3)
+
+    def test_initialize_medoids_signature(self):
+        """_initialize_medoids should accept (X, random_state)."""
+        from sklearn.utils import check_random_state
+        model = CLARANS(n_clusters=3, random_state=42)
+        rng = check_random_state(42)
+        medoids = model._initialize_medoids(self.X, rng)
+        self.assertEqual(len(medoids), 3)
+
 
 if __name__ == "__main__":
     unittest.main()

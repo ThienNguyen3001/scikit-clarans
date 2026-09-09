@@ -37,7 +37,9 @@ class FastCLARANS(CLARANS):
     maxneighbor : int or None, default=None
         The maximum number of non-medoid candidates to sample per local
         search. If ``None``, defaults to 2.5% of non-medoid points
-        (i.e., ``0.025 * (n - k)``) as recommended in the paper.
+        (i.e., ``0.025 * (n - k)``) as recommended in Schubert & Rousseeuw
+        (2021). This adaptive default automatically scales with dataset size
+        without requiring manual tuning.
 
     init : {'random', 'heuristic', 'k-medoids++', 'build', array-like}, default='random'
         Method for initialization. If an array-like is provided it should
@@ -103,8 +105,9 @@ class FastCLARANS(CLARANS):
         X : array-like or sparse matrix of shape (n_samples, n_features)
             Training instances to cluster. Accepts CSR/CSC sparse matrices.
 
-        y : Ignored
-            Not used, present for API consistency.
+        y : Ignored, default=None
+            Not used, present for API consistency with scikit-learn
+            pipelines and ClusterMixin.
 
         Returns
         -------
@@ -142,10 +145,13 @@ class FastCLARANS(CLARANS):
         best_medoids: np.ndarray = np.empty(self.n_clusters, dtype=int)
         self.n_iter_ = 0
 
+        deterministic_medoids = self._prepare_initial_medoids(X, random_state)
+
         for loc_idx in range(self.numlocal):
-            current_medoids_indices = self._initialize_medoids(
-                X, n_samples, n_features, random_state
-            )
+            if deterministic_medoids is not None:
+                current_medoids_indices = deterministic_medoids.copy()
+            else:
+                current_medoids_indices = self._initialize_medoids(X, random_state)
             current_medoids_indices.sort()
 
             # Compute nearest/second-nearest on-the-fly (no precomputed matrix)

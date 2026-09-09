@@ -158,6 +158,18 @@ class TestFastCLARANS(unittest.TestCase):
         with self.assertRaises(ValueError):
             model.fit(self.X)
 
+    def test_deterministic_init_warning(self):
+        """FastCLARANS should warn when numlocal > 1 with deterministic init and succeed."""
+        import warnings
+        with warnings.catch_warnings(record=True) as w:
+            warnings.simplefilter("always")
+            model = FastCLARANS(
+                n_clusters=3, numlocal=2, maxneighbor=10, init="heuristic", random_state=42
+            )
+            model.fit(self.X)
+            self.assertTrue(any(issubclass(warn.category, UserWarning) for warn in w))
+            self.assertEqual(len(model.medoid_indices_), 3)
+
 
 if __name__ == "__main__":
     unittest.main()
