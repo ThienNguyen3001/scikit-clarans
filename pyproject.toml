@@ -3,6 +3,6 @@ requires = ["setuptools>=64", "wheel"]
 build-backend = "setuptools.build_meta"
 
 [tool.mypy]
-python_version = "3.9"
 ignore_missing_imports = true
 warn_unused_configs = true
+follow_imports = "silent"
