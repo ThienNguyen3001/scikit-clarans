@@ -21,8 +21,9 @@ List of examples
 - 06_predict_new_data.py: Predict cluster labels for new data points.
 - 07_custom_init_centers.py: Pass an array-like init to CLARANS.
 - 08_performance_tuning.py: Demonstrate runtime / quality trade-offs when tuning parameters.
-- 09_compare_fastclarans_clarans: Compare CLARANS vs. FastCLARANS (FastPAM1 optimization with on-the-fly distances).
-- 10_transform_data: Testing CLARANS transform method for distance consistency and output shape.
+- 09_compare_fastclarans_clarans.py: Compare CLARANS vs. FastCLARANS (FastPAM1 optimization with on-the-fly distances).
+- 10_transform_data.py: Demonstrate CLARANS transform method for distance-to-medoid features.
+- 11_precomputed_distances.py: Cluster using precomputed distance matrices (metric="precomputed").
 
 Notes
 -----
@@ -33,5 +34,5 @@ set the backend::
     import matplotlib
     matplotlib.use("Agg")
 
-If you want an interactive notebook, check the `examples/` folder for a Jupyter
-notebook that demonstrates several of the examples together.
+If you want an interactive demo, open the [Google Colab Notebook](https://colab.research.google.com/drive/1JdgVaZcbS1uwY7kPQZM8DtX97R9ga31d?usp=sharing)
+to run and experiment with `scikit-clarans` directly in your browser.

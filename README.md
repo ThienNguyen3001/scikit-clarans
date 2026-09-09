@@ -4,7 +4,7 @@
 
 [![License](https://img.shields.io/github/license/ThienNguyen3001/scikit-clarans)](LICENSE)
 [![DOI](https://zenodo.org/badge/DOI/10.5281/zenodo.18366801.svg)](https://doi.org/10.5281/zenodo.18366801)
-[![Python 3.8+](https://img.shields.io/badge/python-3.8+-blue.svg)](https://www.python.org/downloads/)
+[![Python 3.9+](https://img.shields.io/badge/python-3.9+-blue.svg)](https://www.python.org/downloads/)
 [![Docs Build](https://img.shields.io/github/actions/workflow/status/ThienNguyen3001/scikit-clarans/docs-build.yml?branch=main&label=Docs%20Build)](https://github.com/ThienNguyen3001/scikit-clarans/actions/workflows/docs-build.yml)
 [![Test Suite](https://img.shields.io/github/actions/workflow/status/ThienNguyen3001/scikit-clarans/test_suite.yml?branch=main&label=Test%20Suite)](https://github.com/ThienNguyen3001/scikit-clarans/actions/workflows/test_suite.yml)
 [![Quality Check](https://img.shields.io/github/actions/workflow/status/ThienNguyen3001/scikit-clarans/lint_cov_check.yml?branch=main&label=Quality%20Check)](https://github.com/ThienNguyen3001/scikit-clarans/actions/workflows/lint_cov_check.yml)
@@ -66,7 +66,7 @@ print("Labels:", clarans.labels_)
 from clarans import FastCLARANS
 
 # FastCLARANS computes distances on-the-fly (memory efficient)
-# and samples 2.5% of non-medoid points per iteration
+# and samples max(250, 2.5% of non-medoid points) per iteration
 fast_model = FastCLARANS(n_clusters=5, numlocal=3, random_state=42)
 fast_model.fit(X)
 ```
@@ -78,9 +78,11 @@ fast_model.fit(X)
 
 ## Examples
 
-This repository includes a number of runnable examples in the `examples/` folder showing common usage patterns, integrations and a Jupyter notebook (`examples/clarans_examples.ipynb`) with many interactive recipes. Run any example with::
+This repository includes a number of runnable examples in the `examples/` folder showing common usage patterns and integrations. Run any example with:
 
-    python examples/01_quick_start.py
+```bash
+python examples/01_quick_start.py
+```
 
 ## Documentation
 
