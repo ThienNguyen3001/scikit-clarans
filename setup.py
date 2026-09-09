@@ -31,6 +31,8 @@ setup(
     ],
     keywords="clustering sklearn scikit-learn clarans k-medoids",
     packages=find_packages(),
+    package_data={"clarans": ["py.typed"]},
+    include_package_data=True,
     install_requires=["numpy", "scikit-learn", "scipy"],
     extras_require={
         "dev": [
@@ -50,6 +52,6 @@ setup(
             "sphinx-autodoc-typehints",
         ],
     },
-    python_requires=">=3.8",
+    python_requires=">=3.9",
     test_suite="clarans.tests",
 )

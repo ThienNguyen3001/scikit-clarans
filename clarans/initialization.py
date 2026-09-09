@@ -38,9 +38,15 @@ def initialize_heuristic(X, n_clusters, metric="euclidean"):
             UserWarning,
         )
 
-    # This requires O(N^2) complexity
-    D = pairwise_distances(X, metric=metric)
-    dist_sums = np.sum(D, axis=1)
+    if metric == "precomputed":
+        D = X
+    else:
+        D = pairwise_distances(X, metric=metric)
+
+    if hasattr(D, "toarray"):
+        dist_sums = np.asarray(D.sum(axis=1)).ravel()
+    else:
+        dist_sums = np.sum(D, axis=1)
     current_medoids_indices = np.argpartition(dist_sums, n_clusters - 1)[:n_clusters]
     return current_medoids_indices
 
@@ -79,9 +85,10 @@ def initialize_build(X, n_clusters, metric="euclidean"):
 
     medoids = []
 
-    # Calculate full distance matrix potentially (expensive) or compute on fly
-    # Using euclidean_distances or pairwise_distances
-    D = pairwise_distances(X, metric=metric)
+    if metric == "precomputed":
+        D = X.toarray() if hasattr(X, "toarray") else np.asarray(X)
+    else:
+        D = pairwise_distances(X, metric=metric)
 
     dist_sums = D.sum(axis=1)
     first_medoid = np.argmin(dist_sums)
@@ -157,11 +164,18 @@ def initialize_k_medoids_plus_plus(
     first_medoid = random_state.randint(0, n_samples)
     medoid_indices[0] = first_medoid
 
-    closest = pairwise_distances(
-        X,
-        X[first_medoid].reshape(1, -1),
-        metric=metric,
-    ).flatten()
+    if metric == "precomputed":
+        closest = (
+            X[first_medoid].toarray().ravel()
+            if hasattr(X, "toarray")
+            else np.asarray(X[first_medoid]).ravel()
+        )
+    else:
+        closest = pairwise_distances(
+            X,
+            X[first_medoid].reshape(1, -1),
+            metric=metric,
+        ).flatten()
 
     closest_dist_sq = closest**2
     current_pot = closest_dist_sq.sum()
@@ -174,10 +188,20 @@ def initialize_k_medoids_plus_plus(
         candidate_ids = np.searchsorted(cumsum_dist, rand_vals)
         np.clip(candidate_ids, 0, n_samples - 1, out=candidate_ids)
 
-        # Compute distances from candidates to all points
-        candidates_X = X[candidate_ids]
-
-        dists_candidates = pairwise_distances(candidates_X, X, metric=metric) ** 2
+        if metric == "precomputed":
+            dists_candidates = (
+                (
+                    X[candidate_ids].toarray()
+                    if hasattr(X, "toarray")
+                    else np.asarray(X[candidate_ids])
+                )
+                ** 2
+            )
+        else:
+            candidates_X = X[candidate_ids]
+            dists_candidates = (
+                pairwise_distances(candidates_X, X, metric=metric) ** 2
+            )
 
         best_candidate = None
         best_pot = None

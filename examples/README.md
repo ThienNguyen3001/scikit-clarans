@@ -23,6 +23,7 @@ List of examples
 - 08_performance_tuning.py: Demonstrate runtime / quality trade-offs when tuning parameters.
 - 09_compare_fastclarans_clarans: Compare CLARANS vs. FastCLARANS (FastPAM1 optimization with on-the-fly distances).
 - 10_transform_data: Testing CLARANS transform method for distance consistency and output shape.
+- 11_precomputed_distances.py: Cluster using precomputed distance matrices (metric="precomputed").
 
 Notes
 -----
