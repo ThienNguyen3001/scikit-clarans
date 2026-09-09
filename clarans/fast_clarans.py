@@ -39,10 +39,6 @@ class FastCLARANS(CLARANS):
         search. If ``None``, defaults to 2.5% of non-medoid points
         (i.e., ``0.025 * (n - k)``) as recommended in the paper.
 
-    max_iter : int or None, default=300
-        Maximum number of successful swaps (improvements) allowed per
-        local search. Use ``None`` to disable this safeguard.
-
     init : {'random', 'heuristic', 'k-medoids++', 'build', array-like}, default='random'
         Method for initialization. If an array-like is provided it should
         be of shape (n_clusters, n_features) and will be snapped to the
@@ -162,9 +158,6 @@ class FastCLARANS(CLARANS):
             iter_count = 0
 
             while i < self.maxneighbor_:
-                if self.max_iter is not None and iter_count >= self.max_iter:
-                    break
-
                 # Choose a random non-medoid candidate using mask (safe for
                 # any k/n ratio, avoids rejection sampling infinite loop)
                 non_medoid_mask = np.ones(n_samples, dtype=bool)

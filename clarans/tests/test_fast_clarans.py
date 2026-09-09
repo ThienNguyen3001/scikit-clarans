@@ -127,8 +127,8 @@ class TestFastCLARANS(unittest.TestCase):
             FastCLARANS(numlocal=0).fit(self.X)
         with self.assertRaises(ValueError):
             FastCLARANS(maxneighbor=0).fit(self.X)
-        with self.assertRaises(ValueError):
-            FastCLARANS(max_iter=-1).fit(self.X)
+        with self.assertRaises(TypeError):
+            FastCLARANS(max_iter=-1)
 
     def test_precomputed_metric(self):
         """Test FastCLARANS with metric='precomputed'."""

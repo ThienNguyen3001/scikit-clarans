@@ -78,13 +78,6 @@ class TestCLARANS(unittest.TestCase):
             clarans.fit(self.X)
             self.assertEqual(len(clarans.cluster_centers_), 3)
 
-    def test_max_iter(self):
-        """Test max_iter parameter."""
-        clarans = CLARANS(
-            n_clusters=3, numlocal=1, maxneighbor=50, max_iter=5, random_state=42
-        )
-        clarans.fit(self.X)
-        self.assertEqual(len(clarans.cluster_centers_), 3)
 
     def test_input_validation_init(self):
         """Test invalid init parameter."""
@@ -242,13 +235,6 @@ class TestCLARANS(unittest.TestCase):
         with self.assertRaises(Exception):
             clarans.predict(self.X)
 
-    def test_max_iter_none(self):
-        """max_iter=None should allow unlimited iterations."""
-        clarans = CLARANS(
-            n_clusters=3, numlocal=1, maxneighbor=50, max_iter=None, random_state=42
-        )
-        clarans.fit(self.X)
-        self.assertEqual(len(clarans.medoid_indices_), 3)
 
 
 class TestCLARANSEdgeCases(unittest.TestCase):
@@ -433,10 +419,10 @@ class TestCLARANSValidationAndPrecomputed(unittest.TestCase):
             with self.assertRaises(ValueError):
                 CLARANS(maxneighbor=val).fit(self.X)
 
-    def test_invalid_max_iter(self):
-        """max_iter < 0 should raise ValueError."""
-        with self.assertRaises(ValueError):
-            CLARANS(max_iter=-1).fit(self.X)
+    def test_removed_max_iter(self):
+        """max_iter was removed from the API; passing it should raise TypeError."""
+        with self.assertRaises(TypeError):
+            CLARANS(max_iter=10)
 
     def test_precomputed_metric_fit_predict_transform(self):
         """CLARANS should support metric='precomputed'."""

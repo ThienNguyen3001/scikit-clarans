@@ -41,10 +41,6 @@ class CLARANS(ClusterMixin, TransformerMixin, BaseEstimator):
         Higher values make the algorithm behave more like PAM (checking
         more neighbors); lower values make it faster but more random.
 
-    max_iter : int, default=300
-        The maximum number of successful swaps (improvements) allowed per
-        local search. This acts as a safeguard against infinite loops.
-
     init : {'random', 'heuristic', 'k-medoids++', 'build', array-like}, default='random'
         Strategy for selecting initial medoids:
 
@@ -93,10 +89,10 @@ class CLARANS(ClusterMixin, TransformerMixin, BaseEstimator):
     -----
     - Time complexity: In each local search, random candidate neighbor swaps
       are evaluated on the search graph G_{n,k}. The search terminates when
-      ``maxneighbor`` consecutive non-improving swaps are tested. With up to
-      ``max_iter`` successful swaps (S) and distance evaluation cost
-      O(n * k * d), runtime per local search is bounded by
-      O((S + maxneighbor) * n * k * d), repeated ``numlocal`` times.
+      ``maxneighbor`` consecutive non-improving swaps are tested. With S
+      successful swaps and distance evaluation cost O(n * k * d), runtime per
+      local search is bounded by O((S + maxneighbor) * n * k * d), repeated
+      ``numlocal`` times.
     - Memory complexity: Distances are computed on-the-fly, keeping memory
       usage at O(n) instead of O(n^2). Note that initialization methods
       such as ``'build'`` and ``'heuristic'`` compute full pairwise distance
@@ -123,7 +119,6 @@ class CLARANS(ClusterMixin, TransformerMixin, BaseEstimator):
         n_clusters=8,
         numlocal=2,
         maxneighbor=None,
-        max_iter=300,
         init="random",
         metric="euclidean",
         random_state=None,
@@ -131,7 +126,6 @@ class CLARANS(ClusterMixin, TransformerMixin, BaseEstimator):
         self.n_clusters = n_clusters
         self.numlocal = numlocal
         self.maxneighbor = maxneighbor
-        self.max_iter = max_iter
         self.init = init
         self.metric = metric
         self.random_state = random_state
@@ -297,9 +291,6 @@ class CLARANS(ClusterMixin, TransformerMixin, BaseEstimator):
             iter_count = 0
 
             while i < self.maxneighbor_:
-                if self.max_iter is not None and iter_count >= self.max_iter:
-                    break
-
                 random_medoid_pos = random_state.randint(0, self.n_clusters)
 
                 mask = np.ones(n_samples, dtype=bool)
@@ -340,8 +331,6 @@ class CLARANS(ClusterMixin, TransformerMixin, BaseEstimator):
             raise ValueError(f"n_clusters must be >= 1; got {self.n_clusters}")
         if self.numlocal < 1:
             raise ValueError(f"numlocal must be >= 1; got {self.numlocal}")
-        if self.max_iter is not None and self.max_iter < 0:
-            raise ValueError(f"max_iter must be >= 0; got {self.max_iter}")
         if self.maxneighbor is not None and self.maxneighbor < 1:
             raise ValueError(f"maxneighbor must be >= 1; got {self.maxneighbor}")
 
