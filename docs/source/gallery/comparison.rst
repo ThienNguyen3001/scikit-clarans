@@ -7,9 +7,9 @@ Algorithm comparison
    :align: center
 
    Side-by-side comparison of CLARANS, FastCLARANS and scikit-learn's
-   `KMeans` on the same dataset.
+   ``KMeans`` on the same dataset.
 
-.. _code:
+.. _gallery-comparison-code:
 
 .. code-block:: python
    :linenos:

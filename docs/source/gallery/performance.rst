@@ -8,7 +8,7 @@ Performance tuning
 
    Runtime scaling across dataset sizes (CLARANS, FastCLARANS, KMeans).
 
-.. _code:
+.. _gallery-performance-code:
 
 .. code-block:: python
    :linenos:
@@ -60,12 +60,15 @@ Performance tuning
        print(f"Saved {out}")
 
 
+   if __name__ == "__main__":
+       main()
+
 .. figure:: /_static/parameter_sensitivity.png
    :alt: Parameter sensitivity
    :figwidth: 80%
    :align: center
 
-   Sensitivity of final cost / runtime to `numlocal` and `maxneighbor`.
+   Sensitivity of final cost / runtime to ``numlocal`` and ``maxneighbor``.
 
 .. code-block:: python
    :linenos:
@@ -123,3 +126,7 @@ Performance tuning
        out = "parameter_sensitivity.png"
        fig.savefig(out, bbox_inches="tight", dpi=150)
        print(f"Saved {out}")
+
+
+   if __name__ == "__main__":
+       main()

@@ -32,7 +32,7 @@ Helper Modules
 Initialization
 ^^^^^^^^^^^^^^
 
-Internal strategies for seeding medoids (``'k-medoids++'``, ``'build'``, ``'heuristic'``, ``'random'``).
+Internal strategies for seeding medoids (``k-medoids++``, ``build``, ``heuristic``, ``random``).
 
 .. automodule:: clarans.initialization
    :members:

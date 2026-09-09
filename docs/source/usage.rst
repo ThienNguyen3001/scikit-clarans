@@ -29,7 +29,7 @@ While **k-Means** is widely used, it has fundamental limitations in practical ma
 
 .. note::
 
-   **A note on `inertia_`**: In ``scikit-learn``'s ``KMeans``, ``inertia_`` represents the sum of *squared* Euclidean distances. In ``scikit-clarans``, ``inertia_`` represents the sum of *unsquared* distances from each sample to its assigned medoid according to the chosen metric.
+   **A note on** ``inertia_``: In ``scikit-learn``'s ``KMeans``, ``inertia_`` represents the sum of *squared* Euclidean distances. In ``scikit-clarans``, ``inertia_`` represents the sum of *unsquared* distances from each sample to its assigned medoid according to the chosen metric.
 
 Quick Start
 -----------
@@ -119,28 +119,30 @@ Both estimators accept key hyperparameters to balance execution speed and cluste
      - Dynamic
      - Maximum non-improving neighbors to check per search. Defaults to :math:`\max(250, 1.25\% \times k(n-k))` in CLARANS and :math:`\max(250, 2.5\% \times (n-k))` in FastCLARANS.
    * - ``init``
-     - ``'k-medoids++'``
-     - Initialization strategy (``'k-medoids++'``, ``'build'``, ``'heuristic'``, ``'random'``).
+     - ``random``
+     - Initialization strategy (``random``, ``k-medoids++``, ``build``, ``heuristic``, or array-like).
    * - ``metric``
-     - ``'euclidean'``
-     - Distance metric to use (e.g., ``'euclidean'``, ``'manhattan'``, ``'cosine'``).
+     - ``euclidean``
+     - Distance metric to use (e.g., ``euclidean``, ``manhattan``, ``cosine``).
 
 Practical Tuning Tips
 ^^^^^^^^^^^^^^^^^^^^^^
 
-* **Initialization Strategy (``init``)**:
+* **Initialization Strategy** (``init``):
   
-  * ``'k-medoids++'`` *(Default, recommended)*: Probabilistic seeding proportional to squared distance. Fast and memory-friendly (:math:`O(n \cdot k)`).
-  * ``'build'``: Classic PAM greedy seeding. Excellent solution quality on small datasets, but computes the full pairwise distance matrix (:math:`O(n^2)` time and memory). Avoid on large datasets (:math:`n > 5000`).
-  * ``'random'``: Pure uniform sampling. Very fast, but typically requires increasing ``numlocal`` to achieve comparable clustering quality.
+  * ``random`` *(Default)*: Pure uniform sampling. Very fast, but typically requires increasing ``numlocal`` to achieve comparable clustering quality.
+  * ``k-medoids++`` *(Recommended)*: Probabilistic seeding proportional to squared distance. Fast and memory-friendly (:math:`O(n \cdot k)`).
+  * ``build``: Classic PAM greedy seeding. Excellent solution quality on small datasets, but computes the full pairwise distance matrix (:math:`O(n^2)` time and memory). Avoid on large datasets (:math:`n > 5000`).
+  * ``heuristic``: Selects the :math:`k` most central data points with the smallest total distance to all others (:math:`O(n^2)` time and memory). Avoid on large datasets (:math:`n > 5000`).
+  * ``array-like``: Pass custom coordinates of shape ``(n_clusters, n_features)`` or pre-defined medoid indices to inject prior domain knowledge.
 
-* **Number of Restarts (``numlocal``)**:
-  If cluster assignments fluctuate between runs or the objective value (``inertia_``) is inconsistent, increase ``numlocal`` to 3–5 when using randomized initialization (``'k-medoids++'`` or ``'random'``).
+* **Number of Restarts** (``numlocal``):
+  If cluster assignments fluctuate between runs or the objective value (``inertia_``) is inconsistent, increase ``numlocal`` to 3–5 when using randomized initialization (``k-medoids++`` or ``random``).
   
   .. note::
-     **Deterministic initialization**: Strategies such as ``'build'``, ``'heuristic'``, or explicit centroid arrays are deterministic. Setting ``numlocal > 1`` with these strategies will start all local searches from the exact same medoids. It is recommended to use ``numlocal=1`` with deterministic initialization to conserve compute resources.
+     **Deterministic initialization**: Strategies such as ``build``, ``heuristic``, or explicit centroid arrays are deterministic. Setting ``numlocal > 1`` with these strategies will start all local searches from the exact same medoids. It is recommended to use ``numlocal=1`` with deterministic initialization to conserve compute resources.
 
-* **Candidate Exploration (``maxneighbor``)**:
+* **Candidate Exploration** (``maxneighbor``):
   Leaving ``maxneighbor=None`` (the default) is strongly recommended for almost all use cases. It automatically adapts to the problem geometry based on empirical ratios from the original papers (:math:`1.25\% \times k(n-k)` in CLARANS and :math:`2.5\% \times (n-k)` in FastCLARANS). You only need to explicitly specify ``maxneighbor`` (e.g., ``maxneighbor=200``) if you must enforce a hard upper bound on execution time on very large datasets.
 
 How It Works (Under the Hood)
@@ -149,7 +151,8 @@ How It Works (Under the Hood)
 Understanding the search graph :math:`G_{n,k}` helps developers reason about convergence:
 
 1. **The Search Graph**:
-   The problem space is modeled as an undirected graph :math:`G_{n,k} = (V, E)`.
+   The problem space is modeled as an undirected graph :math:`G_{n,k} = (V, E)`:
+
    * Each vertex :math:`v \in V` represents a candidate set of :math:`k` medoids (:math:`|V| = \binom{n}{k}`).
    * Two vertices are connected by an edge if their medoid sets differ by exactly one point (a single swap :math:`(m_j \leftrightarrow x_c)`).
    * Each node has exactly :math:`k(n-k)` neighbors.
@@ -161,7 +164,7 @@ Understanding the search graph :math:`G_{n,k}` helps developers reason about con
    Instead of checking all :math:`k(n-k)` neighbors, CLARANS draws random candidate neighbors. As soon as it finds a neighbor that reduces the clustering cost, it immediately transitions to that node (first-choice hill climbing). If :math:`\text{maxneighbor}` consecutive random neighbors fail to improve the cost, the search terminates at a local optimum. The process repeats :math:`\text{numlocal}` times from new random starts.
 
 4. **How FastCLARANS Improves Exploration**:
-   FastCLARANS utilizes the FastPAM1 formulation: by tracking the nearest and second-nearest medoids for each sample, it computes the swap delta for **all :math:`k` medoids simultaneously** in a single :math:`O(n)` pass over the data. This evaluates :math:`k` graph edges in the time CLARANS evaluates one.
+   FastCLARANS utilizes the FastPAM1 formulation: by tracking the nearest and second-nearest medoids for each sample, it computes the swap delta for **all** :math:`k` **medoids simultaneously** in a single :math:`O(n)` pass over the data. This evaluates :math:`k` graph edges in the time CLARANS evaluates one.
 
 Next Steps
 ----------

@@ -1,5 +1,5 @@
 Quality vs k
-=============
+============
 
 .. figure:: /_static/silhouette_vs_k.png
    :alt: Silhouette score vs k
@@ -8,7 +8,7 @@ Quality vs k
 
    Silhouette score versus number of clusters for different algorithms.
 
-.. _code:
+.. _gallery-quality-code:
 
 .. code-block:: python
    :linenos:
@@ -62,3 +62,4 @@ Quality vs k
 
    if __name__ == "__main__":
        main()
+

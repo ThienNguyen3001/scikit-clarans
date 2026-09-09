@@ -35,6 +35,7 @@ The algorithms and heuristics implemented in this library originate from the fol
   `doi:10.1016/j.is.2021.101804 <https://doi.org/10.1016/j.is.2021.101804>`_
 
 * **Seeding Methods:**
+
   * Arthur, D., & Vassilvitskii, S. (2007). *k-means++: The advantages of careful seeding.* SODA '07.
   * Kaufman, L., & Rousseeuw, P. J. (1990). *Finding Groups in Data: An Introduction to Cluster Analysis.* John Wiley & Sons.
 

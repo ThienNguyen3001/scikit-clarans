@@ -8,7 +8,7 @@
 
    CLARANS clustering on a synthetic blobs dataset.
 
-.. _code:
+.. _gallery-2d-code:
 
 .. code-block:: python
    :linenos:
