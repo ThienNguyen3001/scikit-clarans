@@ -35,11 +35,20 @@ class TestFastCLARANS(unittest.TestCase):
         except Exception:
             self.skipTest("scipy not available")
 
+        # Test with csr_matrix
         X_sparse = sparse.csr_matrix(self.X)
         model = FastCLARANS(n_clusters=3, numlocal=1, random_state=42)
         model.fit(X_sparse)
         labels = model.predict(X_sparse)
         self.assertEqual(labels.shape, (100,))
+
+        # Test with csr_array if available
+        if hasattr(sparse, "csr_array"):
+            X_arr = sparse.csr_array(self.X)
+            model_arr = FastCLARANS(n_clusters=3, numlocal=1, random_state=42)
+            model_arr.fit(X_arr)
+            labels_arr = model_arr.predict(X_arr)
+            self.assertEqual(labels_arr.shape, (100,))
 
     def test_init_methods(self):
         for init_method in ["random", "heuristic", "k-medoids++", "build"]:

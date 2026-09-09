@@ -135,6 +135,28 @@ class TestCLARANS(unittest.TestCase):
         self.assertTrue(hasattr(clarans, "inertia_"))
         self.assertGreaterEqual(clarans.inertia_, 0)
 
+    def test_sparse_input(self):
+        """Test CLARANS with scipy sparse matrices and arrays."""
+        try:
+            from scipy import sparse
+        except Exception:
+            self.skipTest("scipy not available")
+
+        # Test with csr_matrix
+        X_sparse = sparse.csr_matrix(self.X)
+        model = CLARANS(n_clusters=3, numlocal=1, random_state=42)
+        model.fit(X_sparse)
+        labels = model.predict(X_sparse)
+        self.assertEqual(labels.shape, (100,))
+
+        # Test with csr_array if available
+        if hasattr(sparse, "csr_array"):
+            X_arr = sparse.csr_array(self.X)
+            model_arr = CLARANS(n_clusters=3, numlocal=1, random_state=42)
+            model_arr.fit(X_arr)
+            labels_arr = model_arr.predict(X_arr)
+            self.assertEqual(labels_arr.shape, (100,))
+
     def test_medoid_uniqueness_multiple_seeds(self):
         """All medoids should be unique across multiple random seeds."""
         for seed in range(10):

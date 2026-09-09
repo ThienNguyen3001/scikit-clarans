@@ -177,15 +177,16 @@ class FastCLARANS(CLARANS):
                 candidate_idx = random_state.choice(available_candidates)
 
                 # Compute distances from candidate to all points
+                cand_row = X[candidate_idx : candidate_idx + 1]
                 if self.metric == "precomputed":
                     d_xc = (
-                        X[candidate_idx].toarray().ravel()
-                        if hasattr(X, "toarray")
-                        else np.asarray(X[candidate_idx]).ravel()
+                        cand_row.toarray().ravel()
+                        if hasattr(cand_row, "toarray")
+                        else np.asarray(cand_row).ravel()
                     )
                 else:
                     d_xc = pairwise_distances(
-                        X[candidate_idx].reshape(1, -1), X, metric=self.metric
+                        cand_row, X, metric=self.metric
                     ).ravel()
 
                 removal_loss = np.zeros(self.n_clusters)

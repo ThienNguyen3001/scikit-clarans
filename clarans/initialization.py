@@ -164,16 +164,17 @@ def initialize_k_medoids_plus_plus(
     first_medoid = random_state.randint(0, n_samples)
     medoid_indices[0] = first_medoid
 
+    first_row = X[first_medoid : first_medoid + 1]
     if metric == "precomputed":
         closest = (
-            X[first_medoid].toarray().ravel()
-            if hasattr(X, "toarray")
-            else np.asarray(X[first_medoid]).ravel()
+            first_row.toarray().ravel()
+            if hasattr(first_row, "toarray")
+            else np.asarray(first_row).ravel()
         )
     else:
         closest = pairwise_distances(
             X,
-            X[first_medoid].reshape(1, -1),
+            first_row,
             metric=metric,
         ).flatten()
 
