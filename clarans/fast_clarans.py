@@ -231,7 +231,7 @@ class FastCLARANS(CLARANS):
                             idx2, weights=term2, minlength=self.n_clusters
                         )
 
-                    min_delta_idx = np.argmin(total_delta)
+                    min_delta_idx = int(np.argmin(total_delta))
                     min_delta = total_delta[min_delta_idx]
 
                 if min_delta < 0:
