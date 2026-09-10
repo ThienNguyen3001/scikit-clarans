@@ -1,6 +1,7 @@
 import unittest
 
 import numpy as np
+from sklearn.exceptions import NotFittedError
 from sklearn.datasets import make_blobs
 
 from clarans import FastCLARANS
@@ -119,6 +120,16 @@ class TestFastCLARANS(unittest.TestCase):
         self.assertTrue(hasattr(model, "inertia_"))
         self.assertGreaterEqual(model.inertia_, 0)
 
+    def test_n_iter_and_n_swaps_attributes(self):
+        """Test that n_iter_ and n_swaps_ are set correctly in FastCLARANS."""
+        model = FastCLARANS(n_clusters=3, numlocal=2, maxneighbor=50, random_state=42)
+        model.fit(self.X)
+        self.assertTrue(hasattr(model, "n_iter_"))
+        self.assertTrue(hasattr(model, "n_swaps_"))
+        self.assertGreaterEqual(model.n_iter_, 1)
+        self.assertGreaterEqual(model.n_swaps_, 0)
+        self.assertLessEqual(model.n_swaps_, model.n_iter_)
+
     def test_invalid_parameters(self):
         """Test parameter validation in FastCLARANS."""
         with self.assertRaises(ValueError):
@@ -143,6 +154,8 @@ class TestFastCLARANS(unittest.TestCase):
         self.assertEqual(len(model.medoid_indices_), 3)
         self.assertEqual(len(model.labels_), 100)
         self.assertGreaterEqual(model.inertia_, 0)
+        self.assertIsNone(model.cluster_centers_)
+        self.assertFalse(hasattr(model, "n_features_in_"))
 
         # predict on square matrix
         labels = model.predict(D)
@@ -169,6 +182,38 @@ class TestFastCLARANS(unittest.TestCase):
             model.fit(self.X)
             self.assertTrue(any(issubclass(warn.category, UserWarning) for warn in w))
             self.assertEqual(len(model.medoid_indices_), 3)
+
+    def test_keyword_only_args(self):
+        """FastCLARANS should enforce keyword-only arguments per SLEP009."""
+        with self.assertRaises(TypeError):
+            FastCLARANS(3)
+
+    def test_get_feature_names_out(self):
+        """FastCLARANS should provide get_feature_names_out per SLEP007."""
+        model = FastCLARANS(n_clusters=3)
+        with self.assertRaises(NotFittedError):
+            model.get_feature_names_out()
+
+        model.fit(self.X)
+        names = model.get_feature_names_out()
+        np.testing.assert_array_equal(
+            names,
+            np.array(["fastclarans0", "fastclarans1", "fastclarans2"], dtype=object),
+        )
+
+    def test_pandas_output(self):
+        """FastCLARANS should support set_output(transform='pandas') per SLEP018."""
+        import pandas as pd
+
+        model = FastCLARANS(n_clusters=3, random_state=42)
+        model.set_output(transform="pandas")
+        model.fit(self.X)
+        transformed = model.transform(self.X)
+        self.assertIsInstance(transformed, pd.DataFrame)
+        self.assertListEqual(
+            list(transformed.columns),
+            ["fastclarans0", "fastclarans1", "fastclarans2"],
+        )
 
 
 if __name__ == "__main__":

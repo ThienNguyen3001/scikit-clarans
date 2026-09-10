@@ -54,27 +54,34 @@ class FastCLARANS(CLARANS):
 
     Attributes
     ----------
-    medoid_indices_ : ndarray of shape (n_clusters,)
-        Indices of the selected medoids in the training set.
-
-    cluster_centers_ : ndarray of shape (n_clusters, n_features)
-        Coordinates of the medoids (rows from the training data).
+    cluster_centers_ : {ndarray, sparse matrix} of shape (n_clusters, n_features) or None
+        Coordinates of cluster centers (medoids). If ``metric='precomputed'``,
+        this is ``None``.
 
     labels_ : ndarray of shape (n_samples,)
         Labels of each point indicating the nearest medoid.
+
+    medoid_indices_ : ndarray of shape (n_clusters,)
+        Indices of the selected medoids in the training set.
 
     inertia_ : float
         Sum of distances from each sample to its nearest medoid (total
         cost of the best solution found).
 
     maxneighbor_ : int
-        Actual number of non-medoid candidates sampled per local search.
+        Effective maximum number of non-improving non-medoid candidates
+        sampled per local search.
 
     n_iter_ : int
-        Total number of iterations (accepted swaps) across all local searches.
+        Number of candidate neighbors evaluated during the best local search.
+
+    n_swaps_ : int
+        Number of successful medoid swaps performed during the best local
+        search.
 
     n_features_in_ : int
-        Number of features seen during :term:`fit`.
+        Number of features seen during :term:`fit`. Defined only when
+        ``metric != 'precomputed'``.
 
     Notes
     -----
@@ -143,7 +150,8 @@ class FastCLARANS(CLARANS):
 
         best_cost = np.inf
         best_medoids: np.ndarray = np.empty(self.n_clusters, dtype=int)
-        self.n_iter_ = 0
+        best_n_iter = 0
+        best_n_swaps = 0
 
         deterministic_medoids = self._prepare_initial_medoids(X, random_state)
 
@@ -161,9 +169,11 @@ class FastCLARANS(CLARANS):
             current_cost: float = float(np.sum(near_dist))
 
             i = 0
-            iter_count = 0
+            swap_count = 0
+            eval_count = 0
 
             while i < self.maxneighbor_:
+                eval_count += 1
                 # Choose a random non-medoid candidate using mask (safe for
                 # any k/n ratio, avoids rejection sampling infinite loop)
                 non_medoid_mask = np.ones(n_samples, dtype=bool)
@@ -244,15 +254,18 @@ class FastCLARANS(CLARANS):
                     current_cost = float(np.sum(near_dist))
 
                     i = 0
-                    iter_count += 1
+                    swap_count += 1
                 else:
                     i += 1
-
-            self.n_iter_ += max(1, iter_count)
 
             if current_cost < best_cost:
                 best_cost = current_cost
                 best_medoids = current_medoids_indices.copy()
+                best_n_iter = eval_count
+                best_n_swaps = swap_count
+
+        self.n_iter_ = best_n_iter
+        self.n_swaps_ = best_n_swaps
 
         return self._finalize_fit(X, best_cost, best_medoids)
 

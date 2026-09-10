@@ -1,6 +1,7 @@
 import unittest
 
 import numpy as np
+from sklearn.exceptions import NotFittedError
 from sklearn.datasets import make_blobs
 from sklearn.metrics import (
     pairwise_distances,
@@ -127,6 +128,22 @@ class TestCLARANS(unittest.TestCase):
         self.assertTrue(hasattr(clarans, "inertia_"))
         self.assertGreaterEqual(clarans.inertia_, 0)
 
+    def test_n_iter_and_n_swaps_attributes(self):
+        """Test that n_iter_ and n_swaps_ are set correctly after fit."""
+        clarans = CLARANS(n_clusters=3, numlocal=2, maxneighbor=50, random_state=42)
+        clarans.fit(self.X)
+        self.assertTrue(hasattr(clarans, "n_iter_"))
+        self.assertTrue(hasattr(clarans, "n_swaps_"))
+        self.assertGreaterEqual(clarans.n_iter_, 1)
+        self.assertGreaterEqual(clarans.n_swaps_, 0)
+        self.assertLessEqual(clarans.n_swaps_, clarans.n_iter_)
+
+    def test_medoid_indices_sorted(self):
+        """Test that medoid_indices_ is always sorted."""
+        clarans = CLARANS(n_clusters=4, numlocal=5, maxneighbor=30, random_state=42)
+        clarans.fit(self.X)
+        self.assertTrue(np.all(np.diff(clarans.medoid_indices_) >= 0))
+
     def test_sparse_input(self):
         """Test CLARANS with scipy sparse matrices and arrays."""
         try:
@@ -233,6 +250,36 @@ class TestCLARANS(unittest.TestCase):
         clarans = CLARANS(n_clusters=3)
         with self.assertRaises(Exception):
             clarans.predict(self.X)
+
+    def test_keyword_only_args(self):
+        """CLARANS should enforce keyword-only arguments per SLEP009."""
+        with self.assertRaises(TypeError):
+            CLARANS(3)
+
+    def test_get_feature_names_out(self):
+        """CLARANS should provide get_feature_names_out per SLEP007."""
+        clarans = CLARANS(n_clusters=3)
+        with self.assertRaises(NotFittedError):
+            clarans.get_feature_names_out()
+
+        clarans.fit(self.X)
+        names = clarans.get_feature_names_out()
+        np.testing.assert_array_equal(
+            names, np.array(["clarans0", "clarans1", "clarans2"], dtype=object)
+        )
+
+    def test_pandas_output(self):
+        """CLARANS should support set_output(transform='pandas') per SLEP018."""
+        import pandas as pd
+
+        clarans = CLARANS(n_clusters=3, random_state=42)
+        clarans.set_output(transform="pandas")
+        clarans.fit(self.X)
+        transformed = clarans.transform(self.X)
+        self.assertIsInstance(transformed, pd.DataFrame)
+        self.assertListEqual(
+            list(transformed.columns), ["clarans0", "clarans1", "clarans2"]
+        )
 
 
 class TestCLARANSEdgeCases(unittest.TestCase):
@@ -436,6 +483,8 @@ class TestCLARANSValidationAndPrecomputed(unittest.TestCase):
         self.assertEqual(len(model.medoid_indices_), 3)
         self.assertEqual(len(model.labels_), 50)
         self.assertGreaterEqual(model.inertia_, 0)
+        self.assertIsNone(model.cluster_centers_)
+        self.assertFalse(hasattr(model, "n_features_in_"))
 
         # predict on full square matrix
         labels = model.predict(self.D)

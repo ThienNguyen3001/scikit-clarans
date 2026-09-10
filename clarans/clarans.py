@@ -66,8 +66,9 @@ class CLARANS(ClusterMixin, TransformerMixin, BaseEstimator):
 
     Attributes
     ----------
-    cluster_centers_ : ndarray of shape (n_clusters, n_features)
-        Coordinates of cluster centers (medoids).
+    cluster_centers_ : {ndarray, sparse matrix} of shape (n_clusters, n_features) or None
+        Coordinates of cluster centers (medoids). If ``metric='precomputed'``,
+        this is ``None``.
 
     labels_ : ndarray of shape (n_samples,)
         Labels of each point.
@@ -79,13 +80,19 @@ class CLARANS(ClusterMixin, TransformerMixin, BaseEstimator):
         Sum of distances of samples to their closest cluster center.
 
     maxneighbor_ : int
-        Actual number of neighbors examined during search.
+        Effective maximum number of non-improving neighbors examined per
+        local search.
 
     n_iter_ : int
-        Total number of iterations (accepted swaps) across all local searches.
+        Number of candidate neighbors evaluated during the best local search.
+
+    n_swaps_ : int
+        Number of successful medoid swaps performed during the best local
+        search.
 
     n_features_in_ : int
-        Number of features seen during :term:`fit`.
+        Number of features seen during :term:`fit`. Defined only when
+        ``metric != 'precomputed'``.
 
     Notes
     -----
@@ -118,6 +125,7 @@ class CLARANS(ClusterMixin, TransformerMixin, BaseEstimator):
 
     def __init__(
         self,
+        *,
         n_clusters=8,
         numlocal=2,
         maxneighbor=None,
@@ -308,7 +316,8 @@ class CLARANS(ClusterMixin, TransformerMixin, BaseEstimator):
 
         best_cost = np.inf
         best_medoids = np.empty(self.n_clusters, dtype=int)
-        self.n_iter_ = 0
+        best_n_iter = 0
+        best_n_swaps = 0
 
         deterministic_medoids = self._prepare_initial_medoids(X, random_state)
 
@@ -321,9 +330,11 @@ class CLARANS(ClusterMixin, TransformerMixin, BaseEstimator):
             current_cost = calculate_cost(X, current_medoids_indices, self.metric)
 
             i = 0
-            iter_count = 0
+            swap_count = 0
+            eval_count = 0
 
             while i < self.maxneighbor_:
+                eval_count += 1
                 random_medoid_pos = random_state.randint(0, self.n_clusters)
 
                 mask = np.ones(n_samples, dtype=bool)
@@ -346,15 +357,18 @@ class CLARANS(ClusterMixin, TransformerMixin, BaseEstimator):
                     current_medoids_indices = neighbor_medoids_indices
                     current_cost = neighbor_cost
                     i = 0
-                    iter_count += 1
+                    swap_count += 1
                 else:
                     i += 1
-
-            self.n_iter_ += max(1, iter_count)
 
             if current_cost < best_cost:
                 best_cost = current_cost
                 best_medoids = current_medoids_indices.copy()
+                best_n_iter = eval_count
+                best_n_swaps = swap_count
+
+        self.n_iter_ = best_n_iter
+        self.n_swaps_ = best_n_swaps
 
         return self._finalize_fit(X, best_cost, best_medoids)
 
@@ -390,26 +404,33 @@ class CLARANS(ClusterMixin, TransformerMixin, BaseEstimator):
                 f"n_clusters must be less than n_samples ({n_samples}); got {self.n_clusters}"
             )
 
-        if self.metric == "precomputed" and n_samples != n_features:
-            raise ValueError(
-                f"Precomputed distance matrix must be square "
-                f"(got shape ({n_samples}, {n_features}))"
-            )
+        if self.metric == "precomputed":
+            if n_samples != n_features:
+                raise ValueError(
+                    f"Precomputed distance matrix must be square "
+                    f"(got shape ({n_samples}, {n_features}))"
+                )
+            if hasattr(self, "n_features_in_"):
+                del self.n_features_in_
+            if hasattr(self, "feature_names_in_"):
+                del self.feature_names_in_
 
         return X, random_state, n_samples, n_features
 
     def _finalize_fit(self, X, best_cost, best_medoids):
         """Set fitted attributes and assign cluster labels."""
         self.inertia_ = float(best_cost)
-        self.medoid_indices_ = best_medoids
-        self.cluster_centers_ = X[self.medoid_indices_]
+        self.medoid_indices_ = np.sort(best_medoids)
+        self._n_features_out = self.n_clusters
 
         if self.metric == "precomputed":
+            self.cluster_centers_ = None
             dist_to_medoids = X[:, self.medoid_indices_]
             if hasattr(dist_to_medoids, "toarray"):
                 dist_to_medoids = dist_to_medoids.toarray()
             self.labels_ = np.argmin(dist_to_medoids, axis=1)
         else:
+            self.cluster_centers_ = X[self.medoid_indices_]
             self.labels_, _ = pairwise_distances_argmin_min(
                 X, self.cluster_centers_, metric=self.metric
             )
@@ -445,14 +466,15 @@ class CLARANS(ClusterMixin, TransformerMixin, BaseEstimator):
 
         if self.metric == "precomputed":
             X = check_array(X, accept_sparse=["csr", "csc"])
-            if X.shape[1] == self.n_features_in_:
+            n_train_samples = len(self.labels_)
+            if X.shape[1] == n_train_samples:
                 dist_to_medoids = X[:, self.medoid_indices_]
             elif X.shape[1] == self.n_clusters:
                 dist_to_medoids = X
             else:
                 raise ValueError(
                     f"Precomputed X has {X.shape[1]} columns; expected either "
-                    f"{self.n_features_in_} (samples) or {self.n_clusters} (clusters)."
+                    f"{n_train_samples} (samples) or {self.n_clusters} (clusters)."
                 )
             if hasattr(dist_to_medoids, "toarray"):
                 dist_to_medoids = dist_to_medoids.toarray()
@@ -501,14 +523,15 @@ class CLARANS(ClusterMixin, TransformerMixin, BaseEstimator):
 
         if self.metric == "precomputed":
             X = check_array(X, accept_sparse=["csr", "csc"])
-            if X.shape[1] == self.n_features_in_:
+            n_train_samples = len(self.labels_)
+            if X.shape[1] == n_train_samples:
                 dist_to_medoids = X[:, self.medoid_indices_]
             elif X.shape[1] == self.n_clusters:
                 dist_to_medoids = X
             else:
                 raise ValueError(
                     f"Precomputed X has {X.shape[1]} columns; expected either "
-                    f"{self.n_features_in_} (samples) or {self.n_clusters} (clusters)."
+                    f"{n_train_samples} (samples) or {self.n_clusters} (clusters)."
                 )
             return (
                 dist_to_medoids.toarray()
@@ -526,3 +549,41 @@ class CLARANS(ClusterMixin, TransformerMixin, BaseEstimator):
                 X = check_array(X, accept_sparse=["csr", "csc"])
 
         return pairwise_distances(X, self.cluster_centers_, metric=self.metric)
+
+    def get_feature_names_out(self, input_features=None) -> np.ndarray:
+        """
+        Get output feature names for transformation.
+
+        The feature names out will be prefixed by the lowercased class name.
+        For example, if the transformer outputs 3 features, then the feature names
+        out are: `["clarans0", "clarans1", "clarans2"]` (or `fastclarans0`, etc.).
+
+        Parameters
+        ----------
+        input_features : array-like of str or None, default=None
+            Only used to validate feature names with the names seen in `fit`.
+
+        Returns
+        -------
+        feature_names_out : ndarray of str objects
+            Transformed feature names.
+        """
+        check_is_fitted(self, "_n_features_out")
+        try:
+            from sklearn.utils.validation import _generate_get_feature_names_out
+
+            return _generate_get_feature_names_out(
+                self, self._n_features_out, input_features=input_features
+            )
+        except ImportError:
+            if input_features is not None and hasattr(self, "feature_names_in_"):
+                if len(input_features) != len(self.feature_names_in_):
+                    raise ValueError(
+                        f"input_features should have length equal to the number of "
+                        f"features ({len(self.feature_names_in_)}), got {len(input_features)}"
+                    )
+            class_name = self.__class__.__name__.lower()
+            return np.asarray(
+                [f"{class_name}{i}" for i in range(self._n_features_out)],
+                dtype=object,
+            )
