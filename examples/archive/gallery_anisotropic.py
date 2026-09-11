@@ -16,7 +16,7 @@ def main():
     transformation = np.array([[0.6, -0.6], [-0.4, 0.8]])
     X = X.dot(transformation)
 
-    model = CLARANS(n_clusters=3, numlocal=5, random_state=42)
+    model = CLARANS(n_clusters=3, num_local=5, random_state=42)
     model.fit(X)
 
     fig, ax = plt.subplots(figsize=(6, 4))

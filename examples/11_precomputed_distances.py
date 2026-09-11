@@ -24,8 +24,8 @@ def main():
     # 2. Fit CLARANS with metric='precomputed'
     clarans = CLARANS(
         n_clusters=3,
-        numlocal=3,
-        maxneighbor=30,
+        num_local=3,
+        max_neighbors=30,
         metric="precomputed",
         random_state=42,
     )
@@ -39,8 +39,8 @@ def main():
     # 3. Fit FastCLARANS with metric='precomputed'
     fast_clarans = FastCLARANS(
         n_clusters=3,
-        numlocal=3,
-        maxneighbor=30,
+        num_local=3,
+        max_neighbors=30,
         metric="precomputed",
         random_state=42,
     )

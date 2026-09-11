@@ -27,7 +27,7 @@
 
    def main():
        X, _ = make_blobs(n_samples=500, centers=4, cluster_std=0.60, random_state=42)
-       model = CLARANS(n_clusters=4, numlocal=5, random_state=42)
+       model = CLARANS(n_clusters=4, num_local=5, random_state=42)
        model.fit(X)
 
        fig, ax = plt.subplots(figsize=(6, 4))
@@ -69,7 +69,7 @@
 
    def main():
        X, _ = make_moons(n_samples=500, noise=0.05, random_state=42)
-       model = CLARANS(n_clusters=2, numlocal=5, random_state=42)
+       model = CLARANS(n_clusters=2, num_local=5, random_state=42)
        model.fit(X)
 
        fig, ax = plt.subplots(figsize=(6, 4))
@@ -115,7 +115,7 @@
        transformation = np.array([[0.6, -0.6], [-0.4, 0.8]])
        X = X.dot(transformation)
 
-       model = CLARANS(n_clusters=3, numlocal=5, random_state=42)
+       model = CLARANS(n_clusters=3, num_local=5, random_state=42)
        model.fit(X)
 
        fig, ax = plt.subplots(figsize=(6, 4))

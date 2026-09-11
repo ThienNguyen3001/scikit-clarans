@@ -1,7 +1,7 @@
 """
 08_performance_tuning.py
 ========================
-Show the trade-off between parameter choices (maxneighbor, numlocal) and
+Show the trade-off between parameter choices (max_neighbors, num_local) and
 runtime / final cost.
 
 Run: python examples/08_performance_tuning.py
@@ -19,17 +19,17 @@ def main():
     X, _ = make_blobs(n_samples=1000, centers=5, n_features=2, random_state=42)
 
     combinations = [
-        {"numlocal": 1, "maxneighbor": 250},
-        {"numlocal": 3, "maxneighbor": 250},
-        {"numlocal": 3, "maxneighbor": 1000},
+        {"num_local": 1, "max_neighbors": 250},
+        {"num_local": 3, "max_neighbors": 250},
+        {"num_local": 3, "max_neighbors": 1000},
     ]
 
     for c in combinations:
         t0 = time.time()
         model = CLARANS(
             n_clusters=5,
-            numlocal=c["numlocal"],
-            maxneighbor=c["maxneighbor"],
+            num_local=c["num_local"],
+            max_neighbors=c["max_neighbors"],
             random_state=0,
         )
         model.fit(X)
@@ -37,8 +37,8 @@ def main():
 
         cost = calculate_cost(X, model.medoid_indices_)
         msg = (
-            f"numlocal={c['numlocal']:2d}  "
-            f"maxneighbor={c['maxneighbor']:4d}  "
+            f"num_local={c['num_local']:2d}  "
+            f"max_neighbors={c['max_neighbors']:4d}  "
             f"time={t1-t0:.3f}s  "
             f"cost={cost:.2f}"
         )

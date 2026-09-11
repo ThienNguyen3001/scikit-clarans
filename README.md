@@ -56,10 +56,10 @@ X, _ = make_blobs(n_samples=1000, centers=5, random_state=42)
 
 # 2. Initialize CLARANS
 #    - n_clusters: 5 clusters
-#    - numlocal: 3 restarts for better quality
+#    - num_local: 3 restarts for better quality
 #    - init: 'k-medoids++' for smart starting points
 #    - cache: True (default) for fast O(n) swap evaluations; False for classic baseline
-clarans = CLARANS(n_clusters=5, numlocal=3, init='k-medoids++', cache=True, random_state=42)
+clarans = CLARANS(n_clusters=5, num_local=3, init='k-medoids++', cache=True, random_state=42)
 
 # 3. Fit
 clarans.fit(X)
@@ -77,7 +77,7 @@ from clarans import FastCLARANS
 
 # FastCLARANS computes distances on-the-fly (memory efficient)
 # and samples max(250, 2.5% of non-medoid points) per iteration
-fast_model = FastCLARANS(n_clusters=5, numlocal=3, random_state=42)
+fast_model = FastCLARANS(n_clusters=5, num_local=3, random_state=42)
 fast_model.fit(X)
 ```
 

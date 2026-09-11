@@ -12,7 +12,7 @@ from clarans import CLARANS
 
 def main():
     X, _ = make_moons(n_samples=500, noise=0.05, random_state=42)
-    model = CLARANS(n_clusters=2, numlocal=5, random_state=42)
+    model = CLARANS(n_clusters=2, num_local=5, random_state=42)
     model.fit(X)
 
     fig, ax = plt.subplots(figsize=(6, 4))

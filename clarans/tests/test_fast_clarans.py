@@ -14,7 +14,7 @@ class TestFastCLARANS(unittest.TestCase):
         )
 
     def test_fit(self):
-        model = FastCLARANS(n_clusters=3, numlocal=2, maxneighbor=10, random_state=42)
+        model = FastCLARANS(n_clusters=3, num_local=2, max_neighbors=10, random_state=42)
         model.fit(self.X)
 
         self.assertEqual(len(model.cluster_centers_), 3)
@@ -25,7 +25,7 @@ class TestFastCLARANS(unittest.TestCase):
             self.assertTrue(np.any(np.all(self.X == self.X[idx], axis=1)))
 
     def test_predict(self):
-        model = FastCLARANS(n_clusters=3, numlocal=1, random_state=42)
+        model = FastCLARANS(n_clusters=3, num_local=1, random_state=42)
         model.fit(self.X)
         labels = model.predict(self.X)
         self.assertEqual(labels.shape, (100,))
@@ -38,7 +38,7 @@ class TestFastCLARANS(unittest.TestCase):
 
         # Test with csr_matrix
         X_sparse = sparse.csr_matrix(self.X)
-        model = FastCLARANS(n_clusters=3, numlocal=1, random_state=42)
+        model = FastCLARANS(n_clusters=3, num_local=1, random_state=42)
         model.fit(X_sparse)
         labels = model.predict(X_sparse)
         self.assertEqual(labels.shape, (100,))
@@ -46,7 +46,7 @@ class TestFastCLARANS(unittest.TestCase):
         # Test with csr_array if available
         if hasattr(sparse, "csr_array"):
             X_arr = sparse.csr_array(self.X)
-            model_arr = FastCLARANS(n_clusters=3, numlocal=1, random_state=42)
+            model_arr = FastCLARANS(n_clusters=3, num_local=1, random_state=42)
             model_arr.fit(X_arr)
             labels_arr = model_arr.predict(X_arr)
             self.assertEqual(labels_arr.shape, (100,))
@@ -54,7 +54,7 @@ class TestFastCLARANS(unittest.TestCase):
     def test_init_methods(self):
         for init_method in ["random", "heuristic", "k-medoids++", "build"]:
             model = FastCLARANS(
-                n_clusters=3, numlocal=1, maxneighbor=10, init=init_method, random_state=42
+                n_clusters=3, num_local=1, max_neighbors=10, init=init_method, random_state=42
             )
             model.fit(self.X)
             self.assertEqual(len(model.cluster_centers_), 3)
@@ -62,7 +62,7 @@ class TestFastCLARANS(unittest.TestCase):
     def test_precomputed_init(self):
         init_centers = self.X[[0, 10, 20]]
         model = FastCLARANS(
-            n_clusters=3, numlocal=1, maxneighbor=10, init=init_centers, random_state=42
+            n_clusters=3, num_local=1, max_neighbors=10, init=init_centers, random_state=42
         )
         model.fit(self.X)
         self.assertEqual(len(model.cluster_centers_), 3)
@@ -78,7 +78,7 @@ class TestFastCLARANS(unittest.TestCase):
 
     def test_transform(self):
         """Test transform() returns distances to cluster centers."""
-        model = FastCLARANS(n_clusters=3, numlocal=1, maxneighbor=10, random_state=42)
+        model = FastCLARANS(n_clusters=3, num_local=1, max_neighbors=10, random_state=42)
         model.fit(self.X)
         X_transformed = model.transform(self.X)
 
@@ -90,7 +90,7 @@ class TestFastCLARANS(unittest.TestCase):
     def test_cosine_metric(self):
         """Test that cosine metric works correctly."""
         model = FastCLARANS(
-            n_clusters=3, numlocal=1, maxneighbor=10, metric="cosine", random_state=42
+            n_clusters=3, num_local=1, max_neighbors=10, metric="cosine", random_state=42
         )
         model.fit(self.X)
         self.assertEqual(len(model.cluster_centers_), 3)
@@ -100,7 +100,7 @@ class TestFastCLARANS(unittest.TestCase):
 
     def test_single_cluster(self):
         """Test with n_clusters=1 (edge case) and ensure swap optimizes cost."""
-        model = FastCLARANS(n_clusters=1, numlocal=1, maxneighbor=10, random_state=42)
+        model = FastCLARANS(n_clusters=1, num_local=1, max_neighbors=10, random_state=42)
         model.fit(self.X)
         self.assertEqual(len(model.cluster_centers_), 1)
         self.assertTrue(np.all(model.labels_ == 0))
@@ -108,21 +108,21 @@ class TestFastCLARANS(unittest.TestCase):
         # Test on 1D data where initial point is suboptimal to verify swap occurs
         X_1d = np.array([[0.0], [1.0], [10.0]])
         # random_state=0 initially selects index 2 (10.0) with cost 19.0
-        model_1d = FastCLARANS(n_clusters=1, numlocal=1, maxneighbor=10, random_state=0)
+        model_1d = FastCLARANS(n_clusters=1, num_local=1, max_neighbors=10, random_state=0)
         model_1d.fit(X_1d)
         self.assertEqual(model_1d.medoid_indices_[0], 1)
         self.assertAlmostEqual(model_1d.inertia_, 10.0)
 
     def test_inertia_attribute(self):
         """Test that inertia_ is set after fit and is non-negative."""
-        model = FastCLARANS(n_clusters=3, numlocal=2, maxneighbor=50, random_state=42)
+        model = FastCLARANS(n_clusters=3, num_local=2, max_neighbors=50, random_state=42)
         model.fit(self.X)
         self.assertTrue(hasattr(model, "inertia_"))
         self.assertGreaterEqual(model.inertia_, 0)
 
     def test_n_iter_and_n_swaps_attributes(self):
         """Test that n_iter_ and n_swaps_ are set correctly in FastCLARANS."""
-        model = FastCLARANS(n_clusters=3, numlocal=2, maxneighbor=50, random_state=42)
+        model = FastCLARANS(n_clusters=3, num_local=2, max_neighbors=50, random_state=42)
         model.fit(self.X)
         self.assertTrue(hasattr(model, "n_iter_"))
         self.assertTrue(hasattr(model, "n_swaps_"))
@@ -135,9 +135,9 @@ class TestFastCLARANS(unittest.TestCase):
         with self.assertRaises(ValueError):
             FastCLARANS(n_clusters=0).fit(self.X)
         with self.assertRaises(ValueError):
-            FastCLARANS(numlocal=0).fit(self.X)
+            FastCLARANS(num_local=0).fit(self.X)
         with self.assertRaises(ValueError):
-            FastCLARANS(maxneighbor=0).fit(self.X)
+            FastCLARANS(max_neighbors=0).fit(self.X)
         with self.assertRaises(TypeError):
             FastCLARANS(max_iter=-1)
 
@@ -147,7 +147,7 @@ class TestFastCLARANS(unittest.TestCase):
 
         D = pairwise_distances(self.X, metric="euclidean")
         model = FastCLARANS(
-            n_clusters=3, numlocal=2, maxneighbor=20, metric="precomputed", random_state=42
+            n_clusters=3, num_local=2, max_neighbors=20, metric="precomputed", random_state=42
         )
         model.fit(D)
 
@@ -172,12 +172,12 @@ class TestFastCLARANS(unittest.TestCase):
             model.fit(self.X)
 
     def test_deterministic_init_warning(self):
-        """FastCLARANS should warn when numlocal > 1 with deterministic init and succeed."""
+        """FastCLARANS should warn when num_local > 1 with deterministic init and succeed."""
         import warnings
         with warnings.catch_warnings(record=True) as w:
             warnings.simplefilter("always")
             model = FastCLARANS(
-                n_clusters=3, numlocal=2, maxneighbor=10, init="heuristic", random_state=42
+                n_clusters=3, num_local=2, max_neighbors=10, init="heuristic", random_state=42
             )
             model.fit(self.X)
             self.assertTrue(any(issubclass(warn.category, UserWarning) for warn in w))
@@ -214,6 +214,22 @@ class TestFastCLARANS(unittest.TestCase):
             list(transformed.columns),
             ["fastclarans0", "fastclarans1", "fastclarans2"],
         )
+
+    def test_legacy_parameters_removed(self):
+        """FastCLARANS should raise TypeError when numlocal or maxneighbor are passed."""
+        with self.assertRaises(TypeError):
+            FastCLARANS(numlocal=2)
+        with self.assertRaises(TypeError):
+            FastCLARANS(maxneighbor=25)
+
+    def test_parameters_num_local_max_neighbors(self):
+        """FastCLARANS with num_local and max_neighbors should work and set max_neighbors_."""
+        model = FastCLARANS(
+            n_clusters=3, num_local=2, max_neighbors=25, random_state=42
+        )
+        model.fit(self.X)
+        self.assertEqual(model.max_neighbors_, 25)
+        self.assertFalse(hasattr(model, "maxneighbor_"))
 
 
 if __name__ == "__main__":

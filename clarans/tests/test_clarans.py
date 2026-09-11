@@ -25,7 +25,7 @@ class TestCLARANS(unittest.TestCase):
         )
 
     def test_fit(self):
-        clarans = CLARANS(n_clusters=3, numlocal=2, maxneighbor=10, random_state=42)
+        clarans = CLARANS(n_clusters=3, num_local=2, max_neighbors=10, random_state=42)
         clarans.fit(self.X)
 
         self.assertEqual(len(clarans.cluster_centers_), 3)
@@ -36,13 +36,13 @@ class TestCLARANS(unittest.TestCase):
             self.assertTrue(np.any(np.all(self.X == self.X[idx], axis=1)))
 
     def test_predict(self):
-        clarans = CLARANS(n_clusters=3, numlocal=1, random_state=42)
+        clarans = CLARANS(n_clusters=3, num_local=1, random_state=42)
         clarans.fit(self.X)
         labels = clarans.predict(self.X)
         self.assertEqual(labels.shape, (100,))
 
     def test_convergence(self):
-        clarans = CLARANS(n_clusters=3, numlocal=10, maxneighbor=100, random_state=42)
+        clarans = CLARANS(n_clusters=3, num_local=10, max_neighbors=100, random_state=42)
         clarans.fit(self.X)
         score = silhouette_score(self.X, clarans.labels_)
         self.assertGreater(score, -0.1, f"Silhouette score too low: {score}")
@@ -52,8 +52,8 @@ class TestCLARANS(unittest.TestCase):
         for init_method in ["random", "heuristic", "k-medoids++", "build"]:
             clarans = CLARANS(
                 n_clusters=3,
-                numlocal=1,
-                maxneighbor=10,
+                num_local=1,
+                max_neighbors=10,
                 init=init_method,
                 random_state=42,
             )
@@ -65,7 +65,7 @@ class TestCLARANS(unittest.TestCase):
         """Test initialization with precomputed array."""
         init_centers = self.X[[0, 10, 20]]
         clarans = CLARANS(
-            n_clusters=3, numlocal=1, maxneighbor=10, init=init_centers, random_state=42
+            n_clusters=3, num_local=1, max_neighbors=10, init=init_centers, random_state=42
         )
         clarans.fit(self.X)
         self.assertEqual(len(clarans.cluster_centers_), 3)
@@ -74,7 +74,7 @@ class TestCLARANS(unittest.TestCase):
         """Test different metrics."""
         for metric in ["euclidean", "manhattan"]:
             clarans = CLARANS(
-                n_clusters=3, numlocal=1, maxneighbor=10, metric=metric, random_state=42
+                n_clusters=3, num_local=1, max_neighbors=10, metric=metric, random_state=42
             )
             clarans.fit(self.X)
             self.assertEqual(len(clarans.cluster_centers_), 3)
@@ -91,7 +91,7 @@ class TestCLARANS(unittest.TestCase):
 
     def test_transform(self):
         """Test transform() returns distances to cluster centers."""
-        clarans = CLARANS(n_clusters=3, numlocal=1, maxneighbor=10, random_state=42)
+        clarans = CLARANS(n_clusters=3, num_local=1, max_neighbors=10, random_state=42)
         clarans.fit(self.X)
         X_transformed = clarans.transform(self.X)
 
@@ -106,7 +106,7 @@ class TestCLARANS(unittest.TestCase):
     def test_cosine_metric(self):
         """Test that cosine metric works correctly."""
         clarans = CLARANS(
-            n_clusters=3, numlocal=1, maxneighbor=10, metric="cosine", random_state=42
+            n_clusters=3, num_local=1, max_neighbors=10, metric="cosine", random_state=42
         )
         clarans.fit(self.X)
         self.assertEqual(len(clarans.cluster_centers_), 3)
@@ -116,21 +116,21 @@ class TestCLARANS(unittest.TestCase):
 
     def test_single_cluster(self):
         """Test with n_clusters=1 (edge case)."""
-        clarans = CLARANS(n_clusters=1, numlocal=1, maxneighbor=10, random_state=42)
+        clarans = CLARANS(n_clusters=1, num_local=1, max_neighbors=10, random_state=42)
         clarans.fit(self.X)
         self.assertEqual(len(clarans.cluster_centers_), 1)
         self.assertTrue(np.all(clarans.labels_ == 0))
 
     def test_inertia_attribute(self):
         """Test that inertia_ is set after fit and is non-negative."""
-        clarans = CLARANS(n_clusters=3, numlocal=2, maxneighbor=50, random_state=42)
+        clarans = CLARANS(n_clusters=3, num_local=2, max_neighbors=50, random_state=42)
         clarans.fit(self.X)
         self.assertTrue(hasattr(clarans, "inertia_"))
         self.assertGreaterEqual(clarans.inertia_, 0)
 
     def test_n_iter_and_n_swaps_attributes(self):
         """Test that n_iter_ and n_swaps_ are set correctly after fit."""
-        clarans = CLARANS(n_clusters=3, numlocal=2, maxneighbor=50, random_state=42)
+        clarans = CLARANS(n_clusters=3, num_local=2, max_neighbors=50, random_state=42)
         clarans.fit(self.X)
         self.assertTrue(hasattr(clarans, "n_iter_"))
         self.assertTrue(hasattr(clarans, "n_swaps_"))
@@ -140,7 +140,7 @@ class TestCLARANS(unittest.TestCase):
 
     def test_medoid_indices_sorted(self):
         """Test that medoid_indices_ is always sorted."""
-        clarans = CLARANS(n_clusters=4, numlocal=5, maxneighbor=30, random_state=42)
+        clarans = CLARANS(n_clusters=4, num_local=5, max_neighbors=30, random_state=42)
         clarans.fit(self.X)
         self.assertTrue(np.all(np.diff(clarans.medoid_indices_) >= 0))
 
@@ -153,7 +153,7 @@ class TestCLARANS(unittest.TestCase):
 
         # Test with csr_matrix
         X_sparse = sparse.csr_matrix(self.X)
-        model = CLARANS(n_clusters=3, numlocal=1, random_state=42)
+        model = CLARANS(n_clusters=3, num_local=1, random_state=42)
         model.fit(X_sparse)
         labels = model.predict(X_sparse)
         self.assertEqual(labels.shape, (100,))
@@ -161,7 +161,7 @@ class TestCLARANS(unittest.TestCase):
         # Test with csr_array if available
         if hasattr(sparse, "csr_array"):
             X_arr = sparse.csr_array(self.X)
-            model_arr = CLARANS(n_clusters=3, numlocal=1, random_state=42)
+            model_arr = CLARANS(n_clusters=3, num_local=1, random_state=42)
             model_arr.fit(X_arr)
             labels_arr = model_arr.predict(X_arr)
             self.assertEqual(labels_arr.shape, (100,))
@@ -170,7 +170,7 @@ class TestCLARANS(unittest.TestCase):
         """All medoids should be unique across multiple random seeds."""
         for seed in range(10):
             clarans = CLARANS(
-                n_clusters=3, numlocal=1, maxneighbor=30, random_state=seed
+                n_clusters=3, num_local=1, max_neighbors=30, random_state=seed
             )
             clarans.fit(self.X)
             unique_count = len(np.unique(clarans.medoid_indices_))
@@ -181,7 +181,7 @@ class TestCLARANS(unittest.TestCase):
 
     def test_cluster_centers_match_medoids(self):
         """cluster_centers_ should be the actual data points at medoid_indices_."""
-        clarans = CLARANS(n_clusters=3, numlocal=1, maxneighbor=30, random_state=42)
+        clarans = CLARANS(n_clusters=3, num_local=1, max_neighbors=30, random_state=42)
         clarans.fit(self.X)
         for i, center in enumerate(clarans.cluster_centers_):
             medoid_idx = clarans.medoid_indices_[i]
@@ -192,7 +192,7 @@ class TestCLARANS(unittest.TestCase):
 
     def test_labels_in_valid_range(self):
         """Labels should be in range [0, n_clusters)."""
-        clarans = CLARANS(n_clusters=3, numlocal=1, maxneighbor=30, random_state=42)
+        clarans = CLARANS(n_clusters=3, num_local=1, max_neighbors=30, random_state=42)
         clarans.fit(self.X)
         self.assertTrue(
             np.all((clarans.labels_ >= 0) & (clarans.labels_ < 3)),
@@ -201,7 +201,7 @@ class TestCLARANS(unittest.TestCase):
 
     def test_predict_matches_fit_labels(self):
         """predict(X) on training data should match labels_."""
-        clarans = CLARANS(n_clusters=3, numlocal=2, maxneighbor=50, random_state=42)
+        clarans = CLARANS(n_clusters=3, num_local=2, max_neighbors=50, random_state=42)
         clarans.fit(self.X)
         predicted = clarans.predict(self.X)
         np.testing.assert_array_equal(
@@ -211,10 +211,10 @@ class TestCLARANS(unittest.TestCase):
 
     def test_determinism(self):
         """Same random_state should give identical results."""
-        clarans1 = CLARANS(n_clusters=3, numlocal=2, maxneighbor=50, random_state=123)
+        clarans1 = CLARANS(n_clusters=3, num_local=2, max_neighbors=50, random_state=123)
         clarans1.fit(self.X)
 
-        clarans2 = CLARANS(n_clusters=3, numlocal=2, maxneighbor=50, random_state=123)
+        clarans2 = CLARANS(n_clusters=3, num_local=2, max_neighbors=50, random_state=123)
         clarans2.fit(self.X)
 
         np.testing.assert_array_equal(
@@ -226,18 +226,18 @@ class TestCLARANS(unittest.TestCase):
             "Same random_state should give same labels",
         )
 
-    def test_maxneighbor_default(self):
-        """Default maxneighbor should be calculated correctly."""
-        clarans = CLARANS(n_clusters=3, numlocal=1, random_state=42)
+    def test_max_neighbors_default(self):
+        """Default max_neighbors should be calculated correctly."""
+        clarans = CLARANS(n_clusters=3, num_local=1, random_state=42)
         clarans.fit(self.X)
         expected = max(250, int(0.0125 * 3 * (100 - 3)))
-        self.assertEqual(clarans.maxneighbor_, expected)
+        self.assertEqual(clarans.max_neighbors_, expected)
 
-    def test_maxneighbor_custom(self):
-        """Custom maxneighbor should be used when provided."""
-        clarans = CLARANS(n_clusters=3, maxneighbor=100, random_state=42)
+    def test_max_neighbors_custom(self):
+        """Custom max_neighbors should be used when provided."""
+        clarans = CLARANS(n_clusters=3, max_neighbors=100, random_state=42)
         clarans.fit(self.X)
-        self.assertEqual(clarans.maxneighbor_, 100)
+        self.assertEqual(clarans.max_neighbors_, 100)
 
     def test_n_clusters_exceeds_samples(self):
         """Should raise error when n_clusters >= n_samples."""
@@ -288,7 +288,7 @@ class TestCLARANSEdgeCases(unittest.TestCase):
     def test_identical_points(self):
         """Algorithm should handle dataset with all identical points."""
         X = np.ones((50, 2))
-        clarans = CLARANS(n_clusters=3, numlocal=1, maxneighbor=20, random_state=42)
+        clarans = CLARANS(n_clusters=3, num_local=1, max_neighbors=20, random_state=42)
         clarans.fit(X)
         unique_medoids = len(np.unique(clarans.medoid_indices_))
         self.assertEqual(unique_medoids, 3)
@@ -296,7 +296,7 @@ class TestCLARANSEdgeCases(unittest.TestCase):
     def test_two_clusters(self):
         """Algorithm should work with 2 clusters."""
         X, _ = make_blobs(n_samples=50, centers=2, n_features=2, random_state=42)
-        clarans = CLARANS(n_clusters=2, numlocal=1, maxneighbor=20, random_state=42)
+        clarans = CLARANS(n_clusters=2, num_local=1, max_neighbors=20, random_state=42)
         clarans.fit(X)
         self.assertEqual(len(clarans.medoid_indices_), 2)
         self.assertEqual(len(np.unique(clarans.labels_)), 2)
@@ -304,7 +304,7 @@ class TestCLARANSEdgeCases(unittest.TestCase):
     def test_high_dimensional(self):
         """Algorithm should work with high-dimensional data."""
         X, _ = make_blobs(n_samples=100, centers=3, n_features=50, random_state=42)
-        clarans = CLARANS(n_clusters=3, numlocal=1, maxneighbor=30, random_state=42)
+        clarans = CLARANS(n_clusters=3, num_local=1, max_neighbors=30, random_state=42)
         clarans.fit(X)
         self.assertEqual(len(clarans.medoid_indices_), 3)
         self.assertEqual(clarans.cluster_centers_.shape, (3, 50))
@@ -312,7 +312,7 @@ class TestCLARANSEdgeCases(unittest.TestCase):
     def test_n_clusters_close_to_n_samples(self):
         """Algorithm should work when n_clusters is close to n_samples."""
         X = np.random.RandomState(42).randn(20, 2)
-        clarans = CLARANS(n_clusters=15, numlocal=1, maxneighbor=10, random_state=42)
+        clarans = CLARANS(n_clusters=15, num_local=1, max_neighbors=10, random_state=42)
         clarans.fit(X)
         self.assertEqual(len(clarans.medoid_indices_), 15)
         self.assertEqual(len(np.unique(clarans.medoid_indices_)), 15)
@@ -320,7 +320,7 @@ class TestCLARANSEdgeCases(unittest.TestCase):
     def test_single_feature(self):
         """Algorithm should work with single feature."""
         X = np.random.RandomState(42).randn(50, 1)
-        clarans = CLARANS(n_clusters=3, numlocal=1, maxneighbor=20, random_state=42)
+        clarans = CLARANS(n_clusters=3, num_local=1, max_neighbors=20, random_state=42)
         clarans.fit(X)
         self.assertEqual(len(clarans.medoid_indices_), 3)
         self.assertEqual(clarans.cluster_centers_.shape, (3, 1))
@@ -452,17 +452,17 @@ class TestCLARANSValidationAndPrecomputed(unittest.TestCase):
             with self.assertRaises(ValueError):
                 CLARANS(n_clusters=val).fit(self.X)
 
-    def test_invalid_numlocal(self):
-        """numlocal < 1 should raise ValueError."""
+    def test_invalid_num_local(self):
+        """num_local < 1 should raise ValueError."""
         for val in [0, -1]:
             with self.assertRaises(ValueError):
-                CLARANS(numlocal=val).fit(self.X)
+                CLARANS(num_local=val).fit(self.X)
 
-    def test_invalid_maxneighbor(self):
-        """maxneighbor < 1 should raise ValueError."""
+    def test_invalid_max_neighbors(self):
+        """max_neighbors < 1 should raise ValueError."""
         for val in [0, -1]:
             with self.assertRaises(ValueError):
-                CLARANS(maxneighbor=val).fit(self.X)
+                CLARANS(max_neighbors=val).fit(self.X)
 
     def test_removed_max_iter(self):
         """max_iter was removed from the API; passing it should raise TypeError."""
@@ -473,8 +473,8 @@ class TestCLARANSValidationAndPrecomputed(unittest.TestCase):
         """CLARANS should support metric='precomputed'."""
         model = CLARANS(
             n_clusters=3,
-            numlocal=2,
-            maxneighbor=20,
+            num_local=2,
+            max_neighbors=20,
             metric="precomputed",
             random_state=42,
         )
@@ -512,8 +512,8 @@ class TestCLARANSValidationAndPrecomputed(unittest.TestCase):
         for init_method in ["random", "heuristic", "k-medoids++", "build"]:
             model = CLARANS(
                 n_clusters=3,
-                numlocal=1,
-                maxneighbor=10,
+                num_local=1,
+                max_neighbors=10,
                 init=init_method,
                 metric="precomputed",
                 random_state=42,
@@ -522,13 +522,13 @@ class TestCLARANSValidationAndPrecomputed(unittest.TestCase):
             self.assertEqual(len(model.medoid_indices_), 3)
 
     def test_deterministic_init_warning_and_caching(self):
-        """CLARANS should warn when numlocal > 1 with deterministic init and succeed."""
+        """CLARANS should warn when num_local > 1 with deterministic init and succeed."""
         import warnings
         for init_strategy in ["heuristic", "build", self.X[:3]]:
             with warnings.catch_warnings(record=True) as w:
                 warnings.simplefilter("always")
                 model = CLARANS(
-                    n_clusters=3, numlocal=2, maxneighbor=10, init=init_strategy, random_state=42
+                    n_clusters=3, num_local=2, max_neighbors=10, init=init_strategy, random_state=42
                 )
                 model.fit(self.X)
                 self.assertTrue(any(issubclass(warn.category, UserWarning) for warn in w))
@@ -537,13 +537,13 @@ class TestCLARANSValidationAndPrecomputed(unittest.TestCase):
     def test_cache_parameter(self):
         """Test cache parameter: True, False, and invalid values."""
         model_cached = CLARANS(
-            n_clusters=3, numlocal=1, maxneighbor=20, cache=True, random_state=42
+            n_clusters=3, num_local=1, max_neighbors=20, cache=True, random_state=42
         )
         model_cached.fit(self.X)
         self.assertEqual(len(model_cached.medoid_indices_), 3)
 
         model_non_cached = CLARANS(
-            n_clusters=3, numlocal=1, maxneighbor=20, cache=False, random_state=42
+            n_clusters=3, num_local=1, max_neighbors=20, cache=False, random_state=42
         )
         model_non_cached.fit(self.X)
         self.assertEqual(len(model_non_cached.medoid_indices_), 3)
@@ -555,6 +555,22 @@ class TestCLARANSValidationAndPrecomputed(unittest.TestCase):
 
         with self.assertRaises(ValueError):
             CLARANS(cache="invalid").fit(self.X)
+
+    def test_legacy_parameters_removed(self):
+        """Passing removed numlocal or maxneighbor should raise TypeError."""
+        with self.assertRaises(TypeError):
+            CLARANS(numlocal=2)
+        with self.assertRaises(TypeError):
+            CLARANS(maxneighbor=25)
+
+    def test_parameters_num_local_max_neighbors(self):
+        """Using num_local and max_neighbors should work and set max_neighbors_."""
+        model = CLARANS(
+            n_clusters=3, num_local=2, max_neighbors=25, random_state=42
+        )
+        model.fit(self.X)
+        self.assertEqual(model.max_neighbors_, 25)
+        self.assertFalse(hasattr(model, "maxneighbor_"))
 
 
 if __name__ == "__main__":

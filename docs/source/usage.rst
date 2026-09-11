@@ -47,7 +47,7 @@ Here is a quick example demonstrating clustering with ``CLARANS``:
     # 2. Instantiate and fit model
     model = CLARANS(
         n_clusters=4,
-        numlocal=3,
+        num_local=3,
         init='k-medoids++',
         random_state=42
     )
@@ -94,7 +94,7 @@ Quick example with ``FastCLARANS``:
     from clarans import FastCLARANS
 
     # FastCLARANS evaluates k graph edges per candidate evaluation
-    fast_model = FastCLARANS(n_clusters=4, numlocal=3, random_state=42)
+    fast_model = FastCLARANS(n_clusters=4, num_local=3, random_state=42)
     fast_model.fit(X)
 
 Configuration & Hyperparameter Tuning
@@ -112,10 +112,10 @@ Both estimators accept key hyperparameters to balance execution speed and cluste
    * - ``n_clusters``
      - ``8``
      - Number of clusters (medoids) to find (:math:`k`).
-   * - ``numlocal``
+   * - ``num_local``
      - ``2``
      - Number of local searches (random restarts). Higher values explore more local minima.
-   * - ``maxneighbor``
+   * - ``max_neighbors``
      - Dynamic
      - Maximum non-improving neighbors to check per search. Defaults to :math:`\max(250, 1.25\% \times k(n-k))` in CLARANS and :math:`\max(250, 2.5\% \times (n-k))` in FastCLARANS.
    * - ``init``
@@ -139,20 +139,20 @@ Practical Tuning Tips
 
 * **Initialization Strategy** (``init``):
   
-  * ``random`` *(Default)*: Pure uniform sampling. Very fast, but typically requires increasing ``numlocal`` to achieve comparable clustering quality.
+  * ``random`` *(Default)*: Pure uniform sampling. Very fast, but typically requires increasing ``num_local`` to achieve comparable clustering quality.
   * ``k-medoids++`` *(Recommended)*: Probabilistic seeding proportional to squared distance. Fast and memory-friendly (:math:`O(n \cdot k)`).
   * ``build``: Classic PAM greedy seeding. Excellent solution quality on small datasets, but computes the full pairwise distance matrix (:math:`O(n^2)` time and memory). Avoid on large datasets (:math:`n > 5000`).
   * ``heuristic``: Selects the :math:`k` most central data points with the smallest total distance to all others (:math:`O(n^2)` time and memory). Avoid on large datasets (:math:`n > 5000`).
   * ``array-like``: Pass custom coordinates of shape ``(n_clusters, n_features)`` or pre-defined medoid indices to inject prior domain knowledge.
 
-* **Number of Restarts** (``numlocal``):
-  If cluster assignments fluctuate between runs or the objective value (``inertia_``) is inconsistent, increase ``numlocal`` to 3–5 when using randomized initialization (``k-medoids++`` or ``random``).
+* **Number of Restarts** (``num_local``):
+  If cluster assignments fluctuate between runs or the objective value (``inertia_``) is inconsistent, increase ``num_local`` to 3–5 when using randomized initialization (``k-medoids++`` or ``random``).
   
   .. note::
-     **Deterministic initialization**: Strategies such as ``build``, ``heuristic``, or explicit centroid arrays are deterministic. Setting ``numlocal > 1`` with these strategies will start all local searches from the exact same medoids. It is recommended to use ``numlocal=1`` with deterministic initialization to conserve compute resources.
+     **Deterministic initialization**: Strategies such as ``build``, ``heuristic``, or explicit centroid arrays are deterministic. Setting ``num_local > 1`` with these strategies will start all local searches from the exact same medoids. It is recommended to use ``num_local=1`` with deterministic initialization to conserve compute resources.
 
-* **Candidate Exploration** (``maxneighbor``):
-  Leaving ``maxneighbor=None`` (the default) is strongly recommended for almost all use cases. It automatically adapts to the problem geometry based on empirical ratios from the original papers (:math:`1.25\% \times k(n-k)` in CLARANS and :math:`2.5\% \times (n-k)` in FastCLARANS). You only need to explicitly specify ``maxneighbor`` (e.g., ``maxneighbor=200``) if you must enforce a hard upper bound on execution time on very large datasets.
+* **Candidate Exploration** (``max_neighbors``):
+  Leaving ``max_neighbors=None`` (the default) is strongly recommended for almost all use cases. It automatically adapts to the problem geometry based on empirical ratios from the original papers (:math:`1.25\% \times k(n-k)` in CLARANS and :math:`2.5\% \times (n-k)` in FastCLARANS). You only need to explicitly specify ``max_neighbors`` (e.g., ``max_neighbors=200``) if you must enforce a hard upper bound on execution time on very large datasets.
 
 How It Works (Under the Hood)
 -----------------------------
@@ -170,7 +170,7 @@ Understanding the search graph :math:`G_{n,k}` helps developers reason about con
    Standard PAM examines all :math:`k(n-k)` neighbors at each step to find the steepest descent, costing :math:`O(k(n-k)^2)` per iteration. This becomes intractable for large datasets.
 
 3. **How CLARANS Accelerates Search**:
-   Instead of checking all :math:`k(n-k)` neighbors, CLARANS draws random candidate neighbors. As soon as it finds a neighbor that reduces the clustering cost, it immediately transitions to that node (first-choice hill climbing). If :math:`\text{maxneighbor}` consecutive random neighbors fail to improve the cost, the search terminates at a local optimum. The process repeats :math:`\text{numlocal}` times from new random starts.
+   Instead of checking all :math:`k(n-k)` neighbors, CLARANS draws random candidate neighbors. As soon as it finds a neighbor that reduces the clustering cost, it immediately transitions to that node (first-choice hill climbing). If :math:`\text{max\_neighbors}` consecutive random neighbors fail to improve the cost, the search terminates at a local optimum. The process repeats :math:`\text{num\_local}` times from new random starts.
 
 4. **How FastCLARANS Improves Exploration**:
    FastCLARANS utilizes the FastPAM1 formulation: by tracking the nearest and second-nearest medoids for each sample, it computes the swap delta for **all** :math:`k` **medoids simultaneously** in a single :math:`O(n)` pass over the data. This evaluates :math:`k` graph edges in the time CLARANS evaluates one.

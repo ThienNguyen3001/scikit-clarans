@@ -29,12 +29,12 @@ class FastCLARANS(CLARANS):
     n_clusters : int, default=8
         The number of clusters to form (also the number of medoids).
 
-    numlocal : int, default=2
+    num_local : int, default=2
         The number of local searches to perform. More local searches
         increase the chance of finding a better minimum at the cost of
         additional runtime.
 
-    maxneighbor : int or None, default=None
+    max_neighbors : int or None, default=None
         The maximum number of non-medoid candidates to sample per local
         search. If ``None``, defaults to 2.5% of non-medoid points
         (i.e., ``0.025 * (n - k)``) as recommended in Schubert & Rousseeuw
@@ -68,7 +68,7 @@ class FastCLARANS(CLARANS):
         Sum of distances from each sample to its nearest medoid (total
         cost of the best solution found).
 
-    maxneighbor_ : int
+    max_neighbors_ : int
         Effective maximum number of non-improving non-medoid candidates
         sampled per local search.
 
@@ -139,14 +139,14 @@ class FastCLARANS(CLARANS):
         """
         X, random_state, n_samples, n_features = self._validate_input_and_params(X)
 
-        if self.maxneighbor is None:
+        if self.max_neighbors is None:
             # FastCLARANS samples 2.5% of non-medoid points per local search
             # (Schubert & Rousseeuw, 2021) instead of 1.25% * k * (n-k) edges
-            self.maxneighbor_ = max(
+            self.max_neighbors_ = max(
                 250, int(0.025 * (n_samples - self.n_clusters))
             )
         else:
-            self.maxneighbor_ = self.maxneighbor
+            self.max_neighbors_ = int(self.max_neighbors)
 
         best_cost = np.inf
         best_medoids: np.ndarray = np.empty(self.n_clusters, dtype=int)
@@ -155,7 +155,7 @@ class FastCLARANS(CLARANS):
 
         deterministic_medoids = self._prepare_initial_medoids(X, random_state)
 
-        for loc_idx in range(self.numlocal):
+        for loc_idx in range(self.num_local):
             if deterministic_medoids is not None:
                 current_medoids_indices = deterministic_medoids.copy()
             else:
@@ -171,7 +171,7 @@ class FastCLARANS(CLARANS):
             swap_count = 0
             eval_count = 0
 
-            while i < self.maxneighbor_:
+            while i < self.max_neighbors_:
                 eval_count += 1
                 # Choose a random non-medoid candidate using mask (safe for
                 # any k/n ratio, avoids rejection sampling infinite loop)

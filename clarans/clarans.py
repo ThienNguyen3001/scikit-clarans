@@ -28,14 +28,14 @@ class CLARANS(ClusterMixin, TransformerMixin, BaseEstimator):
         The number of clusters to form (also the number of medoids to
         generate).
 
-    numlocal : int, default=2
+    num_local : int, default=2
         The number of local searches to perform.
-        CLARANS runs the search process ``numlocal`` times starting from
+        CLARANS runs the search process ``num_local`` times starting from
         different random nodes to reduce the chance of getting stuck in
         poor local minima. Increasing this improves solution quality but
         increases runtime.
 
-    maxneighbor : int, default=None
+    max_neighbors : int or None, default=None
         The maximum number of neighbors (random swaps) to examine during
         each step. If ``None``, it defaults to ``max(250, 1.25% of k*(n-k))``
         as recommended in the original paper (Ng & Han, 2002). This adaptive
@@ -86,7 +86,7 @@ class CLARANS(ClusterMixin, TransformerMixin, BaseEstimator):
     inertia_ : float
         Sum of distances of samples to their closest cluster center.
 
-    maxneighbor_ : int
+    max_neighbors_ : int
         Effective maximum number of non-improving neighbors examined per
         local search.
 
@@ -105,10 +105,10 @@ class CLARANS(ClusterMixin, TransformerMixin, BaseEstimator):
     -----
     - Time complexity: In each local search, random candidate neighbor swaps
       are evaluated on the search graph G_{n,k}. The search terminates when
-      ``maxneighbor`` consecutive non-improving swaps are tested. With S
+      ``max_neighbors`` consecutive non-improving swaps are tested. With S
       successful swaps and distance evaluation cost O(n * k * d), runtime per
-      local search is bounded by O((S + maxneighbor) * n * k * d), repeated
-      ``numlocal`` times.
+      local search is bounded by O((S + max_neighbors) * n * k * d), repeated
+      ``num_local`` times.
     - Memory complexity: Distances are computed on-the-fly, keeping memory
       usage at O(n) instead of O(n^2). Note that initialization methods
       such as ``'build'`` and ``'heuristic'`` compute full pairwise distance
@@ -134,16 +134,16 @@ class CLARANS(ClusterMixin, TransformerMixin, BaseEstimator):
         self,
         *,
         n_clusters=8,
-        numlocal=2,
-        maxneighbor=None,
+        num_local=2,
+        max_neighbors=None,
         init="random",
         metric="euclidean",
         random_state=None,
         cache=True,
     ):
         self.n_clusters = n_clusters
-        self.numlocal = numlocal
-        self.maxneighbor = maxneighbor
+        self.num_local = num_local
+        self.max_neighbors = max_neighbors
         self.init = init
         self.metric = metric
         self.random_state = random_state
@@ -153,7 +153,7 @@ class CLARANS(ClusterMixin, TransformerMixin, BaseEstimator):
         """Pre-compute initial medoids if the initialization strategy is deterministic.
 
         For deterministic strategies ('build', 'heuristic', or explicit array),
-        computing initial medoids once before the ``numlocal`` loop avoids costly
+        computing initial medoids once before the ``num_local`` loop avoids costly
         O(N^2) recalculations across local search restarts.
         """
         is_deterministic = (
@@ -162,20 +162,20 @@ class CLARANS(ClusterMixin, TransformerMixin, BaseEstimator):
             or isinstance(self.init, list)
         )
         if is_deterministic:
-            if self.numlocal > 1:
+            if self.num_local > 1:
                 if isinstance(self.init, str):
                     warnings.warn(
                         f"The '{self.init}' initialization is deterministic. Running "
-                        f"multiple local searches (numlocal={self.numlocal}) will start "
-                        f"from the exact same initial medoids. Consider using numlocal=1 "
-                        f"or 'k-medoids++' for diverse restarts.",
+                        f"multiple local searches (num_local={self.num_local}) "
+                        f"will start from the exact same initial medoids. Consider using "
+                        f"num_local=1 or 'k-medoids++' for diverse restarts.",
                         UserWarning,
                     )
                 else:
                     warnings.warn(
                         f"An explicit init array was provided. Running multiple local "
-                        f"searches (numlocal={self.numlocal}) will start from the exact "
-                        f"same initial medoids.",
+                        f"searches (num_local={self.num_local}) will start from "
+                        f"the exact same initial medoids.",
                         UserWarning,
                     )
             return self._initialize_medoids(X, random_state)
@@ -297,10 +297,10 @@ class CLARANS(ClusterMixin, TransformerMixin, BaseEstimator):
 
         Notes
         -----
-        - Time complexity: each local search evaluates up to ``maxneighbor``
+        - Time complexity: each local search evaluates up to ``max_neighbors``
           candidate swaps, and each cost evaluation is O(n * k) (distance
           to medoids), so the worst-case runtime is roughly
-          O(numlocal * maxneighbor * n * k).
+          O(num_local * max_neighbors * n * k).
         - Initialization methods such as ``'heuristic'`` and ``'build'``
           may compute the full pairwise distance matrix and therefore have
           O(n^2) time and memory costs.
@@ -316,12 +316,12 @@ class CLARANS(ClusterMixin, TransformerMixin, BaseEstimator):
         """
         X, random_state, n_samples, n_features = self._validate_input_and_params(X)
 
-        if self.maxneighbor is None:
-            self.maxneighbor_ = max(
+        if self.max_neighbors is None:
+            self.max_neighbors_ = max(
                 250, int(0.0125 * self.n_clusters * (n_samples - self.n_clusters))
             )
         else:
-            self.maxneighbor_ = self.maxneighbor
+            self.max_neighbors_ = int(self.max_neighbors)
 
         best_cost = np.inf
         best_medoids = np.empty(self.n_clusters, dtype=int)
@@ -330,7 +330,7 @@ class CLARANS(ClusterMixin, TransformerMixin, BaseEstimator):
 
         deterministic_medoids = self._prepare_initial_medoids(X, random_state)
 
-        for loc_idx in range(self.numlocal):
+        for loc_idx in range(self.num_local):
             if deterministic_medoids is not None:
                 current_medoids_indices = deterministic_medoids.copy()
             else:
@@ -348,7 +348,7 @@ class CLARANS(ClusterMixin, TransformerMixin, BaseEstimator):
             swap_count = 0
             eval_count = 0
 
-            while i < self.maxneighbor_:
+            while i < self.max_neighbors_:
                 eval_count += 1
                 random_medoid_pos = random_state.randint(0, self.n_clusters)
 
@@ -486,12 +486,21 @@ class CLARANS(ClusterMixin, TransformerMixin, BaseEstimator):
 
     def _validate_input_and_params(self, X):
         """Validate estimator parameters and input data array."""
-        if self.n_clusters < 1:
+        if not isinstance(self.n_clusters, (int, np.integer)) or self.n_clusters < 1:
             raise ValueError(f"n_clusters must be >= 1; got {self.n_clusters}")
-        if self.numlocal < 1:
-            raise ValueError(f"numlocal must be >= 1; got {self.numlocal}")
-        if self.maxneighbor is not None and self.maxneighbor < 1:
-            raise ValueError(f"maxneighbor must be >= 1; got {self.maxneighbor}")
+        if (
+            not isinstance(self.num_local, (int, np.integer))
+            or self.num_local < 1
+        ):
+            raise ValueError(f"num_local must be >= 1; got {self.num_local}")
+        if self.max_neighbors is not None:
+            if (
+                not isinstance(self.max_neighbors, (int, np.integer))
+                or self.max_neighbors < 1
+            ):
+                raise ValueError(
+                    f"max_neighbors must be >= 1; got {self.max_neighbors}"
+                )
         if not isinstance(self.cache, (bool, np.bool_)):
             raise ValueError(f"cache must be a boolean; got {self.cache}")
 

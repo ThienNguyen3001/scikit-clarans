@@ -23,7 +23,7 @@ def main():
     results = []
     for init in inits:
         t0 = time.time()
-        model = CLARANS(n_clusters=4, numlocal=3, init=init, random_state=42)
+        model = CLARANS(n_clusters=4, num_local=3, init=init, random_state=42)
         model.fit(X)
         t1 = time.time()
 

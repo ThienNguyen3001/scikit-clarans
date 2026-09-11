@@ -27,9 +27,9 @@ def clustering_silhouette_scorer(estimator, X):
 
 param_grid = {
     "n_clusters": [3, 4, 5],
-    "numlocal": [2, 5, 10],
+    "num_local": [2, 5, 10],
     "init": ["k-medoids++", "random", "heuristic"],
-    "maxneighbor": [None, 50],
+    "max_neighbors": [None, 50],
 }
 
 

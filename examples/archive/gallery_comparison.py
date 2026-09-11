@@ -13,8 +13,8 @@ from sklearn.cluster import KMeans
 def main():
     X, _ = make_blobs(n_samples=500, centers=3, random_state=42)
     models = [
-        ("CLARANS", CLARANS(n_clusters=3, numlocal=5, random_state=42)),
-        ("FastCLARANS", FastCLARANS(n_clusters=3, numlocal=5, random_state=42)),
+        ("CLARANS", CLARANS(n_clusters=3, num_local=5, random_state=42)),
+        ("FastCLARANS", FastCLARANS(n_clusters=3, num_local=5, random_state=42)),
         ("KMeans", KMeans(n_clusters=3, random_state=42)),
     ]
 
