@@ -47,7 +47,7 @@ class CLARANS(ClusterMixin, TransformerMixin, BaseEstimator):
         like PAM (checking more neighbors); lower values make it faster.
 
     init : {'k-medoids++', 'random', 'heuristic', 'build', array-like}, default='k-medoids++'
-        Strategy for selecting initial medoids:
+        Strategy for selecting initial medoids (adapted from scikit-learn-extra):
 
         - ``'k-medoids++'``: Optimized probabilistic initialization (similar
           to k-means++) for faster convergence.
@@ -124,8 +124,12 @@ class CLARANS(ClusterMixin, TransformerMixin, BaseEstimator):
     
     References
     ----------
-    Ng, R. T., & Han, J. (2002). CLARANS: A method for clustering objects for spatial data mining. 
-    IEEE transactions on knowledge and data engineering, 14(5), 1003-1016.
+    * Ng, R. T., & Han, J. (2002). CLARANS: A method for clustering objects for
+      spatial data mining. IEEE Transactions on Knowledge and Data Engineering,
+      14(5), 1003-1016.
+    * scikit-learn-extra contributors. KMedoids clustering implementation
+      and initialization strategies ('k-medoids++', 'heuristic', 'build').
+      https://scikit-learn-extra.readthedocs.io/en/stable/generated/sklearn_extra.cluster.KMedoids.html
 
     Examples
     --------

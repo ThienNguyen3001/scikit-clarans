@@ -38,6 +38,7 @@ The algorithms and heuristics implemented in this library originate from the fol
 
   * Arthur, D., & Vassilvitskii, S. (2007). *k-means++: The advantages of careful seeding.* SODA '07.
   * Kaufman, L., & Rousseeuw, P. J. (1990). *Finding Groups in Data: An Introduction to Cluster Analysis.* John Wiley & Sons.
+  * Initialization implementations (``'k-medoids++'``, ``'heuristic'``, ``'build'``) adapted from `scikit-learn-extra KMedoids <https://scikit-learn-extra.readthedocs.io/en/stable/generated/sklearn_extra.cluster.KMedoids.html>`_.
 
 Resources
 ---------

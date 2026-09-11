@@ -125,6 +125,8 @@ The core algorithms implemented in this package originate from:
   > Ng, R. T., & Han, J. (2002). *CLARANS: A method for clustering objects for spatial data mining.* IEEE Transactions on Knowledge and Data Engineering, 14(5), 1003-1016. [doi:10.1109/TKDE.2002.1033770](https://doi.org/10.1109/TKDE.2002.1033770)
 * **FastCLARANS & FastPAM1:**
   > Schubert, E., & Rousseeuw, P. J. (2021). *Fast and eager k-medoids clustering: O(k) runtime improvement of the PAM, CLARA, and CLARANS algorithms.* Information Systems, 101, 101804. [doi:10.1016/j.is.2021.101804](https://doi.org/10.1016/j.is.2021.101804)
+* **Seeding & Initialization:**
+  > Initialization strategies (`k-medoids++`, `heuristic`, `build`) are adapted from the [scikit-learn-extra KMedoids](https://scikit-learn-extra.readthedocs.io/en/stable/generated/sklearn_extra.cluster.KMedoids.html) implementation.
 
 ## License
 

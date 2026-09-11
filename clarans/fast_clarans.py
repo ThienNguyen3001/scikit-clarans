@@ -42,9 +42,9 @@ class FastCLARANS(CLARANS):
         without requiring manual tuning.
 
     init : {'k-medoids++', 'random', 'heuristic', 'build', array-like}, default='k-medoids++'
-        Method for initialization. If an array-like is provided it should
-        be of shape (n_clusters, n_features) and will be snapped to the
-        nearest points in X.
+        Method for initialization (adapted from scikit-learn-extra). If an
+        array-like is provided it should be of shape (n_clusters, n_features)
+        and will be snapped to the nearest points in X.
 
     metric : str or callable, default='euclidean'
         The distance metric passed to scikit-learn pairwise utilities.
@@ -98,9 +98,12 @@ class FastCLARANS(CLARANS):
 
     References
     ----------
-    Schubert, E., & Rousseeuw, P. J. (2021). Fast and eager k-medoids
-    clustering: O(k) runtime improvement of the PAM, CLARA, and CLARANS
-    algorithms. Information Systems, 101, 101804.
+    * Schubert, E., & Rousseeuw, P. J. (2021). Fast and eager k-medoids
+      clustering: O(k) runtime improvement of the PAM, CLARA, and CLARANS
+      algorithms. Information Systems, 101, 101804.
+    * scikit-learn-extra contributors. KMedoids clustering implementation
+      and initialization strategies ('k-medoids++', 'heuristic', 'build').
+      https://scikit-learn-extra.readthedocs.io/en/stable/generated/sklearn_extra.cluster.KMedoids.html
     """
 
     def fit(self, X: ArrayLike | "spmatrix", y: Any = None) -> "FastCLARANS":

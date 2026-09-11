@@ -1,3 +1,11 @@
+"""
+Initialization strategies for k-medoids clustering.
+
+The initialization methods ('k-medoids++', 'heuristic', 'build') are
+adapted from the `scikit-learn-extra` KMedoids implementation:
+https://scikit-learn-extra.readthedocs.io/en/stable/generated/sklearn_extra.cluster.KMedoids.html
+"""
+
 import warnings
 import numpy as np
 from sklearn.metrics import pairwise_distances
@@ -53,6 +61,11 @@ def initialize_heuristic(X, n_clusters, metric="euclidean"):
     -----
     This method computes the full pairwise distance matrix and therefore has
     O(n^2) time and memory complexity.
+
+    References
+    ----------
+    Adapted from the scikit-learn-extra KMedoids implementation:
+    https://scikit-learn-extra.readthedocs.io/en/stable/generated/sklearn_extra.cluster.KMedoids.html
     """
     _warn_pairwise_complexity(X.shape[0], "heuristic", metric)
 
@@ -91,6 +104,15 @@ def initialize_build(X, n_clusters, metric="euclidean"):
     -------
     medoids : ndarray of shape (n_clusters,), dtype int
         Indices of the selected medoids in the dataset.
+
+    Notes
+    -----
+    This method implements the greedy BUILD phase from PAM (Kaufman & Rousseeuw, 1990).
+
+    References
+    ----------
+    Adapted from the scikit-learn-extra KMedoids implementation:
+    https://scikit-learn-extra.readthedocs.io/en/stable/generated/sklearn_extra.cluster.KMedoids.html
     """
     n_samples = X.shape[0]
 
@@ -176,8 +198,13 @@ def initialize_k_medoids_plus_plus(
 
     Notes
     -----
-    This implementation follows the k-means++ style seeding but uses distances
-    squared and picks medoids (data indices) rather than centroids.
+    This implementation follows the k-means++ style seeding (Arthur & Vassilvitskii, 2007)
+    but uses distances squared and picks medoids (data indices) rather than centroids.
+
+    References
+    ----------
+    Adapted from the scikit-learn-extra KMedoids implementation:
+    https://scikit-learn-extra.readthedocs.io/en/stable/generated/sklearn_extra.cluster.KMedoids.html
     """
     random_state = check_random_state(random_state)
     n_samples = X.shape[0]

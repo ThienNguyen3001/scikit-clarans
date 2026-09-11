@@ -3,7 +3,9 @@ Initialization Strategies
 
 The choice of initial medoids significantly influences both the convergence speed
 and the final solution quality of CLARANS. `scikit-clarans` supports 4 built-in
-initialization methods via the ``init`` parameter.
+initialization methods via the ``init`` parameter, adapted from the
+`scikit-learn-extra <https://scikit-learn-extra.readthedocs.io/en/stable/generated/sklearn_extra.cluster.KMedoids.html>`_
+``KMedoids`` implementation.
 
 Supported Methods
 -----------------
