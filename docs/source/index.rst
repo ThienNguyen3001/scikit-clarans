@@ -34,6 +34,8 @@ Welcome to the documentation for **scikit-clarans**, a specialized clustering li
 
    gallery/2d_clustering
    gallery/comparison
+   gallery/outliers
+   gallery/initializations
    gallery/quality_vs_k
    gallery/performance
 

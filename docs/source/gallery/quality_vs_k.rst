@@ -3,10 +3,11 @@ Quality vs k
 
 .. figure:: /_static/silhouette_vs_k.png
    :alt: Silhouette score vs k
-   :figwidth: 75%
+   :figwidth: 80%
    :align: center
 
-   Silhouette score versus number of clusters for different algorithms.
+   Silhouette score versus number of clusters ($k$) for CLARANS, FastCLARANS,
+   and KMeans on a dataset with 4 true clusters.
 
 .. _gallery-quality-code:
 
@@ -15,7 +16,6 @@ Quality vs k
 
    """Generate `silhouette_vs_k.png` comparing CLARANS, FastCLARANS, and KMeans.
    """
-   from pathlib import Path
    import matplotlib
    matplotlib.use("Agg")
    import matplotlib.pyplot as plt
@@ -26,12 +26,19 @@ Quality vs k
 
 
    def main():
+       plt.style.use("default")
+       plt.rcParams.update({
+           "axes.spines.top": False,
+           "axes.spines.right": False,
+           "axes.edgecolor": "#2c3e50",
+       })
+
        X, _ = make_blobs(n_samples=500, centers=4, cluster_std=0.60, random_state=42)
-       ks = range(2, 9)
+       ks = list(range(2, 9))
        methods = {
            "CLARANS": lambda k: CLARANS(n_clusters=k, num_local=3, random_state=42),
            "FastCLARANS": lambda k: FastCLARANS(n_clusters=k, num_local=3, random_state=42),
-           "KMeans": lambda k: KMeans(n_clusters=k, random_state=42),
+           "K-Means": lambda k: KMeans(n_clusters=k, random_state=42, n_init=10),
        }
 
        results = {name: [] for name in methods}
@@ -47,19 +54,36 @@ Quality vs k
                    score = float("nan")
                results[name].append(score)
 
-       fig, ax = plt.subplots(figsize=(6, 4))
+       fig, ax = plt.subplots(figsize=(6.2, 4.2), dpi=200)
+       ax.yaxis.grid(True, linestyle="--", linewidth=0.6, color="#e5e5e5")
+       ax.xaxis.grid(False)
+
+       colors = {"CLARANS": "#2b5c8f", "FastCLARANS": "#1b9e77", "K-Means": "#d95f02"}
+       markers = {"CLARANS": "o", "FastCLARANS": "s", "K-Means": "^"}
+
        for name, scores in results.items():
-           ax.plot(list(ks), scores, marker="o", label=name)
-       ax.set_xlabel("k (n_clusters)")
+           ax.plot(
+               ks, scores,
+               marker=markers[name], markersize=5, linewidth=1.6,
+               color=colors[name], label=name
+           )
+
+       ax.axvline(x=4, color="#7f8c8d", linestyle=":", linewidth=1.2, label="Optimal ($k=4$)")
+
+       ax.set_xlabel("Number of clusters ($k$)")
        ax.set_ylabel("Silhouette score")
-       ax.set_title("Silhouette score vs k")
-       ax.legend()
+       ax.set_title("Cluster Quality vs. Number of Clusters ($k$)", pad=10)
+       ax.set_xticks(ks)
+       ax.legend(loc="upper right", frameon=False)
+       plt.tight_layout()
 
        out = "silhouette_vs_k.png"
-       fig.savefig(out, bbox_inches="tight", dpi=150)
+       fig.savefig(out, dpi=200)
        print(f"Saved {out}")
 
 
    if __name__ == "__main__":
        main()
+
+
 
