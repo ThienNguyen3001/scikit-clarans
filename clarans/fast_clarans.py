@@ -14,7 +14,7 @@ import numpy as np
 from numpy.typing import ArrayLike
 from sklearn.metrics import pairwise_distances
 
-from clarans.clarans import CLARANS
+from clarans.clarans import CLARANS, _DELTA_TOL
 
 if TYPE_CHECKING:
     from scipy.sparse import spmatrix
@@ -242,7 +242,7 @@ class FastCLARANS(CLARANS):
                     min_delta_idx = int(np.argmin(total_delta))
                     min_delta = total_delta[min_delta_idx]
 
-                if min_delta < 0:
+                if min_delta < _DELTA_TOL:
                     current_medoids_indices[min_delta_idx] = candidate_idx
                     current_medoids_indices.sort()
 
@@ -257,7 +257,7 @@ class FastCLARANS(CLARANS):
                 else:
                     i += 1
 
-            if current_cost < best_cost:
+            if current_cost < best_cost + _DELTA_TOL:
                 best_cost = current_cost
                 best_medoids = current_medoids_indices.copy()
                 best_n_iter = eval_count

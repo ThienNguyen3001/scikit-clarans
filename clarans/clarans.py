@@ -19,6 +19,9 @@ from .utils import calculate_cost
 if TYPE_CHECKING:
     from scipy.sparse import spmatrix
 
+# Numerical tolerance for swap decisions to avoid ghost swaps caused by float64 roundoff noise.
+_DELTA_TOL = -1e-12
+
 
 class CLARANS(ClusterMixin, TransformerMixin, BaseEstimator):
     """
@@ -396,7 +399,7 @@ class CLARANS(ClusterMixin, TransformerMixin, BaseEstimator):
                             np.sum(delta_assigned) + np.sum(delta_others)
                         )
 
-                    if total_delta < 0:
+                    if total_delta < _DELTA_TOL:
                         current_medoids_indices[random_medoid_pos] = (
                             random_non_medoid_candidate
                         )
@@ -418,7 +421,7 @@ class CLARANS(ClusterMixin, TransformerMixin, BaseEstimator):
                         X, neighbor_medoids_indices, self.metric
                     )
 
-                    if neighbor_cost < current_cost:
+                    if neighbor_cost < current_cost + _DELTA_TOL:
                         current_medoids_indices = neighbor_medoids_indices
                         current_cost = neighbor_cost
                         i = 0
@@ -426,7 +429,7 @@ class CLARANS(ClusterMixin, TransformerMixin, BaseEstimator):
                     else:
                         i += 1
 
-            if current_cost < best_cost:
+            if current_cost < best_cost + _DELTA_TOL:
                 best_cost = current_cost
                 best_medoids = current_medoids_indices.copy()
                 best_n_iter = eval_count

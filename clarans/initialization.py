@@ -4,6 +4,29 @@ from sklearn.metrics import pairwise_distances
 from sklearn.utils import check_random_state
 
 
+def _warn_pairwise_complexity(
+    n_samples: int, method_name: str, metric: str, threshold: int = 10_000
+) -> None:
+    """Warn when O(n^2) initialization methods are used on large datasets."""
+    if metric == "precomputed" or n_samples < threshold:
+        return
+
+    bytes_needed = n_samples * n_samples * 8
+    if bytes_needed >= 1024**3:
+        size_str = f"{bytes_needed / (1024**3):.2f} GB"
+    else:
+        size_str = f"{bytes_needed / (1024**2):.0f} MB"
+
+    warnings.warn(
+        f"The '{method_name}' initialization computes a full pairwise distance matrix of shape "
+        f"({n_samples}, {n_samples}), which requires approximately {size_str} of memory (O(n^2)). "
+        f"This may lead to high memory consumption or OutOfMemory errors. "
+        f"Consider using init='k-medoids++' for an O(n*k) probabilistic seeding.",
+        UserWarning,
+        stacklevel=3,
+    )
+
+
 def initialize_heuristic(X, n_clusters, metric="euclidean"):
     """
     Initialize medoids using a heuristic approach.
@@ -31,12 +54,7 @@ def initialize_heuristic(X, n_clusters, metric="euclidean"):
     This method computes the full pairwise distance matrix and therefore has
     O(n^2) time and memory complexity.
     """
-    if X.shape[0] >= 50000:
-        warnings.warn(
-            f"The 'heuristic' initialization involves a full distance matrix calculation "
-            f"for {X.shape[0]} samples. This can be extremely slow and memory-intensive (O(N^2)).",
-            UserWarning,
-        )
+    _warn_pairwise_complexity(X.shape[0], "heuristic", metric)
 
     if metric == "precomputed":
         D = X
@@ -76,17 +94,24 @@ def initialize_build(X, n_clusters, metric="euclidean"):
     """
     n_samples = X.shape[0]
 
-    if n_samples >= 25000:
-        warnings.warn(
-            f"The 'build' initialization involves a full distance matrix calculation "
-            f"for {n_samples} samples. This can be extremely slow and memory-intensive (O(N^2)).",
-            UserWarning,
-        )
+    _warn_pairwise_complexity(n_samples, "build", metric)
 
     medoids = []
 
     if metric == "precomputed":
-        D = X.toarray() if hasattr(X, "toarray") else np.asarray(X)
+        if hasattr(X, "toarray"):
+            warnings.warn(
+                "The 'build' initialization does not support sparse distance matrices directly "
+                "and will convert the matrix to a dense array via `.toarray()`. "
+                "This may consume significant memory. "
+                "Consider using init='heuristic' or init='k-medoids++' "
+                "to preserve memory efficiency.",
+                UserWarning,
+                stacklevel=3,
+            )
+            D = X.toarray()
+        else:
+            D = np.asarray(X)
     else:
         D = pairwise_distances(X, metric=metric)
 

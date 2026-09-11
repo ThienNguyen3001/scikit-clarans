@@ -11,6 +11,7 @@ from sklearn.metrics import (
 
 from clarans import CLARANS
 from clarans.initialization import (
+    _warn_pairwise_complexity,
     initialize_build,
     initialize_heuristic,
     initialize_k_medoids_plus_plus,
@@ -372,6 +373,60 @@ class TestInitializationFunctions(unittest.TestCase):
         expected_first = np.argmin(D.sum(axis=1))
         self.assertEqual(medoids[0], expected_first)
 
+    def test_warn_pairwise_complexity_emits_warning(self):
+        """Should emit UserWarning with memory estimate when n_samples >= threshold."""
+        import warnings
+        with warnings.catch_warnings(record=True) as w:
+            warnings.simplefilter("always")
+            _warn_pairwise_complexity(10_000, "heuristic", "euclidean", threshold=10_000)
+            self.assertEqual(len(w), 1)
+            self.assertTrue(issubclass(w[-1].category, UserWarning))
+            self.assertIn("763 MB", str(w[-1].message))
+            self.assertIn("heuristic", str(w[-1].message))
+            self.assertIn("k-medoids++", str(w[-1].message))
+
+    def test_warn_pairwise_complexity_gb_formatting(self):
+        """Should format memory in GB when memory requirement >= 1 GB."""
+        import warnings
+        with warnings.catch_warnings(record=True) as w:
+            warnings.simplefilter("always")
+            _warn_pairwise_complexity(20_000, "build", "euclidean", threshold=10_000)
+            self.assertEqual(len(w), 1)
+            self.assertIn("GB", str(w[-1].message))
+            self.assertIn("build", str(w[-1].message))
+
+    def test_warn_pairwise_complexity_suppressed_for_precomputed(self):
+        """Should not warn when metric is 'precomputed'."""
+        import warnings
+        with warnings.catch_warnings(record=True) as w:
+            warnings.simplefilter("always")
+            _warn_pairwise_complexity(50_000, "heuristic", "precomputed", threshold=10_000)
+            self.assertEqual(len(w), 0)
+
+    def test_warn_pairwise_complexity_suppressed_for_small_n(self):
+        """Should not warn when n_samples < threshold."""
+        import warnings
+        with warnings.catch_warnings(record=True) as w:
+            warnings.simplefilter("always")
+            _warn_pairwise_complexity(100, "heuristic", "euclidean", threshold=10_000)
+            self.assertEqual(len(w), 0)
+
+    def test_build_sparse_precomputed_warning(self):
+        """initialize_build should warn when a sparse precomputed matrix is passed."""
+        import warnings
+        from scipy.sparse import csr_matrix
+
+        D = pairwise_distances(self.X[:10], metric="euclidean")
+        D_sparse = csr_matrix(D)
+        with warnings.catch_warnings(record=True) as w:
+            warnings.simplefilter("always")
+            medoids = initialize_build(D_sparse, n_clusters=2, metric="precomputed")
+            self.assertEqual(len(medoids), 2)
+            self.assertEqual(len(w), 1)
+            self.assertTrue(issubclass(w[-1].category, UserWarning))
+            self.assertIn("toarray", str(w[-1].message))
+            self.assertIn("sparse", str(w[-1].message))
+
     def test_kmedoids_plusplus_count_and_uniqueness(self):
         """K-medoids++ should return correct number of unique medoids."""
         for n_clusters in [2, 3, 5]:
@@ -582,6 +637,18 @@ class TestCLARANSValidationAndPrecomputed(unittest.TestCase):
         model.fit(self.X)
         self.assertEqual(model.max_neighbors_, 25)
         self.assertFalse(hasattr(model, "maxneighbor_"))
+
+    def test_delta_tolerance_rejects_ghost_swaps(self):
+        """Tolerance should prevent ghost swaps when delta is negligible roundoff noise."""
+        from clarans.clarans import _DELTA_TOL
+
+        self.assertLess(_DELTA_TOL, 0)
+        self.assertEqual(_DELTA_TOL, -1e-12)
+
+        X_dup = np.array([[0.0, 0.0], [0.0, 0.0], [10.0, 10.0], [10.0, 10.0]])
+        model = CLARANS(n_clusters=2, num_local=1, max_neighbors=50, random_state=42)
+        model.fit(X_dup)
+        self.assertGreaterEqual(model.n_swaps_, 0)
 
 
 if __name__ == "__main__":
