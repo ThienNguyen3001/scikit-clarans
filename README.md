@@ -20,7 +20,7 @@
 
 ### ⚡ CLARANS vs. FastCLARANS: Which one to use?
 * **`FastCLARANS` (Recommended for most workloads)**: Uses FastPAM1 delta calculations (Schubert & Rousseeuw, 2021) to evaluate all $k$ medoids at once. Explores $k$ graph edges in the time CLARANS explores one, yielding substantial speedups with $O(n)$ memory.
-* **`CLARANS`**: Classic randomized search (Ng & Han, 2002). Useful as a baseline or for exact reproduction of published benchmarks.
+* **`CLARANS`**: Randomized search (Ng & Han, 2002) with optional distance caching (`cache=True`, default) for fast $O(n)$ swap evaluations, or classic brute-force cost recalculation (`cache=False`).
 
 ---
 
@@ -58,7 +58,8 @@ X, _ = make_blobs(n_samples=1000, centers=5, random_state=42)
 #    - n_clusters: 5 clusters
 #    - numlocal: 3 restarts for better quality
 #    - init: 'k-medoids++' for smart starting points
-clarans = CLARANS(n_clusters=5, numlocal=3, init='k-medoids++', random_state=42)
+#    - cache: True (default) for fast O(n) swap evaluations; False for classic baseline
+clarans = CLARANS(n_clusters=5, numlocal=3, init='k-medoids++', cache=True, random_state=42)
 
 # 3. Fit
 clarans.fit(X)

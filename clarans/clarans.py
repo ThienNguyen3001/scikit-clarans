@@ -1,7 +1,7 @@
 from __future__ import annotations
 
 import warnings
-from typing import TYPE_CHECKING, Any
+from typing import TYPE_CHECKING, Any, Sequence
 
 import numpy as np
 from numpy.typing import ArrayLike
@@ -63,6 +63,13 @@ class CLARANS(ClusterMixin, TransformerMixin, BaseEstimator):
     random_state : int, RandomState instance or None, default=None
         Determines random number generation for centroid initialization.
         Use an int to make the randomness deterministic.
+
+    cache : bool, default=True
+        Whether to use distance caching (nearest and second-nearest medoid
+        distances d1, d2) to accelerate candidate swap evaluations in O(n*d)
+        instead of recalculating the full clustering cost from scratch in O(n*k*d).
+        If False, runs the classic brute-force cost recalculation at each candidate
+        evaluation.
 
     Attributes
     ----------
@@ -132,6 +139,7 @@ class CLARANS(ClusterMixin, TransformerMixin, BaseEstimator):
         init="random",
         metric="euclidean",
         random_state=None,
+        cache=True,
     ):
         self.n_clusters = n_clusters
         self.numlocal = numlocal
@@ -139,6 +147,7 @@ class CLARANS(ClusterMixin, TransformerMixin, BaseEstimator):
         self.init = init
         self.metric = metric
         self.random_state = random_state
+        self.cache = cache
 
     def _prepare_initial_medoids(self, X, random_state):
         """Pre-compute initial medoids if the initialization strategy is deterministic.
@@ -327,7 +336,13 @@ class CLARANS(ClusterMixin, TransformerMixin, BaseEstimator):
             else:
                 current_medoids_indices = self._initialize_medoids(X, random_state)
 
-            current_cost = calculate_cost(X, current_medoids_indices, self.metric)
+            if self.cache:
+                near_idx_map, near_dist, second_dist = self._update_cache(
+                    X, current_medoids_indices
+                )
+                current_cost = float(np.sum(near_dist))
+            else:
+                current_cost = calculate_cost(X, current_medoids_indices, self.metric)
 
             i = 0
             swap_count = 0
@@ -346,20 +361,69 @@ class CLARANS(ClusterMixin, TransformerMixin, BaseEstimator):
 
                 random_non_medoid_candidate = random_state.choice(available_candidates)
 
-                neighbor_medoids_indices = current_medoids_indices.copy()
-                neighbor_medoids_indices[random_medoid_pos] = (
-                    random_non_medoid_candidate
-                )
+                if self.cache:
+                    cand_row = X[
+                        random_non_medoid_candidate : random_non_medoid_candidate + 1
+                    ]
+                    if self.metric == "precomputed":
+                        d_xc = (
+                            cand_row.toarray().ravel()
+                            if hasattr(cand_row, "toarray")
+                            else np.asarray(cand_row).ravel()
+                        )
+                    else:
+                        d_xc = pairwise_distances(
+                            cand_row, X, metric=self.metric
+                        ).ravel()
 
-                neighbor_cost = calculate_cost(X, neighbor_medoids_indices, self.metric)
+                    if self.n_clusters == 1:
+                        candidate_cost = float(np.sum(d_xc))
+                        total_delta = candidate_cost - current_cost
+                    else:
+                        is_assigned_to_m = near_idx_map == random_medoid_pos
+                        delta_assigned = (
+                            np.minimum(
+                                second_dist[is_assigned_to_m], d_xc[is_assigned_to_m]
+                            )
+                            - near_dist[is_assigned_to_m]
+                        )
+                        delta_others = np.minimum(
+                            0.0,
+                            d_xc[~is_assigned_to_m] - near_dist[~is_assigned_to_m],
+                        )
+                        total_delta = float(
+                            np.sum(delta_assigned) + np.sum(delta_others)
+                        )
 
-                if neighbor_cost < current_cost:
-                    current_medoids_indices = neighbor_medoids_indices
-                    current_cost = neighbor_cost
-                    i = 0
-                    swap_count += 1
+                    if total_delta < 0:
+                        current_medoids_indices[random_medoid_pos] = (
+                            random_non_medoid_candidate
+                        )
+                        near_idx_map, near_dist, second_dist = self._update_cache(
+                            X, current_medoids_indices
+                        )
+                        current_cost = float(np.sum(near_dist))
+                        i = 0
+                        swap_count += 1
+                    else:
+                        i += 1
                 else:
-                    i += 1
+                    neighbor_medoids_indices = current_medoids_indices.copy()
+                    neighbor_medoids_indices[random_medoid_pos] = (
+                        random_non_medoid_candidate
+                    )
+
+                    neighbor_cost = calculate_cost(
+                        X, neighbor_medoids_indices, self.metric
+                    )
+
+                    if neighbor_cost < current_cost:
+                        current_medoids_indices = neighbor_medoids_indices
+                        current_cost = neighbor_cost
+                        i = 0
+                        swap_count += 1
+                    else:
+                        i += 1
 
             if current_cost < best_cost:
                 best_cost = current_cost
@@ -372,6 +436,54 @@ class CLARANS(ClusterMixin, TransformerMixin, BaseEstimator):
 
         return self._finalize_fit(X, best_cost, best_medoids)
 
+    def _update_cache(
+        self, X: np.ndarray | "spmatrix", medoids_indices: Sequence[int] | np.ndarray
+    ) -> tuple[np.ndarray, np.ndarray, np.ndarray]:
+        """Compute nearest and second-nearest medoid information on-the-fly.
+
+        Parameters
+        ----------
+        X : array-like of shape (n_samples, n_features)
+            The data matrix.
+        medoids_indices : array-like of shape (n_clusters,)
+            Indices of the current medoids.
+
+        Returns
+        -------
+        near_idx_map : ndarray of shape (n_samples,)
+            Index (0..k-1) of the nearest medoid for each sample.
+        near_dist : ndarray of shape (n_samples,)
+            Distance from each sample to its nearest medoid.
+        second_dist : ndarray of shape (n_samples,)
+            Distance from each sample to its second nearest medoid.
+        """
+        n_samples = X.shape[0]
+        if self.metric == "precomputed":
+            sub_mat = X[:, medoids_indices]
+            subD = (
+                sub_mat.toarray()
+                if hasattr(sub_mat, "toarray")
+                else np.asarray(sub_mat)
+            )
+        else:
+            medoids = X[medoids_indices]
+            subD = pairwise_distances(X, medoids, metric=self.metric)
+
+        if self.n_clusters >= 2:
+            sorted_idx = np.argsort(subD, axis=1)
+            smallest_idx = sorted_idx[:, 0]
+            second_smallest_idx = sorted_idx[:, 1]
+
+            near_dist = subD[np.arange(n_samples), smallest_idx]
+            second_dist = subD[np.arange(n_samples), second_smallest_idx]
+            near_idx_map = smallest_idx
+        else:
+            near_dist = subD[:, 0]
+            second_dist = np.full(n_samples, np.inf)
+            near_idx_map = np.zeros(n_samples, dtype=int)
+
+        return near_idx_map, near_dist, second_dist
+
     def _validate_input_and_params(self, X):
         """Validate estimator parameters and input data array."""
         if self.n_clusters < 1:
@@ -380,6 +492,8 @@ class CLARANS(ClusterMixin, TransformerMixin, BaseEstimator):
             raise ValueError(f"numlocal must be >= 1; got {self.numlocal}")
         if self.maxneighbor is not None and self.maxneighbor < 1:
             raise ValueError(f"maxneighbor must be >= 1; got {self.maxneighbor}")
+        if not isinstance(self.cache, (bool, np.bool_)):
+            raise ValueError(f"cache must be a boolean; got {self.cache}")
 
         try:
             from sklearn.utils.validation import validate_data

@@ -161,9 +161,8 @@ class FastCLARANS(CLARANS):
             else:
                 current_medoids_indices = self._initialize_medoids(X, random_state)
             current_medoids_indices.sort()
-
-            # Compute nearest/second-nearest on-the-fly (no precomputed matrix)
-            near_idx_map, near_dist, second_dist = self._update_cache_onthefly(
+            
+            near_idx_map, near_dist, second_dist = self._update_cache(
                 X, current_medoids_indices
             )
             current_cost: float = float(np.sum(near_dist))
@@ -248,7 +247,7 @@ class FastCLARANS(CLARANS):
                     current_medoids_indices.sort()
 
                     # Update nearest/second caches after an accepted swap
-                    near_idx_map, near_dist, second_dist = self._update_cache_onthefly(
+                    near_idx_map, near_dist, second_dist = self._update_cache(
                         X, current_medoids_indices
                     )
                     current_cost = float(np.sum(near_dist))
@@ -269,8 +268,10 @@ class FastCLARANS(CLARANS):
 
         return self._finalize_fit(X, best_cost, best_medoids)
 
-    def _update_cache_onthefly(
-        self, X: np.ndarray | spmatrix, medoids_indices: Sequence[int]
+    def _update_cache(
+        self,
+        X: np.ndarray | spmatrix,
+        medoids_indices: Sequence[int] | np.ndarray,
     ) -> Tuple[np.ndarray, np.ndarray, np.ndarray]:
         """
         Compute nearest and second-nearest medoid information on-the-fly.
