@@ -34,9 +34,9 @@ class FastCLARANS(CLARANS):
         increase the chance of finding a better minimum at the cost of
         additional runtime.
 
-    max_neighbors : int or None, default=None
+    max_neighbors : int or 'auto', default='auto'
         The maximum number of non-medoid candidates to sample per local
-        search. If ``None``, defaults to 2.5% of non-medoid points
+        search. If ``'auto'``, defaults to 2.5% of non-medoid points
         (i.e., ``0.025 * (n - k)``) as recommended in Schubert & Rousseeuw
         (2021). This adaptive default automatically scales with dataset size
         without requiring manual tuning.
@@ -139,7 +139,7 @@ class FastCLARANS(CLARANS):
         """
         X, random_state, n_samples, n_features = self._validate_input_and_params(X)
 
-        if self.max_neighbors is None:
+        if self.max_neighbors == "auto":
             # FastCLARANS samples 2.5% of non-medoid points per local search
             # (Schubert & Rousseeuw, 2021) instead of 1.25% * k * (n-k) edges
             self.max_neighbors_ = max(

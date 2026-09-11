@@ -136,8 +136,9 @@ class TestFastCLARANS(unittest.TestCase):
             FastCLARANS(n_clusters=0).fit(self.X)
         with self.assertRaises(ValueError):
             FastCLARANS(num_local=0).fit(self.X)
-        with self.assertRaises(ValueError):
-            FastCLARANS(max_neighbors=0).fit(self.X)
+        for val in [0, -1, None, "invalid", 1.5, True, False]:
+            with self.assertRaises(ValueError):
+                FastCLARANS(max_neighbors=val).fit(self.X)
         with self.assertRaises(TypeError):
             FastCLARANS(max_iter=-1)
 
@@ -233,6 +234,21 @@ class TestFastCLARANS(unittest.TestCase):
         model.fit(self.X)
         self.assertEqual(model.max_neighbors_, 25)
         self.assertFalse(hasattr(model, "maxneighbor_"))
+
+    def test_max_neighbors_default(self):
+        """Default max_neighbors should be 'auto' and calculated correctly in FastCLARANS."""
+        model = FastCLARANS(n_clusters=3, num_local=1, random_state=42)
+        self.assertEqual(model.max_neighbors, "auto")
+        model.fit(self.X)
+        expected = max(250, int(0.025 * (100 - 3)))
+        self.assertEqual(model.max_neighbors_, expected)
+
+    def test_max_neighbors_explicit_auto(self):
+        """Explicit max_neighbors='auto' should work identically to default in FastCLARANS."""
+        model = FastCLARANS(n_clusters=3, num_local=1, max_neighbors="auto", random_state=42)
+        model.fit(self.X)
+        expected = max(250, int(0.025 * (100 - 3)))
+        self.assertEqual(model.max_neighbors_, expected)
 
 
 if __name__ == "__main__":

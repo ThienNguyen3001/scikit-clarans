@@ -227,8 +227,16 @@ class TestCLARANS(unittest.TestCase):
         )
 
     def test_max_neighbors_default(self):
-        """Default max_neighbors should be calculated correctly."""
+        """Default max_neighbors should be 'auto' and calculated correctly."""
         clarans = CLARANS(n_clusters=3, num_local=1, random_state=42)
+        self.assertEqual(clarans.max_neighbors, "auto")
+        clarans.fit(self.X)
+        expected = max(250, int(0.0125 * 3 * (100 - 3)))
+        self.assertEqual(clarans.max_neighbors_, expected)
+
+    def test_max_neighbors_explicit_auto(self):
+        """Explicit max_neighbors='auto' should work identically to default."""
+        clarans = CLARANS(n_clusters=3, num_local=1, max_neighbors="auto", random_state=42)
         clarans.fit(self.X)
         expected = max(250, int(0.0125 * 3 * (100 - 3)))
         self.assertEqual(clarans.max_neighbors_, expected)
@@ -462,8 +470,8 @@ class TestCLARANSValidationAndPrecomputed(unittest.TestCase):
                 CLARANS(num_local=val).fit(self.X)
 
     def test_invalid_max_neighbors(self):
-        """max_neighbors < 1 should raise ValueError."""
-        for val in [0, -1]:
+        """Invalid max_neighbors (<= 0, None, float, bool, or bad str) should raise ValueError."""
+        for val in [0, -1, None, "invalid", 1.5, True, False]:
             with self.assertRaises(ValueError):
                 CLARANS(max_neighbors=val).fit(self.X)
 

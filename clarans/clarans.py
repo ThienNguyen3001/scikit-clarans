@@ -35,9 +35,9 @@ class CLARANS(ClusterMixin, TransformerMixin, BaseEstimator):
         poor local minima. Increasing this improves solution quality but
         increases runtime.
 
-    max_neighbors : int or None, default=None
+    max_neighbors : int or 'auto', default='auto'
         The maximum number of neighbors (random swaps) to examine during
-        each step. If ``None``, it defaults to ``max(250, 1.25% of k*(n-k))``
+        each step. If ``'auto'``, it defaults to ``max(250, 1.25% of k*(n-k))``
         as recommended in the original paper (Ng & Han, 2002). This adaptive
         default balances runtime and solution quality automatically without
         requiring manual tuning. Higher values make the algorithm behave more
@@ -136,7 +136,7 @@ class CLARANS(ClusterMixin, TransformerMixin, BaseEstimator):
         *,
         n_clusters=8,
         num_local=2,
-        max_neighbors=None,
+        max_neighbors="auto",
         init="k-medoids++",
         metric="euclidean",
         random_state=None,
@@ -317,7 +317,7 @@ class CLARANS(ClusterMixin, TransformerMixin, BaseEstimator):
         """
         X, random_state, n_samples, n_features = self._validate_input_and_params(X)
 
-        if self.max_neighbors is None:
+        if self.max_neighbors == "auto":
             self.max_neighbors_ = max(
                 250, int(0.0125 * self.n_clusters * (n_samples - self.n_clusters))
             )
@@ -494,14 +494,20 @@ class CLARANS(ClusterMixin, TransformerMixin, BaseEstimator):
             or self.num_local < 1
         ):
             raise ValueError(f"num_local must be >= 1; got {self.num_local}")
-        if self.max_neighbors is not None:
-            if (
-                not isinstance(self.max_neighbors, (int, np.integer))
-                or self.max_neighbors < 1
-            ):
+        if self.max_neighbors == "auto":
+            pass
+        elif (
+            isinstance(self.max_neighbors, (int, np.integer))
+            and not isinstance(self.max_neighbors, (bool, np.bool_))
+        ):
+            if self.max_neighbors < 1:
                 raise ValueError(
                     f"max_neighbors must be >= 1; got {self.max_neighbors}"
                 )
+        else:
+            raise ValueError(
+                f"max_neighbors must be an integer >= 1 or 'auto'; got {self.max_neighbors!r}"
+            )
         if not isinstance(self.cache, (bool, np.bool_)):
             raise ValueError(f"cache must be a boolean; got {self.cache}")
 

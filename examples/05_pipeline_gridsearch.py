@@ -29,7 +29,7 @@ param_grid = {
     "n_clusters": [3, 4, 5],
     "num_local": [2, 5, 10],
     "init": ["k-medoids++", "random", "heuristic"],
-    "max_neighbors": [None, 50],
+    "max_neighbors": ["auto", 50],
 }
 
 
