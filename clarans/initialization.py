@@ -182,6 +182,12 @@ def initialize_k_medoids_plus_plus(
     current_pot = closest_dist_sq.sum()
 
     for c in range(1, n_clusters):
+        if current_pot <= 1e-16:
+            remaining = np.setdiff1d(np.arange(n_samples), medoid_indices[:c])
+            chosen_candidate = int(random_state.choice(remaining))
+            medoid_indices[c] = chosen_candidate
+            continue
+
         rand_vals = random_state.random_sample(n_local_trials) * current_pot
 
         cumsum_dist = np.cumsum(closest_dist_sq)
@@ -209,13 +215,31 @@ def initialize_k_medoids_plus_plus(
         best_dist_sq = None
 
         for i in range(n_local_trials):
+            cand_id = int(candidate_ids[i])
+            if cand_id in medoid_indices[:c]:
+                continue
             new_dist_sq = np.minimum(closest_dist_sq, dists_candidates[i])
             new_pot = new_dist_sq.sum()
 
             if best_candidate is None or new_pot < best_pot:
-                best_candidate = candidate_ids[i]
+                best_candidate = cand_id
                 best_pot = new_pot
                 best_dist_sq = new_dist_sq
+
+        if best_candidate is None:
+            remaining = np.setdiff1d(np.arange(n_samples), medoid_indices[:c])
+            best_candidate = int(random_state.choice(remaining))
+            cand_row = X[best_candidate : best_candidate + 1]
+            if metric == "precomputed":
+                row_dist = (
+                    cand_row.toarray().ravel()
+                    if hasattr(cand_row, "toarray")
+                    else np.asarray(cand_row).ravel()
+                )
+            else:
+                row_dist = pairwise_distances(cand_row, X, metric=metric).ravel()
+            best_dist_sq = np.minimum(closest_dist_sq, row_dist**2)
+            best_pot = best_dist_sq.sum()
 
         medoid_indices[c] = best_candidate
         current_pot = best_pot

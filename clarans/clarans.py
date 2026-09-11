@@ -43,26 +43,27 @@ class CLARANS(ClusterMixin, TransformerMixin, BaseEstimator):
         requiring manual tuning. Higher values make the algorithm behave more
         like PAM (checking more neighbors); lower values make it faster.
 
-    init : {'random', 'heuristic', 'k-medoids++', 'build', array-like}, default='random'
+    init : {'k-medoids++', 'random', 'heuristic', 'build', array-like}, default='k-medoids++'
         Strategy for selecting initial medoids:
 
+        - ``'k-medoids++'``: Optimized probabilistic initialization (similar
+          to k-means++) for faster convergence.
         - ``'random'``: Selects ``n_clusters`` random points. Fast but can
           result in poor starting points.
         - ``'heuristic'``: Selects points that are "central" to the data
           (minimizing distance to all others).
-        - ``'k-medoids++'``: Optimized probabilistic initialization (similar
-          to k-means++) for faster convergence.
         - ``'build'``: The greedy initialization from the original PAM
           algorithm. High quality but slow (O(N^2)).
 
     metric : str or callable, default='euclidean'
         The distance metric to use. Supports all metrics from
         ``sklearn.metrics.pairwise_distances`` (e.g., 'euclidean',
-        'manhattan', 'cosine').
+        'manhattan', 'cosine', 'precomputed').
 
     random_state : int, RandomState instance or None, default=None
-        Determines random number generation for centroid initialization.
-        Use an int to make the randomness deterministic.
+        Determines random number generation for medoid swaps and random
+        initialization. Pass an int for reproducible output across multiple
+        function calls.
 
     cache : bool, default=True
         Whether to use distance caching (nearest and second-nearest medoid
@@ -136,7 +137,7 @@ class CLARANS(ClusterMixin, TransformerMixin, BaseEstimator):
         n_clusters=8,
         num_local=2,
         max_neighbors=None,
-        init="random",
+        init="k-medoids++",
         metric="euclidean",
         random_state=None,
         cache=True,

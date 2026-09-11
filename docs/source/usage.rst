@@ -119,8 +119,8 @@ Both estimators accept key hyperparameters to balance execution speed and cluste
      - Dynamic
      - Maximum non-improving neighbors to check per search. Defaults to :math:`\max(250, 1.25\% \times k(n-k))` in CLARANS and :math:`\max(250, 2.5\% \times (n-k))` in FastCLARANS.
    * - ``init``
-     - ``random``
-     - Initialization strategy (``random``, ``k-medoids++``, ``build``, ``heuristic``, or array-like).
+     - ``k-medoids++``
+     - Initialization strategy (``k-medoids++``, ``random``, ``build``, ``heuristic``, or array-like).
    * - ``metric``
      - ``euclidean``
      - Distance metric to use (e.g., ``euclidean``, ``manhattan``, ``cosine``).
@@ -139,8 +139,8 @@ Practical Tuning Tips
 
 * **Initialization Strategy** (``init``):
   
-  * ``random`` *(Default)*: Pure uniform sampling. Very fast, but typically requires increasing ``num_local`` to achieve comparable clustering quality.
-  * ``k-medoids++`` *(Recommended)*: Probabilistic seeding proportional to squared distance. Fast and memory-friendly (:math:`O(n \cdot k)`).
+  * ``k-medoids++`` *(Default, Recommended)*: Probabilistic seeding proportional to squared distance. Fast and memory-friendly (:math:`O(n \cdot k)`).
+  * ``random``: Pure uniform sampling. Very fast, but typically requires increasing ``num_local`` to achieve comparable clustering quality.
   * ``build``: Classic PAM greedy seeding. Excellent solution quality on small datasets, but computes the full pairwise distance matrix (:math:`O(n^2)` time and memory). Avoid on large datasets (:math:`n > 5000`).
   * ``heuristic``: Selects the :math:`k` most central data points with the smallest total distance to all others (:math:`O(n^2)` time and memory). Avoid on large datasets (:math:`n > 5000`).
   * ``array-like``: Pass custom coordinates of shape ``(n_clusters, n_features)`` or pre-defined medoid indices to inject prior domain knowledge.

@@ -203,7 +203,10 @@ class TestFastCLARANS(unittest.TestCase):
 
     def test_pandas_output(self):
         """FastCLARANS should support set_output(transform='pandas') per SLEP018."""
-        import pandas as pd
+        try:
+            import pandas as pd
+        except ImportError:
+            self.skipTest("pandas is not installed")
 
         model = FastCLARANS(n_clusters=3, random_state=42)
         model.set_output(transform="pandas")

@@ -41,7 +41,7 @@ class FastCLARANS(CLARANS):
         (2021). This adaptive default automatically scales with dataset size
         without requiring manual tuning.
 
-    init : {'random', 'heuristic', 'k-medoids++', 'build', array-like}, default='random'
+    init : {'k-medoids++', 'random', 'heuristic', 'build', array-like}, default='k-medoids++'
         Method for initialization. If an array-like is provided it should
         be of shape (n_clusters, n_features) and will be snapped to the
         nearest points in X.
