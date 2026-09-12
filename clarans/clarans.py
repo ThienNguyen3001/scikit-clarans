@@ -352,6 +352,12 @@ class CLARANS(ClusterMixin, TransformerMixin, BaseEstimator):
             else:
                 current_cost = calculate_cost(X, current_medoids_indices, self.metric)
 
+            # Maintain persistent non-medoid mask across iterations to avoid
+            # re-allocating O(n) memory and rescanning every single iteration.
+            non_medoid_mask = np.ones(n_samples, dtype=bool)
+            non_medoid_mask[current_medoids_indices] = False
+            available_candidates = np.flatnonzero(non_medoid_mask)
+
             i = 0
             swap_count = 0
             eval_count = 0
@@ -359,10 +365,6 @@ class CLARANS(ClusterMixin, TransformerMixin, BaseEstimator):
             while i < self.max_neighbors_:
                 eval_count += 1
                 random_medoid_pos = random_state.randint(0, self.n_clusters)
-
-                mask = np.ones(n_samples, dtype=bool)
-                mask[current_medoids_indices] = False
-                available_candidates = np.flatnonzero(mask)
 
                 if available_candidates.size == 0:
                     break
@@ -404,6 +406,7 @@ class CLARANS(ClusterMixin, TransformerMixin, BaseEstimator):
                         )
 
                     if total_delta < _DELTA_TOL:
+                        old_medoid = current_medoids_indices[random_medoid_pos]
                         current_medoids_indices[random_medoid_pos] = (
                             random_non_medoid_candidate
                         )
@@ -411,6 +414,12 @@ class CLARANS(ClusterMixin, TransformerMixin, BaseEstimator):
                             X, current_medoids_indices
                         )
                         current_cost = float(np.sum(near_dist))
+
+                        # Update persistent mask on accepted swap
+                        non_medoid_mask[old_medoid] = True
+                        non_medoid_mask[random_non_medoid_candidate] = False
+                        available_candidates = np.flatnonzero(non_medoid_mask)
+
                         i = 0
                         swap_count += 1
                     else:
@@ -426,8 +435,15 @@ class CLARANS(ClusterMixin, TransformerMixin, BaseEstimator):
                     )
 
                     if neighbor_cost < current_cost + _DELTA_TOL:
+                        old_medoid = current_medoids_indices[random_medoid_pos]
                         current_medoids_indices = neighbor_medoids_indices
                         current_cost = neighbor_cost
+
+                        # Update persistent mask on accepted swap
+                        non_medoid_mask[old_medoid] = True
+                        non_medoid_mask[random_non_medoid_candidate] = False
+                        available_candidates = np.flatnonzero(non_medoid_mask)
+
                         i = 0
                         swap_count += 1
                     else:

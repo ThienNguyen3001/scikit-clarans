@@ -262,6 +262,17 @@ class TestFastCLARANS(unittest.TestCase):
         model.fit(X_dup)
         self.assertGreaterEqual(model.n_swaps_, 0)
 
+    def test_no_cache_parameter(self):
+        """FastCLARANS should not accept cache parameter in __init__."""
+        with self.assertRaises(TypeError):
+            FastCLARANS(cache=False)  # type: ignore[call-arg]
+
+    def test_inherits_update_cache(self):
+        """FastCLARANS should inherit _update_cache directly from CLARANS without overriding."""
+        from clarans.clarans import CLARANS
+
+        self.assertIs(FastCLARANS._update_cache, CLARANS._update_cache)
+
 
 if __name__ == "__main__":
     unittest.main()

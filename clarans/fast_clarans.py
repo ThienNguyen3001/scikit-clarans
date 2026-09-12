@@ -8,7 +8,7 @@ benefiting from the O(k) speedup per swap evaluation.
 
 from __future__ import annotations
 
-from typing import TYPE_CHECKING, Any, Sequence, Tuple
+from typing import TYPE_CHECKING, Any
 
 import numpy as np
 from numpy.typing import ArrayLike
@@ -106,6 +106,26 @@ class FastCLARANS(CLARANS):
       https://scikit-learn-extra.readthedocs.io/en/stable/generated/sklearn_extra.cluster.KMedoids.html
     """
 
+    def __init__(
+        self,
+        *,
+        n_clusters: int = 8,
+        num_local: int = 2,
+        max_neighbors: int | str = "auto",
+        init: str | ArrayLike = "k-medoids++",
+        metric: str | Any = "euclidean",
+        random_state: int | np.random.RandomState | None = None,
+    ) -> None:
+        super().__init__(
+            n_clusters=n_clusters,
+            num_local=num_local,
+            max_neighbors=max_neighbors,
+            init=init,
+            metric=metric,
+            random_state=random_state,
+            cache=True,
+        )
+
     def fit(self, X: ArrayLike | "spmatrix", y: Any = None) -> "FastCLARANS":
         """
         Fit the FastCLARANS model to X.
@@ -170,18 +190,18 @@ class FastCLARANS(CLARANS):
             )
             current_cost: float = float(np.sum(near_dist))
 
+            # Maintain persistent non-medoid mask across iterations to avoid
+            # re-allocating O(n) memory and rescanning every single iteration.
+            non_medoid_mask = np.ones(n_samples, dtype=bool)
+            non_medoid_mask[current_medoids_indices] = False
+            available_candidates = np.flatnonzero(non_medoid_mask)
+
             i = 0
             swap_count = 0
             eval_count = 0
 
             while i < self.max_neighbors_:
                 eval_count += 1
-                # Choose a random non-medoid candidate using mask (safe for
-                # any k/n ratio, avoids rejection sampling infinite loop)
-                non_medoid_mask = np.ones(n_samples, dtype=bool)
-                non_medoid_mask[current_medoids_indices] = False
-                available_candidates = np.flatnonzero(non_medoid_mask)
-
                 if available_candidates.size == 0:
                     break
 
@@ -246,6 +266,7 @@ class FastCLARANS(CLARANS):
                     min_delta = total_delta[min_delta_idx]
 
                 if min_delta < _DELTA_TOL:
+                    old_medoid = current_medoids_indices[min_delta_idx]
                     current_medoids_indices[min_delta_idx] = candidate_idx
                     current_medoids_indices.sort()
 
@@ -254,6 +275,11 @@ class FastCLARANS(CLARANS):
                         X, current_medoids_indices
                     )
                     current_cost = float(np.sum(near_dist))
+
+                    # Update persistent mask on accepted swap
+                    non_medoid_mask[old_medoid] = True
+                    non_medoid_mask[candidate_idx] = False
+                    available_candidates = np.flatnonzero(non_medoid_mask)
 
                     i = 0
                     swap_count += 1
@@ -270,66 +296,3 @@ class FastCLARANS(CLARANS):
         self.n_swaps_ = best_n_swaps
 
         return self._finalize_fit(X, best_cost, best_medoids)
-
-    def _update_cache(
-        self,
-        X: np.ndarray | spmatrix,
-        medoids_indices: Sequence[int] | np.ndarray,
-    ) -> Tuple[np.ndarray, np.ndarray, np.ndarray]:
-        """
-        Compute nearest and second-nearest medoid information on-the-fly.
-
-        Parameters
-        ----------
-        X : array-like of shape (n_samples, n_features)
-            The data matrix.
-
-        medoids_indices : array-like of shape (n_clusters,)
-            Indices of the current medoids.
-
-        Returns
-        -------
-        near_idx_map : ndarray of shape (n_samples,)
-            For each sample, the index (0..k-1) of the nearest medoid in
-            ``medoids_indices``.
-
-        near_dist : ndarray of shape (n_samples,)
-            Distance from each sample to its nearest medoid.
-
-        second_dist : ndarray of shape (n_samples,)
-            Distance from each sample to its second nearest medoid. If
-            ``n_clusters == 1`` this will be an array filled with
-            ``np.inf``.
-        """
-        n_samples = X.shape[0]
-        if self.metric == "precomputed":
-            sub_mat = X[:, medoids_indices]
-            subD = (
-                sub_mat.toarray()
-                if hasattr(sub_mat, "toarray")
-                else np.asarray(sub_mat)
-            )
-        else:
-            medoids = X[medoids_indices]
-            subD = pairwise_distances(X, medoids, metric=self.metric)
-
-        if self.n_clusters >= 2:
-            # Use argsort on the (n_samples, k) matrix to correctly
-            # identify the nearest and second-nearest medoids.
-            # np.argpartition(subD, 1) does NOT guarantee that index 0
-            # holds the smallest value — only that the element at
-            # position 1 is the correct partition boundary.  argsort
-            # on a small k-column matrix is cheap and avoids this bug.
-            sorted_idx = np.argsort(subD, axis=1)
-            smallest_idx = sorted_idx[:, 0]
-            second_smallest_idx = sorted_idx[:, 1]
-
-            near_dist = subD[np.arange(n_samples), smallest_idx]
-            second_dist = subD[np.arange(n_samples), second_smallest_idx]
-            near_idx_map = smallest_idx
-        else:
-            near_dist = subD[:, 0]
-            second_dist = np.full(n_samples, np.inf)
-            near_idx_map = np.zeros(n_samples, dtype=int)
-
-        return near_idx_map, near_dist, second_dist

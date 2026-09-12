@@ -13,11 +13,13 @@ import sys
 # Add project root to sys.path so autodoc can import the package
 sys.path.insert(0, os.path.abspath(os.path.join(os.path.dirname(__file__), "..", "..")))
 
+import clarans
+
 project = "scikit-clarans"
 copyright = "2026, Nguyễn Ngọc Thiện"
 author = "Nguyễn Ngọc Thiện"
 
-version = release = "0.2.2"
+version = release = clarans.__version__
 
 # -- General configuration ---------------------------------------------------
 # https://www.sphinx-doc.org/en/master/usage/configuration.html#general-configuration

@@ -1,6 +1,7 @@
 #! /usr/bin/env python
 import codecs
 import os
+import re
 
 from setuptools import find_packages, setup
 
@@ -9,9 +10,19 @@ here = os.path.abspath(os.path.dirname(__file__))
 with codecs.open(os.path.join(here, "README.md"), encoding="utf-8") as f:
     long_description = f.read()
 
+
+def find_version() -> str:
+    version_file = os.path.join(here, "clarans", "__init__.py")
+    with codecs.open(version_file, encoding="utf-8") as f:
+        match = re.search(r'__version__\s*=\s*["\']([^"\']+)["\']', f.read())
+        if match:
+            return match.group(1)
+    raise RuntimeError("Unable to find version string in clarans/__init__.py.")
+
+
 setup(
     name="scikit-clarans",
-    version="0.2.2",
+    version=find_version(),
     description="A scikit-learn compatible implementation of CLARANS clustering algorithm",
     long_description=long_description,
     long_description_content_type="text/markdown",
