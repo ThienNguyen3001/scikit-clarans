@@ -13,12 +13,12 @@
 
 **scikit-clarans** brings scalable $k$-medoids clustering to Python with a native scikit-learn API. Unlike $k$-means which computes artificial centroids (means), $k$-medoids picks **actual data points** as cluster centers.
 
-### 💡 Why k-Medoids over k-Means?
-* 🛡️ **Outlier Robust**: Minimizes absolute distance ($\sum d$) rather than squared Euclidean distance ($\sum d^2$), so extreme values won't skew cluster centers.
-* 🧩 **Custom Distance Metrics**: Works with `cosine`, `manhattan`, `euclidean`, or any valid metric—unlike $k$-means which is strictly Euclidean.
-* 🎯 **Directly Interpretable**: Medoids are real observations from your dataset (e.g., representative user profiles, real molecules, exemplary documents).
+### Why k-Medoids over k-Means?
+* **Outlier Robust**: Minimizes absolute distance ($\sum d$) rather than squared Euclidean distance ($\sum d^2$), so extreme values won't skew cluster centers.
+* **Custom Distance Metrics**: Works with `cosine`, `manhattan`, `euclidean`, or any valid metric—unlike $k$-means which is strictly Euclidean.
+* **Directly Interpretable**: Medoids are real observations from your dataset (e.g., representative user profiles, real molecules, exemplary documents).
 
-### ⚡ CLARANS vs. FastCLARANS: Which one to use?
+### CLARANS vs. FastCLARANS: Which one to use?
 * **`FastCLARANS` (Recommended for most workloads)**: Uses FastPAM1 delta calculations (Schubert & Rousseeuw, 2021) to evaluate all $k$ medoids at once. Explores $k$ graph edges in the time CLARANS explores one, yielding substantial speedups with $O(n)$ memory.
 * **`CLARANS`**: Randomized search (Ng & Han, 2002) with optional distance caching (`cache=True`, default) for fast $O(n)$ swap evaluations, or classic brute-force cost recalculation (`cache=False`).
 
