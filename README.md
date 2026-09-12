@@ -11,6 +11,9 @@
 [![PyPI version](https://img.shields.io/pypi/v/scikit-clarans.svg)](https://pypi.org/project/scikit-clarans/)
 [![Open In Colab](https://colab.research.google.com/assets/colab-badge.svg)](https://colab.research.google.com/drive/194aBBu0wZotnun25dXqlOrDj3HYHKo-a?usp=sharing)
 
+> [!NOTE]
+> **Educational & Research Scope**: `scikit-clarans` is currently developed primarily for **learning, algorithmic study, and small-to-medium academic research**. As a pure Python/NumPy implementation, it is clean and accessible for experimentation, but it is **not yet optimized for large-scale Big Data applications** ($N \gg 10^5$).
+
 **scikit-clarans** brings scalable $k$-medoids clustering to Python with a native scikit-learn API. Unlike $k$-means which computes artificial centroids (means), $k$-medoids picks **actual data points** as cluster centers.
 
 ### Why k-Medoids over k-Means?

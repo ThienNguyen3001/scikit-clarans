@@ -6,7 +6,7 @@ Quality vs k
    :figwidth: 80%
    :align: center
 
-   Silhouette score versus number of clusters ($k$) for CLARANS, FastCLARANS,
+   Silhouette score versus number of clusters (:math:`k`) for CLARANS, FastCLARANS,
    and KMeans on a dataset with 4 true clusters.
 
 .. _gallery-quality-code:

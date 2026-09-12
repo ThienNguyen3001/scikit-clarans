@@ -10,9 +10,14 @@ Welcome to the documentation for **scikit-clarans**, a specialized clustering li
 
 **scikit-clarans** brings the power of the CLARANS (Clustering Large Applications based on RANdomized Search) algorithm to the **scikit-learn** ecosystem. It is designed to be:
 
-*   **Efficient**: Optimized for larger datasets where standard k-medoids might struggle.
-*   **Compatible**: A drop-in replacement for scikit-learn clusterers efficiently implementing `fit`, `predict`, and more.
+*   **Accessible & Memory-Efficient**: Pure Python/NumPy implementation with :math:`O(n)` memory overhead, substantially more scalable than classic :math:`O(n^2)` PAM.
+*   **Compatible**: A drop-in replacement for scikit-learn clusterers efficiently implementing ``fit``, ``predict``, and more.
 *   **Flexible**: Supports customizable initialization strategies and distance metrics.
+
+.. note::
+   **Educational & Academic Research Scope**
+
+   ``scikit-clarans`` is developed primarily for **learning, algorithmic exploration, and small-to-medium academic research**. While it avoids the heavy :math:`O(n^2)` memory consumption of standard PAM, the current pure Python implementation is **not yet optimized for large-scale enterprise Big Data pipelines** (:math:`N \gg 10^5`).
 
 .. toctree::
    :maxdepth: 2

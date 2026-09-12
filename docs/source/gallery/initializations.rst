@@ -10,12 +10,12 @@ initialization methods via the ``init`` parameter, adapted from the
 Supported Methods
 -----------------
 
-* ``init="random"``: Selects $k$ unique samples uniformly at random. Fast and simple,
+* ``init="random"``: Selects :math:`k` unique samples uniformly at random. Fast and simple,
   but can place multiple initial medoids in the same cluster.
-* ``init="k-medoids++"``: Adapts the $k$-means++ seeding heuristic to $k$-medoids,
+* ``init="k-medoids++"``: Adapts the :math:`k`-means++ seeding heuristic to :math:`k`-medoids,
   probabilistically choosing subsequent medoids proportional to squared distance
   from the nearest already selected medoid. Guarantees well-dispersed starting points.
-* ``init="heuristic"``: Computes pairwise distances and selects the $k$ points with
+* ``init="heuristic"``: Computes pairwise distances and selects the :math:`k` points with
   the smallest aggregate distance to all other samples (centrality).
 * ``init="build"``: Implements the classic PAM BUILD greedy step, iteratively selecting
   medoids that maximize the reduction in total clustering cost.

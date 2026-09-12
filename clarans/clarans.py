@@ -312,9 +312,10 @@ class CLARANS(ClusterMixin, TransformerMixin, BaseEstimator):
         - Initialization methods such as ``'heuristic'`` and ``'build'``
           may compute the full pairwise distance matrix and therefore have
           O(n^2) time and memory costs.
-        - Compared with ``FastCLARANS``, this implementation avoids
-          caching the full distance matrix and is more memory-friendly for
-          very large datasets at the cost of repeated distance computations.
+        - Compared with ``FastCLARANS``: While both estimators compute
+          distances on-the-fly with O(n) memory, FastCLARANS evaluates swaps
+          with all k medoids simultaneously using FastPAM1 delta updates,
+          whereas CLARANS samples random (medoid, non-medoid) pairs.
 
         Examples
         --------
