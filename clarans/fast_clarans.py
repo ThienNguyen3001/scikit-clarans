@@ -16,6 +16,11 @@ from sklearn.metrics import pairwise_distances
 
 from clarans.clarans import CLARANS, _DELTA_TOL
 
+try:
+    from . import _core
+except ImportError:
+    _core = None
+
 if TYPE_CHECKING:
     from scipy.sparse import spmatrix
 
@@ -178,6 +183,15 @@ class FastCLARANS(CLARANS):
 
         deterministic_medoids = self._prepare_initial_medoids(X, random_state)
 
+        use_fast_euclidean = (
+            _core is not None
+            and self.metric == "euclidean"
+            and isinstance(X, np.ndarray)
+            and X.flags.c_contiguous
+            and X.dtype in (np.float64, np.float32)
+        )
+        d_xc_buffer = np.empty(n_samples, dtype=X.dtype) if use_fast_euclidean else None
+
         for loc_idx in range(self.num_local):
             if deterministic_medoids is not None:
                 current_medoids_indices = deterministic_medoids.copy()
@@ -208,22 +222,54 @@ class FastCLARANS(CLARANS):
                 candidate_idx = random_state.choice(available_candidates)
 
                 # Compute distances from candidate to all points
-                cand_row = X[candidate_idx : candidate_idx + 1]
-                if self.metric == "precomputed":
-                    d_xc = (
-                        cand_row.toarray().ravel()
-                        if hasattr(cand_row, "toarray")
-                        else np.asarray(cand_row).ravel()
+                if use_fast_euclidean:
+                    _core.euclidean_distance_1_vs_n(
+                        X[candidate_idx],
+                        X,
+                        d_xc_buffer,
+                        n_samples,
+                        n_features,
                     )
+                    d_xc = d_xc_buffer
                 else:
-                    d_xc = pairwise_distances(
-                        cand_row, X, metric=self.metric
-                    ).ravel()
+                    cand_row = X[candidate_idx : candidate_idx + 1]
+                    if self.metric == "precomputed":
+                        d_xc = (
+                            cand_row.toarray().ravel()
+                            if hasattr(cand_row, "toarray")
+                            else np.asarray(cand_row).ravel()
+                        )
+                    else:
+                        d_xc = pairwise_distances(
+                            cand_row, X, metric=self.metric
+                        ).ravel()
 
                 if self.n_clusters == 1:
                     candidate_cost = float(np.sum(d_xc))
                     min_delta = candidate_cost - current_cost
                     min_delta_idx = 0
+                elif (
+                    _core is not None
+                    and isinstance(d_xc, np.ndarray)
+                    and d_xc.flags.c_contiguous
+                    and d_xc.dtype in (np.float64, np.float32)
+                    and isinstance(near_dist, np.ndarray)
+                    and near_dist.flags.c_contiguous
+                    and isinstance(second_dist, np.ndarray)
+                    and second_dist.flags.c_contiguous
+                    and near_dist.dtype == d_xc.dtype
+                ):
+                    near_idx_c = np.ascontiguousarray(near_idx_map, dtype=np.intp)
+                    best_m, min_delta_val, _ = _core.fastpam1_delta(
+                        near_idx_c,
+                        near_dist,
+                        second_dist,
+                        d_xc,
+                        n_samples,
+                        self.n_clusters,
+                    )
+                    min_delta_idx = int(best_m)
+                    min_delta = float(min_delta_val)
                 else:
                     removal_loss = np.zeros(self.n_clusters)
                     diff = second_dist - near_dist

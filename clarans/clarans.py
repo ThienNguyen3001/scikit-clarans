@@ -16,6 +16,11 @@ from .initialization import (
 )
 from .utils import calculate_cost
 
+try:
+    from . import _core
+except ImportError:
+    _core = None
+
 if TYPE_CHECKING:
     from scipy.sparse import spmatrix
 
@@ -338,6 +343,15 @@ class CLARANS(ClusterMixin, TransformerMixin, BaseEstimator):
 
         deterministic_medoids = self._prepare_initial_medoids(X, random_state)
 
+        use_fast_euclidean = (
+            _core is not None
+            and self.metric == "euclidean"
+            and isinstance(X, np.ndarray)
+            and X.flags.c_contiguous
+            and X.dtype in (np.float64, np.float32)
+        )
+        d_xc_buffer = np.empty(n_samples, dtype=X.dtype) if use_fast_euclidean else None
+
         for loc_idx in range(self.num_local):
             if deterministic_medoids is not None:
                 current_medoids_indices = deterministic_medoids.copy()
@@ -372,23 +386,55 @@ class CLARANS(ClusterMixin, TransformerMixin, BaseEstimator):
                 random_non_medoid_candidate = random_state.choice(available_candidates)
 
                 if self.cache:
-                    cand_row = X[
-                        random_non_medoid_candidate : random_non_medoid_candidate + 1
-                    ]
-                    if self.metric == "precomputed":
-                        d_xc = (
-                            cand_row.toarray().ravel()
-                            if hasattr(cand_row, "toarray")
-                            else np.asarray(cand_row).ravel()
+                    if use_fast_euclidean:
+                        _core.euclidean_distance_1_vs_n(
+                            X[random_non_medoid_candidate],
+                            X,
+                            d_xc_buffer,
+                            n_samples,
+                            n_features,
                         )
+                        d_xc = d_xc_buffer
                     else:
-                        d_xc = pairwise_distances(
-                            cand_row, X, metric=self.metric
-                        ).ravel()
+                        cand_row = X[
+                            random_non_medoid_candidate : random_non_medoid_candidate + 1
+                        ]
+                        if self.metric == "precomputed":
+                            d_xc = (
+                                cand_row.toarray().ravel()
+                                if hasattr(cand_row, "toarray")
+                                else np.asarray(cand_row).ravel()
+                            )
+                        else:
+                            d_xc = pairwise_distances(
+                                cand_row, X, metric=self.metric
+                            ).ravel()
 
                     if self.n_clusters == 1:
                         candidate_cost = float(np.sum(d_xc))
                         total_delta = candidate_cost - current_cost
+                    elif (
+                        _core is not None
+                        and isinstance(d_xc, np.ndarray)
+                        and d_xc.flags.c_contiguous
+                        and d_xc.dtype in (np.float64, np.float32)
+                        and isinstance(near_dist, np.ndarray)
+                        and near_dist.flags.c_contiguous
+                        and isinstance(second_dist, np.ndarray)
+                        and second_dist.flags.c_contiguous
+                        and near_dist.dtype == d_xc.dtype
+                    ):
+                        near_idx_c = np.ascontiguousarray(near_idx_map, dtype=np.intp)
+                        total_delta = float(
+                            _core.clarans_delta(
+                                near_idx_c,
+                                near_dist,
+                                second_dist,
+                                d_xc,
+                                random_medoid_pos,
+                                n_samples,
+                            )
+                        )
                     else:
                         is_assigned_to_m = near_idx_map == random_medoid_pos
                         delta_assigned = (
@@ -494,6 +540,14 @@ class CLARANS(ClusterMixin, TransformerMixin, BaseEstimator):
             subD = pairwise_distances(X, medoids, metric=self.metric)
 
         if self.n_clusters >= 2:
+            if (
+                _core is not None
+                and isinstance(subD, np.ndarray)
+                and subD.flags.c_contiguous
+                and subD.dtype in (np.float64, np.float32)
+            ):
+                return _core.update_cache_2min(subD, n_samples, self.n_clusters)
+
             sorted_idx = np.argsort(subD, axis=1)
             smallest_idx = sorted_idx[:, 0]
             second_smallest_idx = sorted_idx[:, 1]
