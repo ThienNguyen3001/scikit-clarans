@@ -137,5 +137,4 @@ setup(
         ],
     },
     python_requires=">=3.9",
-    test_suite="clarans.tests",
 )
