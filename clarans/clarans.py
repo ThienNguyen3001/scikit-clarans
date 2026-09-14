@@ -178,17 +178,20 @@ class CLARANS(ClusterMixin, TransformerMixin, BaseEstimator):
             if self.num_local > 1:
                 if isinstance(self.init, str):
                     warnings.warn(
-                        f"The '{self.init}' initialization is deterministic. Running "
-                        f"multiple local searches (num_local={self.num_local}) "
-                        f"will start from the exact same initial medoids. Consider using "
-                        f"num_local=1 or 'k-medoids++' for diverse restarts.",
+                        f"The '{self.init}' initialization is deterministic, so all "
+                        f"{self.num_local} local searches start from the exact same initial "
+                        f"medoids. While randomized neighbor sampling still explores "
+                        f"different search paths, consider 'k-medoids++' for diverse "
+                        f"starting points or num_local=1 to save computation.",
                         UserWarning,
                     )
                 else:
                     warnings.warn(
-                        f"An explicit init array was provided. Running multiple local "
-                        f"searches (num_local={self.num_local}) will start from "
-                        f"the exact same initial medoids.",
+                        f"An explicit init array was provided, so all {self.num_local} "
+                        f"local searches start from the exact same initial medoids. "
+                        f"While randomized neighbor sampling still explores different "
+                        f"search paths, consider 'k-medoids++' for diverse starting points "
+                        f"or num_local=1 to save computation.",
                         UserWarning,
                     )
             return self._initialize_medoids(X, random_state)
