@@ -5,8 +5,10 @@ from typing import TYPE_CHECKING, Any, Sequence
 
 import numpy as np
 from numpy.typing import ArrayLike
+from scipy.spatial.distance import cdist
+from scipy.sparse import issparse
 from sklearn.base import BaseEstimator, ClusterMixin, TransformerMixin
-from sklearn.metrics import pairwise_distances_argmin_min, pairwise_distances
+from sklearn.metrics import DistanceMetric, pairwise_distances_argmin_min, pairwise_distances
 from sklearn.utils.validation import check_array, check_is_fitted, check_random_state
 
 from .initialization import (
@@ -15,6 +17,31 @@ from .initialization import (
     initialize_k_medoids_plus_plus,
 )
 from .utils import calculate_cost
+
+_SCIPY_METRIC_MAP = {
+    "manhattan": "cityblock",
+    "l1": "cityblock",
+    "l2": "euclidean",
+}
+
+try:
+    from sklearn.metrics._dist_metrics import METRIC_MAPPING64
+
+    _DM_METRICS = {k for k in METRIC_MAPPING64.keys() if k != "pyfunc"}
+except ImportError:
+    _DM_METRICS = set()
+
+from sklearn.metrics.pairwise import _VALID_METRICS
+
+_CDIST_EXTRA_METRICS = {"jensenshannon", "kulczynski1"}
+
+_ALL_VALID_METRICS = frozenset(
+    set(_VALID_METRICS)
+    | _DM_METRICS
+    | _CDIST_EXTRA_METRICS
+    | {"precomputed"}
+    | set(_SCIPY_METRIC_MAP.keys())
+)
 
 try:
     from . import _core
@@ -65,20 +92,24 @@ class CLARANS(ClusterMixin, TransformerMixin, BaseEstimator):
 
     metric : str or callable, default='euclidean'
         The distance metric to use. Supports all metrics from
-        ``sklearn.metrics.pairwise_distances`` (e.g., 'euclidean',
-        'manhattan', 'cosine', 'precomputed').
+        ``sklearn.metrics.pairwise_distances``, ``scipy.spatial.distance.cdist``,
+        and ``sklearn.metrics.DistanceMetric`` (e.g., 'euclidean',
+        'manhattan', 'cosine', 'chebyshev', 'precomputed') or a callable.
 
     random_state : int, RandomState instance or None, default=None
         Determines random number generation for medoid swaps and random
         initialization. Pass an int for reproducible output across multiple
         function calls.
 
-    cache : bool, default=True
-        Whether to use distance caching (nearest and second-nearest medoid
-        distances d1, d2) to accelerate candidate swap evaluations in O(n*d)
-        instead of recalculating the full clustering cost from scratch in O(n*k*d).
-        If False, runs the classic brute-force cost recalculation at each candidate
-        evaluation.
+    cost_evaluation : {'delta', 'brute_force'}, default='delta'
+        Strategy for evaluating candidate neighbor medoid swaps:
+
+        - ``'delta'``: Uses FastPAM1-style nearest and second-nearest distance
+          tracking (d1, d2) to evaluate swaps in O(n*d) without recalculating
+          the full clustering cost. Recommended for optimal performance.
+        - ``'brute_force'``: Recalculates the total clustering cost from scratch
+          in O(n*k*d) at each candidate swap, following the original classic
+          CLARANS algorithm (Ng & Han, 2002).
 
     Attributes
     ----------
@@ -152,7 +183,7 @@ class CLARANS(ClusterMixin, TransformerMixin, BaseEstimator):
         init="k-medoids++",
         metric="euclidean",
         random_state=None,
-        cache=True,
+        cost_evaluation="delta",
     ):
         self.n_clusters = n_clusters
         self.num_local = num_local
@@ -160,7 +191,7 @@ class CLARANS(ClusterMixin, TransformerMixin, BaseEstimator):
         self.init = init
         self.metric = metric
         self.random_state = random_state
-        self.cache = cache
+        self.cost_evaluation = cost_evaluation
 
     def _prepare_initial_medoids(self, X, random_state):
         """Pre-compute initial medoids if the initialization strategy is deterministic.
@@ -239,9 +270,19 @@ class CLARANS(ClusterMixin, TransformerMixin, BaseEstimator):
                     f"init array must be of shape ({self.n_clusters}, {n_features})"
                 )
 
-            current_medoids_indices, _ = pairwise_distances_argmin_min(
-                init_centers, X, metric=self.metric
-            )
+            if not issparse(X) and not issparse(init_centers):
+                scipy_metric = _SCIPY_METRIC_MAP.get(self.metric, self.metric)
+                try:
+                    D = cdist(init_centers, X, metric=scipy_metric)
+                    current_medoids_indices = np.argmin(D, axis=1)
+                except Exception:
+                    current_medoids_indices, _ = pairwise_distances_argmin_min(
+                        init_centers, X, metric=self.metric
+                    )
+            else:
+                current_medoids_indices, _ = pairwise_distances_argmin_min(
+                    init_centers, X, metric=self.metric
+                )
 
             current_medoids_indices = np.array(current_medoids_indices, dtype=int)
 
@@ -346,14 +387,7 @@ class CLARANS(ClusterMixin, TransformerMixin, BaseEstimator):
 
         deterministic_medoids = self._prepare_initial_medoids(X, random_state)
 
-        use_fast_euclidean = (
-            _core is not None
-            and self.metric == "euclidean"
-            and isinstance(X, np.ndarray)
-            and X.flags.c_contiguous
-            and X.dtype in (np.float64, np.float32)
-        )
-        d_xc_buffer = np.empty(n_samples, dtype=X.dtype) if use_fast_euclidean else None
+        self._setup_distance_engine(X)
 
         for loc_idx in range(self.num_local):
             if deterministic_medoids is not None:
@@ -361,7 +395,7 @@ class CLARANS(ClusterMixin, TransformerMixin, BaseEstimator):
             else:
                 current_medoids_indices = self._initialize_medoids(X, random_state)
 
-            if self.cache:
+            if self.cost_evaluation == "delta":
                 near_idx_map, near_dist, second_dist = self._update_cache(
                     X, current_medoids_indices
                 )
@@ -388,30 +422,11 @@ class CLARANS(ClusterMixin, TransformerMixin, BaseEstimator):
 
                 random_non_medoid_candidate = random_state.choice(available_candidates)
 
-                if self.cache:
-                    if use_fast_euclidean:
-                        _core.euclidean_distance_1_vs_n(
-                            X[random_non_medoid_candidate],
-                            X,
-                            d_xc_buffer,
-                            n_samples,
-                            n_features,
-                        )
-                        d_xc = d_xc_buffer
-                    else:
-                        cand_row = X[
-                            random_non_medoid_candidate : random_non_medoid_candidate + 1
-                        ]
-                        if self.metric == "precomputed":
-                            d_xc = (
-                                cand_row.toarray().ravel()
-                                if hasattr(cand_row, "toarray")
-                                else np.asarray(cand_row).ravel()
-                            )
-                        else:
-                            d_xc = pairwise_distances(
-                                cand_row, X, metric=self.metric
-                            ).ravel()
+                if self.cost_evaluation == "delta":
+                    cand_row = X[
+                        random_non_medoid_candidate : random_non_medoid_candidate + 1
+                    ]
+                    d_xc = self._compute_1_vs_n(cand_row, X)
 
                     if self.n_clusters == 1:
                         candidate_cost = float(np.sum(d_xc))
@@ -509,6 +524,64 @@ class CLARANS(ClusterMixin, TransformerMixin, BaseEstimator):
 
         return self._finalize_fit(X, best_cost, best_medoids)
 
+    def _setup_distance_engine(self, X: np.ndarray | "spmatrix") -> None:
+        """Determine the most efficient distance calculation engine.
+
+        Priority:
+        1. 'precomputed': distance matrix is already computed.
+        2. 'cdist': SciPy C-kernel for dense arrays (Euclidean, Manhattan, Chebyshev, etc.).
+        3. 'distance_metric': Scikit-Learn Cython DistanceMetric for sparse matrices (CSR) or callables.
+        4. 'pairwise': Fallback using pairwise_distances.
+        """
+        if self.metric == "precomputed":
+            self._dist_engine = "precomputed"
+            self._scipy_metric = None
+            self._dm_instance = None
+            return
+
+        # 1. Try SciPy cdist for dense NumPy array
+        if isinstance(X, np.ndarray) and not issparse(X) and isinstance(self.metric, str):
+            mapped_metric = _SCIPY_METRIC_MAP.get(self.metric, self.metric)
+            try:
+                cdist(X[:1], X[:1], metric=mapped_metric)
+                self._dist_engine = "cdist"
+                self._scipy_metric = mapped_metric
+                self._dm_instance = None
+                return
+            except Exception:
+                pass
+
+        # 2. Try Scikit-Learn DistanceMetric (supports CSR sparse matrix & callable functions)
+        try:
+            self._dm_instance = DistanceMetric.get_metric(self.metric)
+            self._dm_instance.pairwise(X[:1], X[:1])
+            self._dist_engine = "distance_metric"
+            self._scipy_metric = None
+            return
+        except Exception:
+            pass
+
+        # 3. Fallback
+        self._dist_engine = "pairwise"
+        self._scipy_metric = None
+        self._dm_instance = None
+
+    def _compute_1_vs_n(self, cand_row: Any, X: np.ndarray | "spmatrix") -> np.ndarray:
+        """Compute distances from a single candidate sample to all samples in X."""
+        engine = getattr(self, "_dist_engine", "pairwise")
+        if engine == "cdist":
+            return cdist(cand_row, X, metric=self._scipy_metric)[0]
+        elif engine == "distance_metric":
+            return self._dm_instance.pairwise(cand_row, X)[0]
+        elif engine == "precomputed":
+            return (
+                cand_row.toarray().ravel()
+                if hasattr(cand_row, "toarray")
+                else np.asarray(cand_row).ravel()
+            )
+        else:
+            return pairwise_distances(cand_row, X, metric=self.metric).ravel()
+
     def _update_cache(
         self, X: np.ndarray | "spmatrix", medoids_indices: Sequence[int] | np.ndarray
     ) -> tuple[np.ndarray, np.ndarray, np.ndarray]:
@@ -540,7 +613,13 @@ class CLARANS(ClusterMixin, TransformerMixin, BaseEstimator):
             )
         else:
             medoids = X[medoids_indices]
-            subD = pairwise_distances(X, medoids, metric=self.metric)
+            engine = getattr(self, "_dist_engine", "pairwise")
+            if engine == "cdist" and isinstance(X, np.ndarray) and not issparse(X):
+                subD = cdist(X, medoids, metric=self._scipy_metric)
+            elif engine == "distance_metric" and getattr(self, "_dm_instance", None) is not None:
+                subD = self._dm_instance.pairwise(X, medoids)
+            else:
+                subD = pairwise_distances(X, medoids, metric=self.metric)
 
         if self.n_clusters >= 2:
             if (
@@ -588,8 +667,19 @@ class CLARANS(ClusterMixin, TransformerMixin, BaseEstimator):
             raise ValueError(
                 f"max_neighbors must be an integer >= 1 or 'auto'; got {self.max_neighbors!r}"
             )
-        if not isinstance(self.cache, (bool, np.bool_)):
-            raise ValueError(f"cache must be a boolean; got {self.cache}")
+        if self.cost_evaluation not in {"delta", "brute_force"}:
+            raise ValueError(
+                f"The 'cost_evaluation' parameter of {self.__class__.__name__} must be a str among "
+                f"{{'brute_force', 'delta'}}. Got {self.cost_evaluation!r} instead."
+            )
+
+        if not callable(self.metric):
+            if not isinstance(self.metric, str) or self.metric not in _ALL_VALID_METRICS:
+                options_repr = "{" + ", ".join(repr(m) for m in sorted(_ALL_VALID_METRICS)) + "}"
+                raise ValueError(
+                    f"The 'metric' parameter of {self.__class__.__name__} must be a str among "
+                    f"{options_repr} or a callable. Got {self.metric!r} instead."
+                )
 
         try:
             from sklearn.utils.validation import validate_data
@@ -641,9 +731,19 @@ class CLARANS(ClusterMixin, TransformerMixin, BaseEstimator):
             self.labels_ = np.argmin(dist_to_medoids, axis=1)
         else:
             self.cluster_centers_ = X[self.medoid_indices_]
-            self.labels_, _ = pairwise_distances_argmin_min(
-                X, self.cluster_centers_, metric=self.metric
-            )
+            if not issparse(X):
+                scipy_metric = _SCIPY_METRIC_MAP.get(self.metric, self.metric)
+                try:
+                    D = cdist(X, self.cluster_centers_, metric=scipy_metric)
+                    self.labels_ = np.argmin(D, axis=1)
+                except Exception:
+                    self.labels_, _ = pairwise_distances_argmin_min(
+                        X, self.cluster_centers_, metric=self.metric
+                    )
+            else:
+                self.labels_, _ = pairwise_distances_argmin_min(
+                    X, self.cluster_centers_, metric=self.metric
+                )
 
         return self
 
@@ -708,6 +808,14 @@ class CLARANS(ClusterMixin, TransformerMixin, BaseEstimator):
                         f"{self.n_features_in_} features as input"
                     )
 
+        if not issparse(X):
+            scipy_metric = _SCIPY_METRIC_MAP.get(self.metric, self.metric)
+            try:
+                D = cdist(X, self.cluster_centers_, metric=scipy_metric)
+                return np.argmin(D, axis=1)
+            except Exception:
+                pass
+
         labels, _ = pairwise_distances_argmin_min(
             X, self.cluster_centers_, metric=self.metric
         )
@@ -757,6 +865,13 @@ class CLARANS(ClusterMixin, TransformerMixin, BaseEstimator):
                 X = self._validate_data(X, reset=False, accept_sparse=["csr", "csc"])
             else:
                 X = check_array(X, accept_sparse=["csr", "csc"])
+
+        if not issparse(X):
+            scipy_metric = _SCIPY_METRIC_MAP.get(self.metric, self.metric)
+            try:
+                return cdist(X, self.cluster_centers_, metric=scipy_metric)
+            except Exception:
+                pass
 
         return pairwise_distances(X, self.cluster_centers_, metric=self.metric)
 

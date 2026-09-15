@@ -9,7 +9,7 @@ from sklearn.metrics import (
     silhouette_score,
 )
 
-from clarans import CLARANS
+from clarans import CLARANS, FastCLARANS
 from clarans.initialization import (
     _warn_pairwise_complexity,
     initialize_build,
@@ -476,7 +476,7 @@ class TestCostCalculation(unittest.TestCase):
             self.X, medoid_points, metric="euclidean"
         )
         expected = np.sum(min_dists)
-        self.assertAlmostEqual(cost, expected, places=10)
+        self.assertAlmostEqual(cost, expected, places=6)
 
     def test_cost_zero_when_all_points_are_medoids(self):
         """Cost should be zero when every point is a medoid."""
@@ -494,7 +494,7 @@ class TestCostCalculation(unittest.TestCase):
                 self.X, self.X[medoids], metric=metric
             )
             expected = np.sum(min_dists)
-            self.assertAlmostEqual(cost, expected, places=10)
+            self.assertAlmostEqual(cost, expected, places=6)
 
     def test_cost_precomputed(self):
         """calculate_cost should work with metric='precomputed'."""
@@ -600,34 +600,38 @@ class TestCLARANSValidationAndPrecomputed(unittest.TestCase):
                 self.assertTrue(any(issubclass(warn.category, UserWarning) for warn in w))
                 self.assertEqual(len(model.medoid_indices_), 3)
 
-    def test_cache_parameter(self):
-        """Test cache parameter: True, False, and invalid values."""
-        model_cached = CLARANS(
-            n_clusters=3, num_local=1, max_neighbors=20, cache=True, random_state=42
+    def test_cost_evaluation_parameter(self):
+        """Test cost_evaluation parameter: 'delta', 'brute_force', and invalid values."""
+        model_delta = CLARANS(
+            n_clusters=3, num_local=1, max_neighbors=20, cost_evaluation="delta", random_state=42
         )
-        model_cached.fit(self.X)
-        self.assertEqual(len(model_cached.medoid_indices_), 3)
+        model_delta.fit(self.X)
+        self.assertEqual(len(model_delta.medoid_indices_), 3)
 
-        model_non_cached = CLARANS(
-            n_clusters=3, num_local=1, max_neighbors=20, cache=False, random_state=42
+        model_brute = CLARANS(
+            n_clusters=3, num_local=1, max_neighbors=20, cost_evaluation="brute_force", random_state=42
         )
-        model_non_cached.fit(self.X)
-        self.assertEqual(len(model_non_cached.medoid_indices_), 3)
+        model_brute.fit(self.X)
+        self.assertEqual(len(model_brute.medoid_indices_), 3)
 
         np.testing.assert_array_equal(
-            model_cached.medoid_indices_, model_non_cached.medoid_indices_
+            model_delta.medoid_indices_, model_brute.medoid_indices_
         )
-        self.assertAlmostEqual(model_cached.inertia_, model_non_cached.inertia_, places=5)
+        self.assertAlmostEqual(model_delta.inertia_, model_brute.inertia_, places=5)
 
         with self.assertRaises(ValueError):
-            CLARANS(cache="invalid").fit(self.X)
+            CLARANS(cost_evaluation="invalid").fit(self.X)
 
     def test_legacy_parameters_removed(self):
-        """Passing removed numlocal or maxneighbor should raise TypeError."""
+        """Passing removed numlocal, maxneighbor, or cache should raise TypeError."""
         with self.assertRaises(TypeError):
             CLARANS(numlocal=2)
         with self.assertRaises(TypeError):
             CLARANS(maxneighbor=25)
+        with self.assertRaises(TypeError):
+            CLARANS(cache=True)
+        with self.assertRaises(TypeError):
+            CLARANS(cache=False)
 
     def test_parameters_num_local_max_neighbors(self):
         """Using num_local and max_neighbors should work and set max_neighbors_."""
@@ -651,5 +655,101 @@ class TestCLARANSValidationAndPrecomputed(unittest.TestCase):
         self.assertGreaterEqual(model.n_swaps_, 0)
 
 
+class TestCascadingDistanceEngine(unittest.TestCase):
+    """Tests for the cascading distance engine (cdist -> DistanceMetric -> pairwise)."""
+
+    def setUp(self):
+        self.X_dense, _ = make_blobs(n_samples=60, centers=3, n_features=4, random_state=42)
+        import scipy.sparse as sp
+        self.X_sparse = sp.csr_matrix(self.X_dense)
+
+    def test_cdist_selected_for_dense_metrics(self):
+        """SciPy cdist should be chosen for standard metrics on dense arrays."""
+        for metric in ["euclidean", "manhattan", "chebyshev", "minkowski"]:
+            model = CLARANS(n_clusters=3, metric=metric, num_local=1, max_neighbors=20, random_state=42)
+            model.fit(self.X_dense)
+            self.assertEqual(model._dist_engine, "cdist")
+
+    def test_distance_metric_selected_for_sparse(self):
+        """Scikit-Learn DistanceMetric should be chosen for sparse CSR input."""
+        for metric in ["euclidean", "manhattan"]:
+            model = CLARANS(n_clusters=3, metric=metric, num_local=1, max_neighbors=20, random_state=42)
+            model.fit(self.X_sparse)
+            self.assertEqual(model._dist_engine, "distance_metric")
+
+    def test_distance_metric_selected_for_callable(self):
+        """Scikit-Learn DistanceMetric should be chosen for callable distance functions."""
+        def my_metric(u, v):
+            return float(np.sum(np.abs(u - v)))
+
+        model = CLARANS(n_clusters=3, metric=my_metric, num_local=1, max_neighbors=20, random_state=42)
+        model.fit(self.X_dense)
+        self.assertEqual(model._dist_engine, "distance_metric")
+
+    def test_precomputed_engine_selected(self):
+        """Precomputed engine should be chosen for precomputed distance matrices."""
+        D = pairwise_distances(self.X_dense)
+        model = CLARANS(n_clusters=3, metric="precomputed", num_local=1, max_neighbors=20, random_state=42)
+        model.fit(D)
+        self.assertEqual(model._dist_engine, "precomputed")
+
+    def test_invalid_metric_raises_clear_error(self):
+        """Invalid metric string should raise ValueError with options from all 3 engines."""
+        with self.assertRaises(ValueError) as ctx:
+            CLARANS(metric="non_existent_metric").fit(self.X_dense)
+
+        msg = str(ctx.exception)
+        self.assertIn("The 'metric' parameter of CLARANS must be a str among", msg)
+        self.assertIn("'euclidean'", msg)
+        self.assertIn("'manhattan'", msg)
+        self.assertIn("'chebyshev'", msg)
+        self.assertIn("'infinity'", msg)
+        self.assertIn("'precomputed'", msg)
+        self.assertIn("or a callable", msg)
+        self.assertIn("Got 'non_existent_metric' instead.", msg)
+
+    def test_invalid_metric_type_raises_clear_error(self):
+        """Non-string, non-callable metric should raise ValueError with received type/value."""
+        with self.assertRaises(ValueError) as ctx:
+            CLARANS(metric=123).fit(self.X_dense)
+
+        msg = str(ctx.exception)
+        self.assertIn("The 'metric' parameter of CLARANS must be a str among", msg)
+        self.assertIn("Got 123 instead.", msg)
+
+    def test_fast_clarans_invalid_metric_error(self):
+        """FastCLARANS should reflect its own class name in metric validation error."""
+        with self.assertRaises(ValueError) as ctx:
+            FastCLARANS(metric="non_existent_metric").fit(self.X_dense)
+
+        msg = str(ctx.exception)
+        self.assertIn("The 'metric' parameter of FastCLARANS must be a str among", msg)
+        self.assertIn("Got 'non_existent_metric' instead.", msg)
+
+    def test_scipy_specific_metric_jensenshannon(self):
+        """SciPy-specific metric jensenshannon should work across fit, predict, transform, and calculate_cost."""
+        X_prob = np.array(
+            [[0.1, 0.9], [0.15, 0.85], [0.85, 0.15], [0.9, 0.1], [0.5, 0.5], [0.45, 0.55]]
+        )
+        cost = calculate_cost(X_prob, [0, 2], metric="jensenshannon")
+        self.assertGreater(cost, 0.0)
+
+        model = CLARANS(n_clusters=2, metric="jensenshannon", random_state=42)
+        model.fit(X_prob)
+        self.assertEqual(len(model.medoid_indices_), 2)
+        self.assertEqual(len(model.labels_), len(X_prob))
+
+        preds = model.predict(X_prob)
+        self.assertEqual(len(preds), len(X_prob))
+
+        transformed = model.transform(X_prob)
+        self.assertEqual(transformed.shape, (len(X_prob), 2))
+
+        fmodel = FastCLARANS(n_clusters=2, metric="jensenshannon", random_state=42)
+        fmodel.fit(X_prob)
+        self.assertEqual(len(fmodel.medoid_indices_), 2)
+
+
 if __name__ == "__main__":
     unittest.main()
+

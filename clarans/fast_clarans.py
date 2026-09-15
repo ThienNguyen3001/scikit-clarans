@@ -52,7 +52,10 @@ class FastCLARANS(CLARANS):
         and will be snapped to the nearest points in X.
 
     metric : str or callable, default='euclidean'
-        The distance metric passed to scikit-learn pairwise utilities.
+        The distance metric to use. Supports all metrics from
+        ``sklearn.metrics.pairwise_distances``, ``scipy.spatial.distance.cdist``,
+        and ``sklearn.metrics.DistanceMetric`` (e.g., 'euclidean',
+        'manhattan', 'cosine', 'chebyshev', 'precomputed') or a callable.
 
     random_state : int, RandomState instance or None, default=None
         Controls random number generation for reproducibility.
@@ -128,7 +131,7 @@ class FastCLARANS(CLARANS):
             init=init,
             metric=metric,
             random_state=random_state,
-            cache=True,
+            cost_evaluation="delta",
         )
 
     def fit(self, X: ArrayLike | "spmatrix", y: Any = None) -> "FastCLARANS":
@@ -183,14 +186,7 @@ class FastCLARANS(CLARANS):
 
         deterministic_medoids = self._prepare_initial_medoids(X, random_state)
 
-        use_fast_euclidean = (
-            _core is not None
-            and self.metric == "euclidean"
-            and isinstance(X, np.ndarray)
-            and X.flags.c_contiguous
-            and X.dtype in (np.float64, np.float32)
-        )
-        d_xc_buffer = np.empty(n_samples, dtype=X.dtype) if use_fast_euclidean else None
+        self._setup_distance_engine(X)
 
         for loc_idx in range(self.num_local):
             if deterministic_medoids is not None:
@@ -222,27 +218,8 @@ class FastCLARANS(CLARANS):
                 candidate_idx = random_state.choice(available_candidates)
 
                 # Compute distances from candidate to all points
-                if use_fast_euclidean:
-                    _core.euclidean_distance_1_vs_n(
-                        X[candidate_idx],
-                        X,
-                        d_xc_buffer,
-                        n_samples,
-                        n_features,
-                    )
-                    d_xc = d_xc_buffer
-                else:
-                    cand_row = X[candidate_idx : candidate_idx + 1]
-                    if self.metric == "precomputed":
-                        d_xc = (
-                            cand_row.toarray().ravel()
-                            if hasattr(cand_row, "toarray")
-                            else np.asarray(cand_row).ravel()
-                        )
-                    else:
-                        d_xc = pairwise_distances(
-                            cand_row, X, metric=self.metric
-                        ).ravel()
+                cand_row = X[candidate_idx : candidate_idx + 1]
+                d_xc = self._compute_1_vs_n(cand_row, X)
 
                 if self.n_clusters == 1:
                     candidate_cost = float(np.sum(d_xc))

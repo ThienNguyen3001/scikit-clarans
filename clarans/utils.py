@@ -2,10 +2,18 @@ from __future__ import annotations
 
 from typing import TYPE_CHECKING, Callable, Sequence
 import numpy as np
+from scipy.spatial.distance import cdist
+from scipy.sparse import issparse
 from sklearn.metrics import pairwise_distances_argmin_min
 
 if TYPE_CHECKING:
     from scipy.sparse import spmatrix
+
+_SCIPY_METRIC_MAP = {
+    "manhattan": "cityblock",
+    "l1": "cityblock",
+    "l2": "euclidean",
+}
 
 
 def calculate_cost(
@@ -40,5 +48,15 @@ def calculate_cost(
         return float(np.sum(np.min(dist_sub, axis=1)))
 
     medoids = X[medoid_indices]
+
+    if not issparse(X):
+        scipy_metric = _SCIPY_METRIC_MAP.get(metric, metric)
+        try:
+            D = cdist(X, medoids, metric=scipy_metric)
+            return float(np.sum(np.min(D, axis=1)))
+        except Exception:
+            pass
+
     _, min_dists = pairwise_distances_argmin_min(X, medoids, metric=metric)
     return float(np.sum(min_dists))
+

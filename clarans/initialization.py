@@ -8,8 +8,33 @@ https://scikit-learn-extra.readthedocs.io/en/stable/generated/sklearn_extra.clus
 
 import warnings
 import numpy as np
+from scipy.spatial.distance import cdist
+from scipy.sparse import issparse
 from sklearn.metrics import pairwise_distances
 from sklearn.utils import check_random_state
+
+_SCIPY_METRIC_MAP = {
+    "manhattan": "cityblock",
+    "l1": "cityblock",
+    "l2": "euclidean",
+}
+
+
+def _compute_pairwise_distances(X, Y=None, metric="euclidean"):
+    """Compute pairwise distances using cdist for dense arrays when possible,
+    falling back to scikit-learn's pairwise_distances."""
+    if not issparse(X) and (Y is None or not issparse(Y)):
+        scipy_metric = _SCIPY_METRIC_MAP.get(metric, metric)
+        try:
+            if Y is None:
+                return cdist(X, X, metric=scipy_metric)
+            return cdist(X, Y, metric=scipy_metric)
+        except Exception:
+            pass
+
+    if Y is None:
+        return pairwise_distances(X, metric=metric)
+    return pairwise_distances(X, Y, metric=metric)
 
 try:
     from . import _core
@@ -77,7 +102,7 @@ def initialize_heuristic(X, n_clusters, metric="euclidean"):
     if metric == "precomputed":
         D = X
     else:
-        D = pairwise_distances(X, metric=metric)
+        D = _compute_pairwise_distances(X, metric=metric)
 
     if hasattr(D, "toarray"):
         dist_sums = np.asarray(D.sum(axis=1)).ravel()
@@ -142,7 +167,7 @@ def initialize_build(X, n_clusters, metric="euclidean"):
         else:
             D = np.asarray(X)
     else:
-        D = pairwise_distances(X, metric=metric)
+        D = _compute_pairwise_distances(X, metric=metric)
 
     dist_sums = D.sum(axis=1)
     first_medoid = int(np.argmin(dist_sums))
@@ -251,7 +276,7 @@ def initialize_k_medoids_plus_plus(
             else np.asarray(first_row).ravel()
         )
     else:
-        closest = pairwise_distances(
+        closest = _compute_pairwise_distances(
             X,
             first_row,
             metric=metric,
@@ -286,7 +311,7 @@ def initialize_k_medoids_plus_plus(
         else:
             candidates_X = X[candidate_ids]
             dists_candidates = (
-                pairwise_distances(candidates_X, X, metric=metric) ** 2
+                _compute_pairwise_distances(candidates_X, X, metric=metric) ** 2
             )
 
         best_candidate = None
@@ -344,7 +369,7 @@ def initialize_k_medoids_plus_plus(
                     else np.asarray(cand_row).ravel()
                 )
             else:
-                row_dist = pairwise_distances(cand_row, X, metric=metric).ravel()
+                row_dist = _compute_pairwise_distances(cand_row, X, metric=metric).ravel()
             best_dist_sq = np.minimum(closest_dist_sq, row_dist**2)
             best_pot = float(best_dist_sq.sum())
 
