@@ -600,34 +600,38 @@ class TestCLARANSValidationAndPrecomputed(unittest.TestCase):
                 self.assertTrue(any(issubclass(warn.category, UserWarning) for warn in w))
                 self.assertEqual(len(model.medoid_indices_), 3)
 
-    def test_cache_parameter(self):
-        """Test cache parameter: True, False, and invalid values."""
-        model_cached = CLARANS(
-            n_clusters=3, num_local=1, max_neighbors=20, cache=True, random_state=42
+    def test_cost_evaluation_parameter(self):
+        """Test cost_evaluation parameter: 'delta', 'brute_force', and invalid values."""
+        model_delta = CLARANS(
+            n_clusters=3, num_local=1, max_neighbors=20, cost_evaluation="delta", random_state=42
         )
-        model_cached.fit(self.X)
-        self.assertEqual(len(model_cached.medoid_indices_), 3)
+        model_delta.fit(self.X)
+        self.assertEqual(len(model_delta.medoid_indices_), 3)
 
-        model_non_cached = CLARANS(
-            n_clusters=3, num_local=1, max_neighbors=20, cache=False, random_state=42
+        model_brute = CLARANS(
+            n_clusters=3, num_local=1, max_neighbors=20, cost_evaluation="brute_force", random_state=42
         )
-        model_non_cached.fit(self.X)
-        self.assertEqual(len(model_non_cached.medoid_indices_), 3)
+        model_brute.fit(self.X)
+        self.assertEqual(len(model_brute.medoid_indices_), 3)
 
         np.testing.assert_array_equal(
-            model_cached.medoid_indices_, model_non_cached.medoid_indices_
+            model_delta.medoid_indices_, model_brute.medoid_indices_
         )
-        self.assertAlmostEqual(model_cached.inertia_, model_non_cached.inertia_, places=5)
+        self.assertAlmostEqual(model_delta.inertia_, model_brute.inertia_, places=5)
 
         with self.assertRaises(ValueError):
-            CLARANS(cache="invalid").fit(self.X)
+            CLARANS(cost_evaluation="invalid").fit(self.X)
 
     def test_legacy_parameters_removed(self):
-        """Passing removed numlocal or maxneighbor should raise TypeError."""
+        """Passing removed numlocal, maxneighbor, or cache should raise TypeError."""
         with self.assertRaises(TypeError):
             CLARANS(numlocal=2)
         with self.assertRaises(TypeError):
             CLARANS(maxneighbor=25)
+        with self.assertRaises(TypeError):
+            CLARANS(cache=True)
+        with self.assertRaises(TypeError):
+            CLARANS(cache=False)
 
     def test_parameters_num_local_max_neighbors(self):
         """Using num_local and max_neighbors should work and set max_neighbors_."""

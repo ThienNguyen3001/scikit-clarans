@@ -123,7 +123,7 @@ class FastCLARANS(CLARANS):
             init=init,
             metric=metric,
             random_state=random_state,
-            cache=True,
+            cost_evaluation="delta",
         )
 
     def fit(self, X: ArrayLike | "spmatrix", y: Any = None) -> "FastCLARANS":

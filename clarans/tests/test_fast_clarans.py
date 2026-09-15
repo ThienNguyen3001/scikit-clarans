@@ -263,9 +263,11 @@ class TestFastCLARANS(unittest.TestCase):
         self.assertGreaterEqual(model.n_swaps_, 0)
 
     def test_no_cache_parameter(self):
-        """FastCLARANS should not accept cache parameter in __init__."""
+        """FastCLARANS should not accept cache or cost_evaluation parameter in __init__."""
         with self.assertRaises(TypeError):
             FastCLARANS(cache=False)  # type: ignore[call-arg]
+        with self.assertRaises(TypeError):
+            FastCLARANS(cost_evaluation="brute_force")  # type: ignore[call-arg]
 
     def test_inherits_update_cache(self):
         """FastCLARANS should inherit _update_cache directly from CLARANS without overriding."""

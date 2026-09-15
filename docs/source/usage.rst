@@ -78,7 +78,7 @@ Choosing an Estimator: CLARANS vs. FastCLARANS
      - Samples random (medoid, non-medoid) pairs
      - Samples non-medoids; tests all :math:`k` medoids at once
    * - **Delta Cost Update**
-     - Single swap evaluation (:math:`O(n)` with ``cache=True``, :math:`O(n \cdot k)` with ``cache=False``)
+     - Single swap evaluation (:math:`O(n)` with ``cost_evaluation='delta'``, :math:`O(n \cdot k)` with ``cost_evaluation='brute_force'``)
      - FastPAM1 vectorized delta cost across all :math:`k` medoids
    * - **Memory Footprint**
      - :math:`O(n)` on-the-fly
@@ -105,7 +105,7 @@ Quick example with ``FastCLARANS``:
 Configuration & Hyperparameter Tuning
 -------------------------------------
 
-Both estimators share core hyperparameters to balance execution speed and clustering quality, with ``CLARANS`` providing an additional ``cache`` parameter:
+Both estimators share core hyperparameters to balance execution speed and clustering quality, with ``CLARANS`` providing an additional ``cost_evaluation`` parameter:
 
 .. list-table::
    :widths: 18 15 15 52
@@ -135,19 +135,19 @@ Both estimators share core hyperparameters to balance execution speed and cluste
      - Both
      - ``euclidean``
      - Distance metric to use (e.g., ``euclidean``, ``manhattan``, ``cosine``).
-   * - ``cache``
+   * - ``cost_evaluation``
      - CLARANS only
-     - ``True``
-     - Whether to use distance caching (:math:`d_1, d_2`) for :math:`O(n)` swap evaluations. If ``False``, recalculates total cost from scratch via ``calculate_cost()`` in :math:`O(n \cdot k)`.
+     - ``'delta'``
+     - Strategy to evaluate candidate swaps (``'delta'`` for :math:`O(n)` evaluations using distance caching; ``'brute_force'`` for recalculating total cost in :math:`O(n \cdot k)`).
 
 Practical Tuning Tips
 ^^^^^^^^^^^^^^^^^^^^^^
 
-* **Distance Caching** (``cache`` in CLARANS):
-  ``CLARANS`` supports an optional ``cache`` parameter (default ``True``). Note that ``FastCLARANS`` does not expose a ``cache`` parameter because its vectorized FastPAM1 delta calculation inherently tracks :math:`d_1` and :math:`d_2`:
+* **Cost Evaluation Strategy** (``cost_evaluation`` in CLARANS):
+  ``CLARANS`` supports an optional ``cost_evaluation`` parameter (default ``'delta'``). Note that ``FastCLARANS`` does not expose this parameter because its vectorized FastPAM1 delta calculation inherently tracks :math:`d_1` and :math:`d_2`:
   
-  * ``cache=True`` *(Recommended)*: Maintains an on-the-fly cache of nearest (:math:`d_1`) and second-nearest (:math:`d_2`) medoid distances for all samples. Each candidate swap is evaluated in :math:`O(n \cdot d)` operations without recomputing distances to unchanged medoids. This yields a 1.5x–2.5x speedup with identical mathematical clustering results while maintaining a lean :math:`O(n)` memory footprint.
-  * ``cache=False``: Evaluates each candidate swap by recalculating the total clustering cost from scratch using ``calculate_cost`` in :math:`O(n \cdot k \cdot d)`. This reproduces the exact classic baseline behavior of Ng & Han (2002).
+  * ``cost_evaluation='delta'`` *(Recommended)*: Maintains an on-the-fly cache of nearest (:math:`d_1`) and second-nearest (:math:`d_2`) medoid distances for all samples. Each candidate swap is evaluated in :math:`O(n \cdot d)` operations without recomputing distances to unchanged medoids. This yields a 1.5x–2.5x speedup with identical mathematical clustering results while maintaining a lean :math:`O(n)` memory footprint.
+  * ``cost_evaluation='brute_force'``: Evaluates each candidate swap by recalculating the total clustering cost from scratch using ``calculate_cost`` in :math:`O(n \cdot k \cdot d)`. This reproduces the exact classic baseline behavior of Ng & Han (2002).
 
 * **Initialization Strategy** (``init``):
   

@@ -68,12 +68,15 @@ class CLARANS(ClusterMixin, TransformerMixin, BaseEstimator):
         initialization. Pass an int for reproducible output across multiple
         function calls.
 
-    cache : bool, default=True
-        Whether to use distance caching (nearest and second-nearest medoid
-        distances d1, d2) to accelerate candidate swap evaluations in O(n*d)
-        instead of recalculating the full clustering cost from scratch in O(n*k*d).
-        If False, runs the classic brute-force cost recalculation at each candidate
-        evaluation.
+    cost_evaluation : {'delta', 'brute_force'}, default='delta'
+        Strategy used to evaluate candidate medoid swaps during local search:
+
+        - 'delta' : Computes incremental cost changes using an on-the-fly cache
+          of nearest (d1) and second-nearest (d2) medoid distances in O(n*d)
+          per candidate swap.
+        - 'brute_force' : Recalculates the total clustering cost from scratch
+          using calculate_cost in O(n*k*d) for each candidate swap, reproducing
+          the classic baseline behavior of Ng & Han (2002).
 
     Attributes
     ----------
@@ -147,7 +150,7 @@ class CLARANS(ClusterMixin, TransformerMixin, BaseEstimator):
         init="k-medoids++",
         metric="euclidean",
         random_state=None,
-        cache=True,
+        cost_evaluation="delta",
     ):
         self.n_clusters = n_clusters
         self.num_local = num_local
@@ -155,7 +158,7 @@ class CLARANS(ClusterMixin, TransformerMixin, BaseEstimator):
         self.init = init
         self.metric = metric
         self.random_state = random_state
-        self.cache = cache
+        self.cost_evaluation = cost_evaluation
 
     def _prepare_initial_medoids(self, X, random_state):
         """Pre-compute initial medoids if the initialization strategy is deterministic.
@@ -348,7 +351,7 @@ class CLARANS(ClusterMixin, TransformerMixin, BaseEstimator):
             else:
                 current_medoids_indices = self._initialize_medoids(X, random_state)
 
-            if self.cache:
+            if self.cost_evaluation == "delta":
                 near_idx_map, near_dist, second_dist = self._update_cache(
                     X, current_medoids_indices
                 )
@@ -375,7 +378,7 @@ class CLARANS(ClusterMixin, TransformerMixin, BaseEstimator):
 
                 random_non_medoid_candidate = random_state.choice(available_candidates)
 
-                if self.cache:
+                if self.cost_evaluation == "delta":
                     cand_row = X[
                         random_non_medoid_candidate : random_non_medoid_candidate + 1
                     ]
@@ -535,8 +538,11 @@ class CLARANS(ClusterMixin, TransformerMixin, BaseEstimator):
             raise ValueError(
                 f"max_neighbors must be an integer >= 1 or 'auto'; got {self.max_neighbors!r}"
             )
-        if not isinstance(self.cache, (bool, np.bool_)):
-            raise ValueError(f"cache must be a boolean; got {self.cache}")
+        if self.cost_evaluation not in ("delta", "brute_force"):
+            raise ValueError(
+                f"The 'cost_evaluation' parameter of CLARANS must be a str among "
+                f"{{'brute_force', 'delta'}}. Got {self.cost_evaluation!r} instead."
+            )
 
         try:
             from sklearn.utils.validation import validate_data
