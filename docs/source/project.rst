@@ -9,7 +9,7 @@ Scope and Intended Audience
 .. note::
    ``scikit-clarans`` is developed primarily for **educational purposes, algorithm study, and small-to-medium academic research prototyping**.
 
-   The library prioritizes clean, accessible, pure Python and NumPy code that adheres closely to standard scikit-learn conventions. While significantly more memory-efficient than classic :math:`O(n^2)` PAM, the current version is **not yet optimized for large-scale Big Data pipelines** (:math:`N \gg 10^5`).
+   The library pairs clean, accessible, scikit-learn compatible design with high-performance **Cython C-extensions** and a cascading distance engine. While substantially more scalable and memory-efficient than classic :math:`O(n^2)` PAM, it is structured for transparent research prototyping rather than distributed Big Data computing (:math:`N \gg 10^5`).
 
 Citation
 --------

@@ -12,7 +12,7 @@
 [![Open In Colab](https://colab.research.google.com/assets/colab-badge.svg)](https://colab.research.google.com/drive/194aBBu0wZotnun25dXqlOrDj3HYHKo-a?usp=sharing)
 
 > [!NOTE]
-> **Educational & Research Scope**: `scikit-clarans` is currently developed primarily for **learning, algorithmic study, and small-to-medium academic research**. As a pure Python/NumPy implementation, it is clean and accessible for experimentation, but it is **not yet optimized for large-scale Big Data applications** ($N \gg 10^5$).
+> **Educational & Research Scope**: `scikit-clarans` is developed primarily for **learning, algorithmic study, and small-to-medium academic research**. It pairs a high-performance **Cython C-extension core** (with pure Python fallback) with an $O(n)$ memory footprint, substantially more scalable and accessible than classic $O(n^2)$ PAM.
 
 **scikit-clarans** brings scalable $k$-medoids clustering to Python with a native scikit-learn API. Unlike $k$-means which computes artificial centroids (means), $k$-medoids picks **actual data points** as cluster centers.
 
@@ -22,16 +22,18 @@
 * **Directly Interpretable**: Medoids are real observations from your dataset (e.g., representative user profiles, real molecules, exemplary documents).
 
 ### CLARANS vs. FastCLARANS: Which one to use?
-* **`FastCLARANS` (Recommended for most workloads)**: Uses FastPAM1 delta calculations (Schubert & Rousseeuw, 2021) to evaluate all $k$ medoids at once. Explores $k$ graph edges in the time CLARANS explores one, yielding substantial speedups with $O(n)$ memory.
-* **`CLARANS`**: Randomized search (Ng & Han, 2002) with optional distance caching (`cache=True`, default) for fast $O(n)$ swap evaluations, or classic brute-force cost recalculation (`cache=False`).
+* **`FastCLARANS` (Recommended for most workloads)**: Uses FastPAM1 delta calculations (Schubert & Rousseeuw, 2021) to evaluate all $k$ medoids at once. Explores $k$ graph edges in the time CLARANS explores one, yielding substantial speedups with $O(n)$ memory and native C-extension acceleration.
+* **`CLARANS`**: Randomized search (Ng & Han, 2002) with optional distance caching (`cost_evaluation='delta'`, default) for fast $O(n)$ swap evaluations, or classic brute-force cost recalculation (`cost_evaluation='brute_force'`).
 
 ---
 
 ## Features
 
 * **Scikit-Learn Native**: Inherits from `BaseEstimator` and `ClusterMixin`. Plug-and-play in scikit-learn `Pipeline`, `GridSearchCV`, and clustering evaluations.
+* **Cython & C-Accelerated**: Core delta cost updates and cache tracking are accelerated with compiled C-extensions (Cython), with seamless fallback to pure Python/NumPy if C extensions are unavailable.
+* **Cascading Distance Engine**: Automatically routes distance computations through the fastest available engine: SciPy `cdist` (C-kernel for dense arrays), Scikit-Learn `DistanceMetric` (for sparse CSR matrices & callables), or `pairwise_distances`.
 * **Memory Efficient**: Computes distances on-the-fly ($O(n)$ memory overhead) to easily scale to tens of thousands of samples without blowing up RAM ($O(n^2)$).
-* **Flexible Seeding**: Supports multiple initialization strategies (`k-medoids++`, `build`, `random`).
+* **Flexible Seeding**: Supports multiple initialization strategies (`k-medoids++`, `build`, `heuristic`, `random`, or custom array).
 
 ## Installation
 
@@ -61,8 +63,8 @@ X, _ = make_blobs(n_samples=1000, centers=5, random_state=42)
 #    - n_clusters: 5 clusters
 #    - num_local: 3 restarts for better quality
 #    - init: 'k-medoids++' for smart starting points
-#    - cache: True (default) for fast O(n) swap evaluations; False for classic baseline
-clarans = CLARANS(n_clusters=5, num_local=3, init='k-medoids++', cache=True, random_state=42)
+#    - cost_evaluation: 'delta' (default) for fast O(n) swap evaluations; 'brute_force' for classic baseline
+clarans = CLARANS(n_clusters=5, num_local=3, init='k-medoids++', cost_evaluation='delta', random_state=42)
 
 # 3. Fit
 clarans.fit(X)

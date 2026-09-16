@@ -88,9 +88,9 @@ Choosing an Estimator: CLARANS vs. FastCLARANS
      - Recommended choice for small-to-medium datasets and research experimentation
 
 .. note::
-   **Dataset Size & Scalability Limitation**
+   **Dataset Size & Scalability Scope**
 
-   While ``FastCLARANS`` substantially outperforms classic ``CLARANS`` by testing all :math:`k` medoid swaps at once with :math:`O(n)` memory, the current library is implemented in pure Python and NumPy. It is intended for **educational exploration, experimentation, and small-to-medium datasets** (up to tens of thousands of samples). It is **not yet optimized for large-scale Big Data pipelines** (such as :math:`N \gg 10^5`).
+   While ``FastCLARANS`` substantially outperforms classic ``CLARANS`` by testing all :math:`k` medoid swaps simultaneously using compiled **Cython C-extensions**, the library is designed with an :math:`O(n)` memory footprint for local in-memory processing. It scales effectively to tens of thousands of samples, but is not designed for distributed Big Data pipelines (:math:`N \gg 10^5`).
 
 Quick example with ``FastCLARANS``:
 
