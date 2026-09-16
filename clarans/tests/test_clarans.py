@@ -790,7 +790,9 @@ class TestUtilsHelpers(unittest.TestCase):
 
                 self.assertEqual(len(w), 1)
                 self.assertTrue(issubclass(w[-1].category, utils.EfficiencyWarning))
-                self.assertIn("Compiled Cython extensions (_core) are not available", str(w[-1].message))
+                self.assertIn(
+                    "Compiled Cython extensions (_core) are not available", str(w[-1].message)
+                )
 
                 # Second call should not issue another warning
                 utils._warn_cython_unavailable()

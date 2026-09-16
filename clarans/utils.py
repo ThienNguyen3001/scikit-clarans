@@ -33,7 +33,8 @@ def _warn_cython_unavailable() -> None:
         warnings.warn(
             "Compiled Cython extensions (_core) are not available; falling back to "
             "pure Python/NumPy implementation. Performance will be significantly slower. "
-            "To enable C-extension acceleration, compile via `pip install -e .` or build from source.",
+            "To enable C-extension acceleration, compile via `pip install -e .` or "
+            "build from source.",
             EfficiencyWarning,
             stacklevel=3,
         )
