@@ -59,4 +59,3 @@ def calculate_cost(
 
     _, min_dists = pairwise_distances_argmin_min(X, medoids, metric=metric)
     return float(np.sum(min_dists))
-

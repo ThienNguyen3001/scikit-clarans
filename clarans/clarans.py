@@ -9,6 +9,7 @@ from scipy.spatial.distance import cdist
 from scipy.sparse import issparse
 from sklearn.base import BaseEstimator, ClusterMixin, TransformerMixin
 from sklearn.metrics import DistanceMetric, pairwise_distances_argmin_min, pairwise_distances
+from sklearn.metrics.pairwise import _VALID_METRICS
 from sklearn.utils.validation import check_array, check_is_fitted, check_random_state
 
 from .initialization import (
@@ -30,8 +31,6 @@ try:
     _DM_METRICS = {k for k in METRIC_MAPPING64.keys() if k != "pyfunc"}
 except ImportError:
     _DM_METRICS = set()
-
-from sklearn.metrics.pairwise import _VALID_METRICS
 
 _CDIST_EXTRA_METRICS = {"jensenshannon", "kulczynski1"}
 
@@ -530,7 +529,7 @@ class CLARANS(ClusterMixin, TransformerMixin, BaseEstimator):
         Priority:
         1. 'precomputed': distance matrix is already computed.
         2. 'cdist': SciPy C-kernel for dense arrays (Euclidean, Manhattan, Chebyshev, etc.).
-        3. 'distance_metric': Scikit-Learn Cython DistanceMetric for sparse matrices (CSR) or callables.
+        3. 'distance_metric': Scikit-Learn DistanceMetric for sparse matrices or callables.
         4. 'pairwise': Fallback using pairwise_distances.
         """
         if self.metric == "precomputed":

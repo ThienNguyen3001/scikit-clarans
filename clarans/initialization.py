@@ -36,6 +36,7 @@ def _compute_pairwise_distances(X, Y=None, metric="euclidean"):
         return pairwise_distances(X, metric=metric)
     return pairwise_distances(X, Y, metric=metric)
 
+
 try:
     from . import _core
 except ImportError:

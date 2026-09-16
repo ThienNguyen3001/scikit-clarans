@@ -609,7 +609,11 @@ class TestCLARANSValidationAndPrecomputed(unittest.TestCase):
         self.assertEqual(len(model_delta.medoid_indices_), 3)
 
         model_brute = CLARANS(
-            n_clusters=3, num_local=1, max_neighbors=20, cost_evaluation="brute_force", random_state=42
+            n_clusters=3,
+            num_local=1,
+            max_neighbors=20,
+            cost_evaluation="brute_force",
+            random_state=42,
         )
         model_brute.fit(self.X)
         self.assertEqual(len(model_brute.medoid_indices_), 3)
@@ -666,14 +670,18 @@ class TestCascadingDistanceEngine(unittest.TestCase):
     def test_cdist_selected_for_dense_metrics(self):
         """SciPy cdist should be chosen for standard metrics on dense arrays."""
         for metric in ["euclidean", "manhattan", "chebyshev", "minkowski"]:
-            model = CLARANS(n_clusters=3, metric=metric, num_local=1, max_neighbors=20, random_state=42)
+            model = CLARANS(
+                n_clusters=3, metric=metric, num_local=1, max_neighbors=20, random_state=42
+            )
             model.fit(self.X_dense)
             self.assertEqual(model._dist_engine, "cdist")
 
     def test_distance_metric_selected_for_sparse(self):
         """Scikit-Learn DistanceMetric should be chosen for sparse CSR input."""
         for metric in ["euclidean", "manhattan"]:
-            model = CLARANS(n_clusters=3, metric=metric, num_local=1, max_neighbors=20, random_state=42)
+            model = CLARANS(
+                n_clusters=3, metric=metric, num_local=1, max_neighbors=20, random_state=42
+            )
             model.fit(self.X_sparse)
             self.assertEqual(model._dist_engine, "distance_metric")
 
@@ -682,14 +690,18 @@ class TestCascadingDistanceEngine(unittest.TestCase):
         def my_metric(u, v):
             return float(np.sum(np.abs(u - v)))
 
-        model = CLARANS(n_clusters=3, metric=my_metric, num_local=1, max_neighbors=20, random_state=42)
+        model = CLARANS(
+            n_clusters=3, metric=my_metric, num_local=1, max_neighbors=20, random_state=42
+        )
         model.fit(self.X_dense)
         self.assertEqual(model._dist_engine, "distance_metric")
 
     def test_precomputed_engine_selected(self):
         """Precomputed engine should be chosen for precomputed distance matrices."""
         D = pairwise_distances(self.X_dense)
-        model = CLARANS(n_clusters=3, metric="precomputed", num_local=1, max_neighbors=20, random_state=42)
+        model = CLARANS(
+            n_clusters=3, metric="precomputed", num_local=1, max_neighbors=20, random_state=42
+        )
         model.fit(D)
         self.assertEqual(model._dist_engine, "precomputed")
 
@@ -727,7 +739,7 @@ class TestCascadingDistanceEngine(unittest.TestCase):
         self.assertIn("Got 'non_existent_metric' instead.", msg)
 
     def test_scipy_specific_metric_jensenshannon(self):
-        """SciPy-specific metric jensenshannon should work across fit, predict, transform, and calculate_cost."""
+        """SciPy metric jensenshannon works in fit, predict, transform, calculate_cost."""
         X_prob = np.array(
             [[0.1, 0.9], [0.15, 0.85], [0.85, 0.15], [0.9, 0.1], [0.5, 0.5], [0.45, 0.55]]
         )
@@ -752,4 +764,3 @@ class TestCascadingDistanceEngine(unittest.TestCase):
 
 if __name__ == "__main__":
     unittest.main()
-
