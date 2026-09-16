@@ -19,7 +19,7 @@ from .utils import _warn_cython_unavailable
 try:
     from . import _core
 except ImportError:
-    _core = None
+    _core = None  # type: ignore[assignment]
 
 if TYPE_CHECKING:
     from scipy.sparse import spmatrix

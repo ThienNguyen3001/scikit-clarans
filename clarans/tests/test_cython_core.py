@@ -14,7 +14,7 @@ from clarans import HAS_CYTHON
 try:
     from clarans import _core
 except ImportError:
-    _core = None
+    _core = None  # type: ignore[assignment]
 
 
 @unittest.skipUnless(

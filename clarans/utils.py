@@ -15,7 +15,7 @@ try:
 
     HAS_CYTHON = _core is not None
 except ImportError:
-    _core = None
+    _core = None  # type: ignore[assignment]
     HAS_CYTHON = False
 
 _cython_warning_issued = False
@@ -144,7 +144,9 @@ def calculate_cost(
     medoids = X[medoid_indices]
 
     if not issparse(X):
-        scipy_metric = _SCIPY_METRIC_MAP.get(metric, metric)
+        scipy_metric = (
+            _SCIPY_METRIC_MAP.get(metric, metric) if isinstance(metric, str) else metric
+        )
         try:
             D = cdist(X, medoids, metric=scipy_metric)
             return float(np.sum(np.min(D, axis=1)))

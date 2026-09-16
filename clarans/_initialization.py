@@ -36,7 +36,7 @@ def _compute_pairwise_distances(X, Y=None, metric="euclidean"):
 try:
     from . import _core
 except ImportError:
-    _core = None
+    _core = None  # type: ignore[assignment]
 
 
 def initialize_heuristic(X, n_clusters, metric="euclidean"):

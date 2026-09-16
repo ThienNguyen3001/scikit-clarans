@@ -39,7 +39,7 @@ _ALL_VALID_METRICS = frozenset(
 try:
     from . import _core
 except ImportError:
-    _core = None
+    _core = None  # type: ignore[assignment]
 
 if TYPE_CHECKING:
     from scipy.sparse import spmatrix
@@ -565,7 +565,7 @@ class CLARANS(ClusterMixin, TransformerMixin, BaseEstimator):
         engine = getattr(self, "_dist_engine", "pairwise")
         if engine == "cdist":
             return cdist(cand_row, X, metric=self._scipy_metric)[0]
-        elif engine == "distance_metric":
+        elif engine == "distance_metric" and self._dm_instance is not None:
             return self._dm_instance.pairwise(cand_row, X)[0]
         elif engine == "precomputed":
             return (
@@ -610,7 +610,7 @@ class CLARANS(ClusterMixin, TransformerMixin, BaseEstimator):
             engine = getattr(self, "_dist_engine", "pairwise")
             if engine == "cdist" and isinstance(X, np.ndarray) and not issparse(X):
                 subD = cdist(X, medoids, metric=self._scipy_metric)
-            elif engine == "distance_metric" and getattr(self, "_dm_instance", None) is not None:
+            elif engine == "distance_metric" and self._dm_instance is not None:
                 subD = self._dm_instance.pairwise(X, medoids)
             else:
                 subD = pairwise_distances(X, medoids, metric=self.metric)
