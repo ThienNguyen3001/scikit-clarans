@@ -55,7 +55,7 @@ jobs:
     name: Publish packages to PyPI
     needs: [build_wheels, build_sdist]
     runs-on: ubuntu-latest
-    if: github.event_name == 'release' && github.event.action == 'published'
+    if: (github.event_name == 'release' && github.event.action == 'published') || github.event_name == 'workflow_dispatch'
     environment:
       name: pypi
     permissions:
