@@ -35,6 +35,15 @@ if sys.platform == "win32":
 
 extra_compile_args = ["-O3"] if (is_mingw or sys.platform != "win32") else ["/O2"]
 
+define_macros: list[tuple[str, str | None]] = [
+    ("NPY_NO_DEPRECATED_API", "NPY_1_7_API_VERSION")
+]
+if sys.platform == "win32":
+    if sys.maxsize > 2**32:
+        define_macros.extend([("MS_WIN64", None), ("SIZEOF_VOID_P", "8")])
+    else:
+        define_macros.extend([("MS_WIN32", None), ("SIZEOF_VOID_P", "4")])
+
 
 class BuildExtAutoCompiler(_build_ext):
     """Automatically configure MinGW compiler on Windows if MSVC is not available."""
@@ -58,7 +67,7 @@ try:
                 "clarans._core",
                 sources=["clarans/_core.pyx"],
                 include_dirs=[np.get_include()],
-                define_macros=[("NPY_NO_DEPRECATED_API", "NPY_1_7_API_VERSION")],
+                define_macros=define_macros,
                 extra_compile_args=extra_compile_args,
             )
         ],
