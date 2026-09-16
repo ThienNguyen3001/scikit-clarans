@@ -14,8 +14,8 @@ def main():
     X, _ = make_blobs(n_samples=500, centers=4, cluster_std=0.60, random_state=42)
     ks = range(2, 9)
     methods = {
-        "CLARANS": lambda k: CLARANS(n_clusters=k, numlocal=3, random_state=42),
-        "FastCLARANS": lambda k: FastCLARANS(n_clusters=k, numlocal=3, random_state=42),
+        "CLARANS": lambda k: CLARANS(n_clusters=k, num_local=3, random_state=42),
+        "FastCLARANS": lambda k: FastCLARANS(n_clusters=k, num_local=3, random_state=42),
         "KMeans": lambda k: KMeans(n_clusters=k, random_state=42),
     }
 

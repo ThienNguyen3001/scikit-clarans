@@ -59,7 +59,7 @@ Provide user-specified candidate centers for domain-guided seeding:
 Performance tuning
 ------------------
 
-Observe trade-offs between ``numlocal``, ``maxneighbor``, runtime, and solution cost:
+Observe trade-offs between ``num_local``, ``max_neighbors``, runtime, and solution cost:
 
 .. literalinclude:: ../../examples/08_performance_tuning.py
    :language: python

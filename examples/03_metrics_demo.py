@@ -21,7 +21,7 @@ def main():
     models = []
     for metric in metrics:
         model = CLARANS(
-            n_clusters=4, numlocal=3, init="k-medoids++", metric=metric, random_state=42
+            n_clusters=4, num_local=3, init="k-medoids++", metric=metric, random_state=42
         )
         model.fit(X)
         cost = calculate_cost(X, model.medoid_indices_, metric=metric)

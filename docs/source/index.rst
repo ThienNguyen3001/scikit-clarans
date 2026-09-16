@@ -10,9 +10,14 @@ Welcome to the documentation for **scikit-clarans**, a specialized clustering li
 
 **scikit-clarans** brings the power of the CLARANS (Clustering Large Applications based on RANdomized Search) algorithm to the **scikit-learn** ecosystem. It is designed to be:
 
-*   **Efficient**: Optimized for larger datasets where standard k-medoids might struggle.
-*   **Compatible**: A drop-in replacement for scikit-learn clusterers efficiently implementing `fit`, `predict`, and more.
-*   **Flexible**: Supports customizable initialization strategies and distance metrics.
+*   **High Performance & Memory-Efficient**: Cython-accelerated C-extensions (with pure Python fallback) paired with :math:`O(n)` memory overhead, substantially more scalable than classic :math:`O(n^2)` PAM.
+*   **Compatible**: A drop-in replacement for scikit-learn clusterers efficiently implementing ``fit``, ``predict``, and more.
+*   **Flexible & Fast**: Cascading distance engine supporting dense arrays (SciPy C-kernel), sparse matrices (Scikit-Learn DistanceMetric), and custom metrics.
+
+.. note::
+   **Educational & Academic Research Scope**
+
+   ``scikit-clarans`` is developed primarily for **learning, algorithmic exploration, and small-to-medium academic research**. While its Cython-accelerated core and :math:`O(n)` memory footprint provide significant speedups over standard PAM, it is designed for clean, accessible prototyping rather than massive distributed enterprise Big Data pipelines (:math:`N \gg 10^5`).
 
 .. toctree::
    :maxdepth: 2
@@ -34,6 +39,8 @@ Welcome to the documentation for **scikit-clarans**, a specialized clustering li
 
    gallery/2d_clustering
    gallery/comparison
+   gallery/outliers
+   gallery/initializations
    gallery/quality_vs_k
    gallery/performance
 

@@ -10,7 +10,7 @@ from clarans import CLARANS
 
 def main():
     X, _ = make_blobs(n_samples=500, centers=4, cluster_std=0.60, random_state=42)
-    model = CLARANS(n_clusters=4, numlocal=5, random_state=42)
+    model = CLARANS(n_clusters=4, num_local=5, random_state=42)
     model.fit(X)
 
     fig, ax = plt.subplots(figsize=(6, 4))

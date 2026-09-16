@@ -20,7 +20,7 @@ from clarans import CLARANS
 def main():
     X, _ = make_blobs(n_samples=500, centers=4, n_features=2, random_state=42)
 
-    model = CLARANS(n_clusters=4, numlocal=3, init="k-medoids++", random_state=42)
+    model = CLARANS(n_clusters=4, num_local=3, init="k-medoids++", random_state=42)
     model.fit(X)
 
     print("Medoid Indices:", model.medoid_indices_)
