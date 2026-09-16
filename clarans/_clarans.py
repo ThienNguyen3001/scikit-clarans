@@ -12,18 +12,12 @@ from sklearn.metrics import DistanceMetric, pairwise_distances_argmin_min, pairw
 from sklearn.metrics.pairwise import _VALID_METRICS
 from sklearn.utils.validation import check_array, check_is_fitted, check_random_state
 
-from .initialization import (
+from ._initialization import (
     initialize_build,
     initialize_heuristic,
     initialize_k_medoids_plus_plus,
 )
-from .utils import calculate_cost
-
-_SCIPY_METRIC_MAP = {
-    "manhattan": "cityblock",
-    "l1": "cityblock",
-    "l2": "euclidean",
-}
+from .utils import _SCIPY_METRIC_MAP, calculate_cost
 
 try:
     from sklearn.metrics._dist_metrics import METRIC_MAPPING64

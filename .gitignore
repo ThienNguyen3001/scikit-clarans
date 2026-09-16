@@ -5,6 +5,8 @@ __pycache__/
 
 # C extensions
 *.so
+*.pyd
+clarans/_core.c
 
 # Distribution / packaging
 .Python

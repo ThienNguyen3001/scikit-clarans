@@ -13,7 +13,7 @@ from typing import TYPE_CHECKING, Any
 import numpy as np
 from numpy.typing import ArrayLike
 
-from clarans.clarans import CLARANS, _DELTA_TOL
+from ._clarans import CLARANS, _DELTA_TOL
 
 try:
     from . import _core

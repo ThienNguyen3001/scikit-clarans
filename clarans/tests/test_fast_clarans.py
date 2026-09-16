@@ -252,7 +252,7 @@ class TestFastCLARANS(unittest.TestCase):
 
     def test_delta_tolerance_rejects_ghost_swaps(self):
         """Tolerance should prevent ghost swaps in FastCLARANS."""
-        from clarans.clarans import _DELTA_TOL
+        from clarans._clarans import _DELTA_TOL
 
         self.assertLess(_DELTA_TOL, 0)
         self.assertEqual(_DELTA_TOL, -1e-12)
@@ -271,7 +271,7 @@ class TestFastCLARANS(unittest.TestCase):
 
     def test_inherits_update_cache(self):
         """FastCLARANS should inherit _update_cache directly from CLARANS without overriding."""
-        from clarans.clarans import CLARANS
+        from clarans._clarans import CLARANS
 
         self.assertIs(FastCLARANS._update_cache, CLARANS._update_cache)
 

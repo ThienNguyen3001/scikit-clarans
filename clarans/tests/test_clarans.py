@@ -10,13 +10,13 @@ from sklearn.metrics import (
 )
 
 from clarans import CLARANS, FastCLARANS
-from clarans.initialization import (
+from clarans._initialization import (
     _warn_pairwise_complexity,
     initialize_build,
     initialize_heuristic,
     initialize_k_medoids_plus_plus,
 )
-from clarans.utils import calculate_cost
+from clarans.utils import calculate_cost, check_medoids
 
 
 class TestCLARANS(unittest.TestCase):
@@ -648,7 +648,7 @@ class TestCLARANSValidationAndPrecomputed(unittest.TestCase):
 
     def test_delta_tolerance_rejects_ghost_swaps(self):
         """Tolerance should prevent ghost swaps when delta is negligible roundoff noise."""
-        from clarans.clarans import _DELTA_TOL
+        from clarans._clarans import _DELTA_TOL
 
         self.assertLess(_DELTA_TOL, 0)
         self.assertEqual(_DELTA_TOL, -1e-12)
@@ -760,6 +760,52 @@ class TestCascadingDistanceEngine(unittest.TestCase):
         fmodel = FastCLARANS(n_clusters=2, metric="jensenshannon", random_state=42)
         fmodel.fit(X_prob)
         self.assertEqual(len(fmodel.medoid_indices_), 2)
+
+
+class TestUtilsHelpers(unittest.TestCase):
+    """Tests for utility helpers in clarans.utils."""
+
+    def test_check_medoids_valid(self):
+        """Valid medoids should convert to 1D intp array."""
+        medoids = [0, 2, 4]
+        res = check_medoids(medoids, n_samples=10)
+        self.assertIsInstance(res, np.ndarray)
+        self.assertEqual(res.dtype, np.intp)
+        np.testing.assert_array_equal(res, [0, 2, 4])
+
+    def test_check_medoids_duplicate_raises(self):
+        """Duplicate medoids should raise ValueError."""
+        with self.assertRaises(ValueError):
+            check_medoids([1, 2, 2])
+
+    def test_check_medoids_empty_raises(self):
+        """Empty medoids sequence should raise ValueError."""
+        with self.assertRaises(ValueError):
+            check_medoids([])
+
+    def test_check_medoids_out_of_bounds_raises(self):
+        """Indices exceeding n_samples or negative should raise ValueError."""
+        with self.assertRaises(ValueError):
+            check_medoids([0, 10], n_samples=10)
+        with self.assertRaises(ValueError):
+            check_medoids([-1, 2], n_samples=10)
+
+    def test_check_medoids_non_integer_raises(self):
+        """Non-integer medoid elements should raise TypeError."""
+        with self.assertRaises(TypeError):
+            check_medoids([0.5, 1.2])
+
+    def test_check_medoids_multidimensional_raises(self):
+        """2D medoids array should raise ValueError."""
+        with self.assertRaises(ValueError):
+            check_medoids(np.array([[0, 1], [2, 3]]))
+
+    def test_public_imports_from_init(self):
+        """calculate_cost and check_medoids should be importable directly from clarans."""
+        from clarans import calculate_cost as calc, check_medoids as chk
+
+        self.assertTrue(callable(calc))
+        self.assertTrue(callable(chk))
 
 
 if __name__ == "__main__":

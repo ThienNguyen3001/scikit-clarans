@@ -13,11 +13,7 @@ from scipy.sparse import issparse
 from sklearn.metrics import pairwise_distances
 from sklearn.utils import check_random_state
 
-_SCIPY_METRIC_MAP = {
-    "manhattan": "cityblock",
-    "l1": "cityblock",
-    "l2": "euclidean",
-}
+from .utils import _SCIPY_METRIC_MAP
 
 
 def _compute_pairwise_distances(X, Y=None, metric="euclidean"):

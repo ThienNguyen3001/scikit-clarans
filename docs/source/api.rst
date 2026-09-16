@@ -34,7 +34,7 @@ Initialization
 
 Internal strategies for seeding medoids (``k-medoids++``, ``build``, ``heuristic``, ``random``).
 
-.. automodule:: clarans.initialization
+.. automodule:: clarans._initialization
    :members:
    :undoc-members:
    :show-inheritance:

@@ -43,7 +43,7 @@ Supported Methods
    matplotlib.use("Agg")
    import matplotlib.pyplot as plt
    from sklearn.datasets import make_blobs
-   from clarans.initialization import (
+   from clarans._initialization import (
        initialize_k_medoids_plus_plus,
        initialize_heuristic,
        initialize_build,
