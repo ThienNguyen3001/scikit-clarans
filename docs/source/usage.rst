@@ -182,7 +182,7 @@ Understanding the search graph :math:`G_{n,k}` helps developers reason about con
    Standard PAM examines all :math:`k(n-k)` neighbors at each step to find the steepest descent, costing :math:`O(k(n-k)^2)` per iteration. This becomes intractable for large datasets.
 
 3. **How CLARANS Accelerates Search**:
-   Instead of checking all :math:`k(n-k)` neighbors, CLARANS draws random candidate neighbors. As soon as it finds a neighbor that reduces the clustering cost, it immediately transitions to that node (first-choice hill climbing). If :math:`\text{max\_neighbors}` consecutive random neighbors fail to improve the cost, the search terminates at a local optimum. The process repeats :math:`\text{num\_local}` times from new random starts.
+   Instead of checking all :math:`k(n-k)` neighbors, CLARANS draws random candidate neighbors. As soon as it finds a neighbor that reduces the clustering cost, it immediately transitions to that node (first-choice hill climbing). If ``max_neighbors`` consecutive random neighbors fail to improve the cost, the search terminates at a local optimum. The process repeats ``num_local`` times from new random starts.
 
 4. **How FastCLARANS Improves Exploration**:
    FastCLARANS utilizes the FastPAM1 formulation: by tracking the nearest and second-nearest medoids for each sample, it computes the swap delta for **all** :math:`k` **medoids simultaneously** in a single :math:`O(n)` pass over the data. This evaluates :math:`k` graph edges in the time CLARANS evaluates one.
