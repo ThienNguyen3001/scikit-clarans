@@ -72,21 +72,7 @@ try:
         },
     )
 except ImportError:
-    if os.path.exists(os.path.join(here, "clarans", "_core.c")):
-        try:
-            import numpy as np
-
-            ext_modules = [
-                Extension(
-                    "clarans._core",
-                    sources=["clarans/_core.c"],
-                    include_dirs=[np.get_include()],
-                    define_macros=[("NPY_NO_DEPRECATED_API", "NPY_1_7_API_VERSION")],
-                    extra_compile_args=extra_compile_args,
-                )
-            ]
-        except ImportError:
-            pass
+    ext_modules = []
 
 
 setup(
@@ -111,7 +97,7 @@ setup(
     ],
     keywords="clustering sklearn scikit-learn clarans k-medoids",
     packages=find_packages(),
-    package_data={"clarans": ["py.typed", "*.pyx", "*.pxd"]},
+    package_data={"clarans": ["py.typed", "*.pyx", "*.pxd", "*.pyi"]},
     include_package_data=True,
     install_requires=["numpy", "scikit-learn", "scipy"],
     cmdclass=cmdclass,
