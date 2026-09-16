@@ -6,7 +6,7 @@
    :figwidth: 80%
    :align: center
 
-   CLARANS clustering on a synthetic blobs dataset ($k=4$).
+   CLARANS clustering on a synthetic blobs dataset (:math:`k=4`).
 
 .. _gallery-2d-code:
 
@@ -64,7 +64,7 @@
    :figwidth: 80%
    :align: center
 
-   CLARANS on two interleaving moons ($k=2$).
+   CLARANS on two interleaving moons (:math:`k=2`).
 
 .. code-block:: python
    :linenos:
@@ -120,7 +120,7 @@
    :figwidth: 80%
    :align: center
 
-   CLARANS on an anisotropic dataset with non-spherical clusters ($k=3$).
+   CLARANS on an anisotropic dataset with non-spherical clusters (:math:`k=3`).
 
 .. code-block:: python
    :linenos:

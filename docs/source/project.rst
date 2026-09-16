@@ -3,6 +3,14 @@ Project
 
 ``scikit-clarans`` is a scikit-learn compatible Python library for scalable k-medoids clustering using the CLARANS and FastCLARANS algorithms. The documentation contains usage guides, practical tutorials, an API reference, and a gallery of runnable examples.
 
+Scope and Intended Audience
+---------------------------
+
+.. note::
+   ``scikit-clarans`` is developed primarily for **educational purposes, algorithm study, and small-to-medium academic research prototyping**.
+
+   The library prioritizes clean, accessible, pure Python and NumPy code that adheres closely to standard scikit-learn conventions. While significantly more memory-efficient than classic :math:`O(n^2)` PAM, the current version is **not yet optimized for large-scale Big Data pipelines** (:math:`N \gg 10^5`).
+
 Citation
 --------
 

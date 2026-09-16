@@ -6,7 +6,7 @@ Performance tuning
    :figwidth: 80%
    :align: center
 
-   Runtime scaling across dataset sizes ($N$ from 500 to 8,000 samples)
+   Runtime scaling across dataset sizes (:math:`N` from 500 to 8,000 samples)
    for CLARANS, FastCLARANS, and KMeans.
 
 .. _gallery-performance-code:

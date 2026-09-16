@@ -78,14 +78,19 @@ Choosing an Estimator: CLARANS vs. FastCLARANS
      - Samples random (medoid, non-medoid) pairs
      - Samples non-medoids; tests all :math:`k` medoids at once
    * - **Delta Cost Update**
-     - Single swap evaluation (:math:`O(n)` with ``cache=True``, :math:`O(n \cdot k)` with ``cache=False``)
+     - Single swap evaluation (:math:`O(n)` with ``cost_evaluation='delta'``, :math:`O(n \cdot k)` with ``cost_evaluation='brute_force'``)
      - FastPAM1 vectorized delta cost across all :math:`k` medoids
    * - **Memory Footprint**
      - :math:`O(n)` on-the-fly
      - :math:`O(n)` on-the-fly
    * - **Best For**
      - Baseline / reproduction of Ng & Han (2002)
-     - **Default choice for production & larger datasets**
+     - Recommended choice for small-to-medium datasets and research experimentation
+
+.. note::
+   **Dataset Size & Scalability Limitation**
+
+   While ``FastCLARANS`` substantially outperforms classic ``CLARANS`` by testing all :math:`k` medoid swaps at once with :math:`O(n)` memory, the current library is implemented in pure Python and NumPy. It is intended for **educational exploration, experimentation, and small-to-medium datasets** (up to tens of thousands of samples). It is **not yet optimized for large-scale Big Data pipelines** (such as :math:`N \gg 10^5`).
 
 Quick example with ``FastCLARANS``:
 
@@ -100,42 +105,49 @@ Quick example with ``FastCLARANS``:
 Configuration & Hyperparameter Tuning
 -------------------------------------
 
-Both estimators accept key hyperparameters to balance execution speed and clustering quality:
+Both estimators share core hyperparameters to balance execution speed and clustering quality, with ``CLARANS`` providing an additional ``cost_evaluation`` parameter:
 
 .. list-table::
-   :widths: 20 20 60
+   :widths: 18 15 15 52
    :header-rows: 1
 
    * - Parameter
+     - Estimator
      - Default
      - Description
    * - ``n_clusters``
+     - Both
      - ``8``
      - Number of clusters (medoids) to find (:math:`k`).
    * - ``num_local``
+     - Both
      - ``2``
      - Number of local searches (random restarts). Higher values explore more local minima.
    * - ``max_neighbors``
+     - Both
      - ``'auto'``
      - Maximum non-improving neighbors to check per search. Defaults to :math:`\max(250, 1.25\% \times k(n-k))` in CLARANS and :math:`\max(250, 2.5\% \times (n-k))` in FastCLARANS.
    * - ``init``
+     - Both
      - ``k-medoids++``
      - Initialization strategy (``k-medoids++``, ``random``, ``build``, ``heuristic``, or array-like).
    * - ``metric``
+     - Both
      - ``euclidean``
      - Distance metric to use (e.g., ``euclidean``, ``manhattan``, ``cosine``).
-   * - ``cache``
-     - ``True``
-     - *(CLARANS only)* Whether to use distance caching (:math:`d_1, d_2`) for :math:`O(n)` swap evaluations. If ``False``, recalculates total cost from scratch via ``calculate_cost()`` in :math:`O(n \cdot k)`.
+   * - ``cost_evaluation``
+     - CLARANS only
+     - ``'delta'``
+     - Strategy to evaluate candidate swaps (``'delta'`` for :math:`O(n)` evaluations using distance caching; ``'brute_force'`` for recalculating total cost in :math:`O(n \cdot k)`).
 
 Practical Tuning Tips
 ^^^^^^^^^^^^^^^^^^^^^^
 
-* **Distance Caching** (``cache`` in CLARANS):
-  CLARANS supports an optional ``cache`` parameter (default ``True``):
+* **Cost Evaluation Strategy** (``cost_evaluation`` in CLARANS):
+  ``CLARANS`` supports an optional ``cost_evaluation`` parameter (default ``'delta'``). Note that ``FastCLARANS`` does not expose this parameter because its vectorized FastPAM1 delta calculation inherently tracks :math:`d_1` and :math:`d_2`:
   
-  * ``cache=True`` *(Recommended)*: Maintains an on-the-fly cache of nearest (:math:`d_1`) and second-nearest (:math:`d_2`) medoid distances for all samples. Each candidate swap is evaluated in :math:`O(n \cdot d)` operations without recomputing distances to unchanged medoids. This yields a 1.5x–2.5x speedup with identical mathematical clustering results while maintaining a lean :math:`O(n)` memory footprint.
-  * ``cache=False``: Evaluates each candidate swap by recalculating the total clustering cost from scratch using ``calculate_cost`` in :math:`O(n \cdot k \cdot d)`. This reproduces the exact classic baseline behavior of Ng & Han (2002).
+  * ``cost_evaluation='delta'`` *(Recommended)*: Maintains an on-the-fly cache of nearest (:math:`d_1`) and second-nearest (:math:`d_2`) medoid distances for all samples. Each candidate swap is evaluated in :math:`O(n \cdot d)` operations without recomputing distances to unchanged medoids. This yields a 1.5x–2.5x speedup with identical mathematical clustering results while maintaining a lean :math:`O(n)` memory footprint.
+  * ``cost_evaluation='brute_force'``: Evaluates each candidate swap by recalculating the total clustering cost from scratch using ``calculate_cost`` in :math:`O(n \cdot k \cdot d)`. This reproduces the exact classic baseline behavior of Ng & Han (2002).
 
 * **Initialization Strategy** (``init``):
   

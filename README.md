@@ -11,14 +11,17 @@
 [![PyPI version](https://img.shields.io/pypi/v/scikit-clarans.svg)](https://pypi.org/project/scikit-clarans/)
 [![Open In Colab](https://colab.research.google.com/assets/colab-badge.svg)](https://colab.research.google.com/drive/194aBBu0wZotnun25dXqlOrDj3HYHKo-a?usp=sharing)
 
+> [!NOTE]
+> **Educational & Research Scope**: `scikit-clarans` is currently developed primarily for **learning, algorithmic study, and small-to-medium academic research**. As a pure Python/NumPy implementation, it is clean and accessible for experimentation, but it is **not yet optimized for large-scale Big Data applications** ($N \gg 10^5$).
+
 **scikit-clarans** brings scalable $k$-medoids clustering to Python with a native scikit-learn API. Unlike $k$-means which computes artificial centroids (means), $k$-medoids picks **actual data points** as cluster centers.
 
-### 💡 Why k-Medoids over k-Means?
-* 🛡️ **Outlier Robust**: Minimizes absolute distance ($\sum d$) rather than squared Euclidean distance ($\sum d^2$), so extreme values won't skew cluster centers.
-* 🧩 **Custom Distance Metrics**: Works with `cosine`, `manhattan`, `euclidean`, or any valid metric—unlike $k$-means which is strictly Euclidean.
-* 🎯 **Directly Interpretable**: Medoids are real observations from your dataset (e.g., representative user profiles, real molecules, exemplary documents).
+### Why k-Medoids over k-Means?
+* **Outlier Robust**: Minimizes absolute distance ($\sum d$) rather than squared Euclidean distance ($\sum d^2$), so extreme values won't skew cluster centers.
+* **Custom Distance Metrics**: Works with `cosine`, `manhattan`, `euclidean`, or any valid metric—unlike $k$-means which is strictly Euclidean.
+* **Directly Interpretable**: Medoids are real observations from your dataset (e.g., representative user profiles, real molecules, exemplary documents).
 
-### ⚡ CLARANS vs. FastCLARANS: Which one to use?
+### CLARANS vs. FastCLARANS: Which one to use?
 * **`FastCLARANS` (Recommended for most workloads)**: Uses FastPAM1 delta calculations (Schubert & Rousseeuw, 2021) to evaluate all $k$ medoids at once. Explores $k$ graph edges in the time CLARANS explores one, yielding substantial speedups with $O(n)$ memory.
 * **`CLARANS`**: Randomized search (Ng & Han, 2002) with optional distance caching (`cache=True`, default) for fast $O(n)$ swap evaluations, or classic brute-force cost recalculation (`cache=False`).
 
