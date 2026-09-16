@@ -17,7 +17,7 @@ from ._initialization import (
     initialize_heuristic,
     initialize_k_medoids_plus_plus,
 )
-from .utils import _SCIPY_METRIC_MAP, calculate_cost
+from .utils import _SCIPY_METRIC_MAP, _warn_cython_unavailable, calculate_cost
 
 try:
     from sklearn.metrics._dist_metrics import METRIC_MAPPING64
@@ -364,6 +364,7 @@ class CLARANS(ClusterMixin, TransformerMixin, BaseEstimator):
         >>> model = CLARANS(n_clusters=3, random_state=0)
         >>> model.fit(X)
         """
+        _warn_cython_unavailable()
         X, random_state, n_samples, n_features = self._validate_input_and_params(X)
 
         if self.max_neighbors == "auto":

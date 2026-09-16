@@ -39,29 +39,6 @@ except ImportError:
     _core = None
 
 
-def _warn_pairwise_complexity(
-    n_samples: int, method_name: str, metric: str, threshold: int = 10_000
-) -> None:
-    """Warn when O(n^2) initialization methods are used on large datasets."""
-    if metric == "precomputed" or n_samples < threshold:
-        return
-
-    bytes_needed = n_samples * n_samples * 8
-    if bytes_needed >= 1024**3:
-        size_str = f"{bytes_needed / (1024**3):.2f} GB"
-    else:
-        size_str = f"{bytes_needed / (1024**2):.0f} MB"
-
-    warnings.warn(
-        f"The '{method_name}' initialization computes a full pairwise distance matrix of shape "
-        f"({n_samples}, {n_samples}), which requires approximately {size_str} of memory (O(n^2)). "
-        f"This may lead to high memory consumption or OutOfMemory errors. "
-        f"Consider using init='k-medoids++' for an O(n*k) probabilistic seeding.",
-        UserWarning,
-        stacklevel=3,
-    )
-
-
 def initialize_heuristic(X, n_clusters, metric="euclidean"):
     """
     Initialize medoids using a heuristic approach.
@@ -94,8 +71,6 @@ def initialize_heuristic(X, n_clusters, metric="euclidean"):
     Adapted from the scikit-learn-extra KMedoids implementation:
     https://scikit-learn-extra.readthedocs.io/en/stable/generated/sklearn_extra.cluster.KMedoids.html
     """
-    _warn_pairwise_complexity(X.shape[0], "heuristic", metric)
-
     if metric == "precomputed":
         D = X
     else:
@@ -144,8 +119,6 @@ def initialize_build(X, n_clusters, metric="euclidean"):
     https://scikit-learn-extra.readthedocs.io/en/stable/generated/sklearn_extra.cluster.KMedoids.html
     """
     n_samples = X.shape[0]
-
-    _warn_pairwise_complexity(n_samples, "build", metric)
 
     medoids = []
 

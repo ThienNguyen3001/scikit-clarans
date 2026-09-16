@@ -14,6 +14,7 @@ import numpy as np
 from numpy.typing import ArrayLike
 
 from ._clarans import CLARANS, _DELTA_TOL
+from .utils import _warn_cython_unavailable
 
 try:
     from . import _core
@@ -167,6 +168,7 @@ class FastCLARANS(CLARANS):
         is efficient for low-dimensional data with cheap distance metrics
         (e.g., Euclidean distance).
         """
+        _warn_cython_unavailable()
         X, random_state, n_samples, n_features = self._validate_input_and_params(X)
 
         if self.max_neighbors == "auto":

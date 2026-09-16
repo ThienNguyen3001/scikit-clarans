@@ -11,7 +11,6 @@ from sklearn.metrics import (
 
 from clarans import CLARANS, FastCLARANS
 from clarans._initialization import (
-    _warn_pairwise_complexity,
     initialize_build,
     initialize_heuristic,
     initialize_k_medoids_plus_plus,
@@ -372,44 +371,6 @@ class TestInitializationFunctions(unittest.TestCase):
         D = pairwise_distances(self.X, metric="euclidean")
         expected_first = np.argmin(D.sum(axis=1))
         self.assertEqual(medoids[0], expected_first)
-
-    def test_warn_pairwise_complexity_emits_warning(self):
-        """Should emit UserWarning with memory estimate when n_samples >= threshold."""
-        import warnings
-        with warnings.catch_warnings(record=True) as w:
-            warnings.simplefilter("always")
-            _warn_pairwise_complexity(10_000, "heuristic", "euclidean", threshold=10_000)
-            self.assertEqual(len(w), 1)
-            self.assertTrue(issubclass(w[-1].category, UserWarning))
-            self.assertIn("763 MB", str(w[-1].message))
-            self.assertIn("heuristic", str(w[-1].message))
-            self.assertIn("k-medoids++", str(w[-1].message))
-
-    def test_warn_pairwise_complexity_gb_formatting(self):
-        """Should format memory in GB when memory requirement >= 1 GB."""
-        import warnings
-        with warnings.catch_warnings(record=True) as w:
-            warnings.simplefilter("always")
-            _warn_pairwise_complexity(20_000, "build", "euclidean", threshold=10_000)
-            self.assertEqual(len(w), 1)
-            self.assertIn("GB", str(w[-1].message))
-            self.assertIn("build", str(w[-1].message))
-
-    def test_warn_pairwise_complexity_suppressed_for_precomputed(self):
-        """Should not warn when metric is 'precomputed'."""
-        import warnings
-        with warnings.catch_warnings(record=True) as w:
-            warnings.simplefilter("always")
-            _warn_pairwise_complexity(50_000, "heuristic", "precomputed", threshold=10_000)
-            self.assertEqual(len(w), 0)
-
-    def test_warn_pairwise_complexity_suppressed_for_small_n(self):
-        """Should not warn when n_samples < threshold."""
-        import warnings
-        with warnings.catch_warnings(record=True) as w:
-            warnings.simplefilter("always")
-            _warn_pairwise_complexity(100, "heuristic", "euclidean", threshold=10_000)
-            self.assertEqual(len(w), 0)
 
     def test_build_sparse_precomputed_warning(self):
         """initialize_build should warn when a sparse precomputed matrix is passed."""
@@ -801,11 +762,39 @@ class TestUtilsHelpers(unittest.TestCase):
             check_medoids(np.array([[0, 1], [2, 3]]))
 
     def test_public_imports_from_init(self):
-        """calculate_cost and check_medoids should be importable directly from clarans."""
-        from clarans import calculate_cost as calc, check_medoids as chk
+        """calculate_cost, check_medoids, EfficiencyWarning, and HAS_CYTHON should be in clarans."""
+        from clarans import (
+            EfficiencyWarning as EffWarn,
+            HAS_CYTHON as has_cy,
+            calculate_cost as calc,
+            check_medoids as chk,
+        )
 
         self.assertTrue(callable(calc))
         self.assertTrue(callable(chk))
+        self.assertTrue(issubclass(EffWarn, UserWarning))
+        self.assertIsInstance(has_cy, bool)
+
+    def test_efficiency_warning_issued_once(self):
+        """EfficiencyWarning should be issued when HAS_CYTHON is False, exactly once."""
+        import warnings
+        from unittest.mock import patch
+        import clarans.utils as utils
+
+        with patch.object(utils, "HAS_CYTHON", False), patch.object(
+            utils, "_cython_warning_issued", False
+        ):
+            with warnings.catch_warnings(record=True) as w:
+                warnings.simplefilter("always")
+                utils._warn_cython_unavailable()
+
+                self.assertEqual(len(w), 1)
+                self.assertTrue(issubclass(w[-1].category, utils.EfficiencyWarning))
+                self.assertIn("Compiled Cython extensions (_core) are not available", str(w[-1].message))
+
+                # Second call should not issue another warning
+                utils._warn_cython_unavailable()
+                self.assertEqual(len(w), 1)
 
 
 if __name__ == "__main__":

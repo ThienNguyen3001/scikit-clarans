@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+import warnings
 from typing import TYPE_CHECKING, Callable, Sequence
 import numpy as np
 from scipy.spatial.distance import cdist
@@ -9,7 +10,41 @@ from sklearn.metrics import pairwise_distances_argmin_min
 if TYPE_CHECKING:
     from scipy.sparse import spmatrix
 
-__all__ = ["calculate_cost", "check_medoids"]
+try:
+    from . import _core
+
+    HAS_CYTHON = _core is not None
+except ImportError:
+    _core = None
+    HAS_CYTHON = False
+
+_cython_warning_issued = False
+
+
+class EfficiencyWarning(UserWarning):
+    """Warning issued when falling back to pure Python/NumPy implementation."""
+
+
+def _warn_cython_unavailable() -> None:
+    """Issue an EfficiencyWarning once per session if Cython core is missing."""
+    global _cython_warning_issued
+    if not HAS_CYTHON and not _cython_warning_issued:
+        _cython_warning_issued = True
+        warnings.warn(
+            "Compiled Cython extensions (_core) are not available; falling back to "
+            "pure Python/NumPy implementation. Performance will be significantly slower. "
+            "To enable C-extension acceleration, compile via `pip install -e .` or build from source.",
+            EfficiencyWarning,
+            stacklevel=3,
+        )
+
+
+__all__ = [
+    "calculate_cost",
+    "check_medoids",
+    "EfficiencyWarning",
+    "HAS_CYTHON",
+]
 
 _SCIPY_METRIC_MAP = {
     "manhattan": "cityblock",
