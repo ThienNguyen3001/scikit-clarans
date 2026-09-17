@@ -36,7 +36,7 @@ from clarans._initialization import (
 try:
     from clarans import _core
 except ImportError:
-    _core = None
+    _core = None  # type: ignore[assignment]
 
 
 # ===========================================================================
