@@ -288,7 +288,11 @@ class FastCLARANS(CLARANS):
                 ]
             )
 
-            cand_row = X[candidate_idx : candidate_idx + 1]
+            cand_row = (
+                None
+                if self.metric == "precomputed"
+                else X[candidate_idx : candidate_idx + 1]
+            )
             d_xc = self._compute_1_vs_n(
                 cand_row, X, out=d_xc_buf, candidate_idx=candidate_idx
             )

@@ -501,9 +501,13 @@ class CLARANS(ClusterMixin, TransformerMixin, BaseEstimator):
             )
 
             if self.cost_evaluation == "delta":
-                cand_row = X[
-                    random_non_medoid_candidate : random_non_medoid_candidate + 1
-                ]
+                cand_row = (
+                    None
+                    if self.metric == "precomputed"
+                    else X[
+                        random_non_medoid_candidate : random_non_medoid_candidate + 1
+                    ]
+                )
                 d_xc = self._compute_1_vs_n(
                     cand_row, X, out=d_xc_buf, candidate_idx=random_non_medoid_candidate
                 )
@@ -615,6 +619,21 @@ class CLARANS(ClusterMixin, TransformerMixin, BaseEstimator):
             self._dist_engine = "precomputed"
             self._scipy_metric = None
             self._dm_instance = None
+            if not issparse(X):
+                n_s = X.shape[0]
+                sample_size = min(100, n_s * n_s)
+                rng = np.random.RandomState(42)
+                idx_i = rng.randint(0, n_s, size=sample_size)
+                idx_j = rng.randint(0, n_s, size=sample_size)
+                if np.allclose(X[idx_i, idx_j], X[idx_j, idx_i]):
+                    self._precomputed_source = X
+                    self._precomputed_is_sym = True
+                else:
+                    self._precomputed_source = np.ascontiguousarray(X.T)
+                    self._precomputed_is_sym = False
+            else:
+                self._precomputed_source = X
+                self._precomputed_is_sym = False
             return
 
         # 1. Try SciPy cdist for dense NumPy array
@@ -660,21 +679,24 @@ class CLARANS(ClusterMixin, TransformerMixin, BaseEstimator):
             return cdist(cand_row, X, metric=self._scipy_metric)[0]
         elif engine == "precomputed":
             if candidate_idx is not None:
-                col_data = X[:, candidate_idx]
-                col_arr = (
+                source = getattr(self, "_precomputed_source", X)
+                if isinstance(source, np.ndarray):
+                    return source[candidate_idx]
+                col_data = (
+                    source[candidate_idx]
+                    if getattr(self, "_precomputed_is_sym", False)
+                    else X[:, candidate_idx]
+                )
+                return (
                     col_data.toarray().ravel()
                     if hasattr(col_data, "toarray")
                     else np.asarray(col_data).ravel()
                 )
-            else:
-                col_arr = (
-                    cand_row.toarray().ravel()
-                    if hasattr(cand_row, "toarray")
-                    else np.asarray(cand_row).ravel()
-                )
-            if out is not None:
-                np.copyto(out, col_arr)
-                return out
+            col_arr = (
+                cand_row.toarray().ravel()
+                if hasattr(cand_row, "toarray")
+                else np.asarray(cand_row).ravel()
+            )
             return col_arr
         elif engine == "distance_metric" and self._dm_instance is not None:
             res = self._dm_instance.pairwise(cand_row, X)[0]
@@ -852,6 +874,11 @@ class CLARANS(ClusterMixin, TransformerMixin, BaseEstimator):
                 self.labels_, _ = pairwise_distances_argmin_min(
                     X, self.cluster_centers_, metric=self.metric
                 )
+
+        if hasattr(self, "_precomputed_source"):
+            del self._precomputed_source
+        if hasattr(self, "_precomputed_is_sym"):
+            del self._precomputed_is_sym
 
         return self
 
