@@ -128,6 +128,27 @@ class TestCythonCore(unittest.TestCase):
         self.assertAlmostEqual(py_best_val, cy_best_val, places=4)
         np.testing.assert_allclose(py_delta_arr, cy_delta_arr, rtol=1e-4)
 
+    def test_fastpam1_delta_with_preallocated_buffer(self):
+        n_samples = 250
+        n_clusters = 5
+        near_idx_map = self.rng.randint(0, n_clusters, size=n_samples).astype(np.intp)
+        near_dist = self.rng.uniform(0.5, 4.0, size=n_samples).astype(np.float64)
+        second_dist = near_dist + self.rng.uniform(0.2, 3.0, size=n_samples).astype(np.float64)
+        d_xc = self.rng.uniform(0.1, 6.0, size=n_samples).astype(np.float64)
+
+        buf = np.zeros(n_clusters, dtype=np.float64)
+        cy_m, cy_val, cy_arr = _core.fastpam1_delta(
+            near_idx_map, near_dist, second_dist, d_xc, n_samples, n_clusters, buf
+        )
+        cy_m_nobuf, cy_val_nobuf, cy_arr_nobuf = _core.fastpam1_delta(
+            near_idx_map, near_dist, second_dist, d_xc, n_samples, n_clusters
+        )
+
+        self.assertEqual(cy_m, cy_m_nobuf)
+        self.assertAlmostEqual(cy_val, cy_val_nobuf, places=12)
+        np.testing.assert_allclose(cy_arr, cy_arr_nobuf, rtol=1e-12)
+        np.testing.assert_allclose(buf, cy_arr_nobuf, rtol=1e-12)
+
     # -----------------------------------------------------------------------
     # 3. update_cache_2min vs NumPy
     # -----------------------------------------------------------------------

@@ -186,129 +186,17 @@ class FastCLARANS(CLARANS):
         best_n_swaps = 0
 
         deterministic_medoids = self._prepare_initial_medoids(X, random_state)
-
         self._setup_distance_engine(X)
 
+        d_xc_buf = np.empty(n_samples, dtype=np.float64)
+        delta_arr_buf = np.zeros(self.n_clusters, dtype=np.float64)
+
         for loc_idx in range(self.num_local):
-            if deterministic_medoids is not None:
-                current_medoids_indices = deterministic_medoids.copy()
-            else:
-                current_medoids_indices = self._initialize_medoids(X, random_state)
-            current_medoids_indices.sort()
-            
-            near_idx_map, near_dist, second_dist = self._update_cache(
-                X, current_medoids_indices
+            current_cost, current_medoids_indices, eval_count, swap_count = (
+                self._single_local_search(
+                    X, random_state, deterministic_medoids, d_xc_buf, delta_arr_buf
+                )
             )
-            current_cost: float = float(np.sum(near_dist))
-
-            # Maintain persistent non-medoid mask across iterations to avoid
-            # re-allocating O(n) memory and rescanning every single iteration.
-            non_medoid_mask = np.ones(n_samples, dtype=bool)
-            non_medoid_mask[current_medoids_indices] = False
-            available_candidates = np.flatnonzero(non_medoid_mask)
-
-            i = 0
-            swap_count = 0
-            eval_count = 0
-
-            while i < self.max_neighbors_:
-                eval_count += 1
-                if available_candidates.size == 0:
-                    break
-
-                candidate_idx = random_state.choice(available_candidates)
-
-                # Compute distances from candidate to all points
-                cand_row = X[candidate_idx : candidate_idx + 1]
-                d_xc = self._compute_1_vs_n(cand_row, X)
-
-                if self.n_clusters == 1:
-                    candidate_cost = float(np.sum(d_xc))
-                    min_delta = candidate_cost - current_cost
-                    min_delta_idx = 0
-                elif (
-                    _core is not None
-                    and isinstance(d_xc, np.ndarray)
-                    and d_xc.flags.c_contiguous
-                    and d_xc.dtype in (np.float64, np.float32)
-                    and isinstance(near_dist, np.ndarray)
-                    and near_dist.flags.c_contiguous
-                    and isinstance(second_dist, np.ndarray)
-                    and second_dist.flags.c_contiguous
-                    and near_dist.dtype == d_xc.dtype
-                ):
-                    near_idx_c = np.ascontiguousarray(near_idx_map, dtype=np.intp)
-                    best_m, min_delta_val, _ = _core.fastpam1_delta(
-                        near_idx_c,
-                        near_dist,
-                        second_dist,
-                        d_xc,
-                        n_samples,
-                        self.n_clusters,
-                    )
-                    min_delta_idx = int(best_m)
-                    min_delta = float(min_delta_val)
-                else:
-                    removal_loss = np.zeros(self.n_clusters)
-                    diff = second_dist - near_dist
-                    with np.errstate(invalid="ignore"):
-                        removal_loss += np.bincount(
-                            near_idx_map, weights=diff, minlength=self.n_clusters
-                        )
-
-                    mask_better_than_nearest = d_xc < near_dist
-                    delta_td_plus_xc: float = float(
-                        np.sum(
-                            d_xc[mask_better_than_nearest]
-                            - near_dist[mask_better_than_nearest]
-                        )
-                    )
-
-                    total_delta = removal_loss + delta_td_plus_xc
-
-                    mask_better_than_second = d_xc < second_dist
-
-                    term1 = (
-                        near_dist[mask_better_than_nearest]
-                        - second_dist[mask_better_than_nearest]
-                    )
-                    idx1 = near_idx_map[mask_better_than_nearest]
-                    with np.errstate(invalid="ignore"):
-                        total_delta += np.bincount(
-                            idx1, weights=term1, minlength=self.n_clusters
-                        )
-
-                    mask_case2 = (~mask_better_than_nearest) & mask_better_than_second
-                    term2 = d_xc[mask_case2] - second_dist[mask_case2]
-                    idx2 = near_idx_map[mask_case2]
-                    with np.errstate(invalid="ignore"):
-                        total_delta += np.bincount(
-                            idx2, weights=term2, minlength=self.n_clusters
-                        )
-
-                    min_delta_idx = int(np.argmin(total_delta))
-                    min_delta = total_delta[min_delta_idx]
-
-                if min_delta < _DELTA_TOL:
-                    old_medoid = current_medoids_indices[min_delta_idx]
-                    current_medoids_indices[min_delta_idx] = candidate_idx
-                    current_medoids_indices.sort()
-
-                    # Update nearest/second caches after an accepted swap
-                    near_idx_map, near_dist, second_dist = self._update_cache(
-                        X, current_medoids_indices
-                    )
-                    current_cost = float(np.sum(near_dist))
-
-                    # Update persistent mask on accepted swap
-                    non_medoid_mask[old_medoid] = True
-                    non_medoid_mask[candidate_idx] = False
-                    available_candidates = np.flatnonzero(non_medoid_mask)
-
-                    i = 0
-                    swap_count += 1
-                else:
-                    i += 1
 
             if current_cost < best_cost + _DELTA_TOL:
                 best_cost = current_cost
@@ -320,3 +208,137 @@ class FastCLARANS(CLARANS):
         self.n_swaps_ = best_n_swaps
 
         return self._finalize_fit(X, best_cost, best_medoids)
+
+    def _single_local_search(
+        self,
+        X: np.ndarray | "spmatrix",
+        random_state: np.random.RandomState,
+        deterministic_medoids: np.ndarray | None,
+        d_xc_buf: np.ndarray | None = None,
+        delta_arr_buf: np.ndarray | None = None,
+    ) -> tuple[float, np.ndarray, int, int]:
+        """Perform a single local search from initial medoids to a local optimum."""
+        n_samples = X.shape[0]
+        if deterministic_medoids is not None:
+            current_medoids_indices = deterministic_medoids.copy()
+        else:
+            current_medoids_indices = self._initialize_medoids(X, random_state)
+        current_medoids_indices.sort()
+
+        medoids_dist = self._compute_medoids_distances(X, current_medoids_indices)
+        if not medoids_dist.flags.c_contiguous:
+            medoids_dist = np.ascontiguousarray(medoids_dist)
+        near_idx_map, near_dist, second_dist = self._compute_2min(medoids_dist)
+        current_cost: float = float(np.sum(near_dist))
+
+        non_medoid_mask = np.ones(n_samples, dtype=bool)
+        non_medoid_mask[current_medoids_indices] = False
+        available_candidates = np.flatnonzero(non_medoid_mask)
+
+        i = 0
+        swap_count = 0
+        eval_count = 0
+
+        while i < self.max_neighbors_:
+            eval_count += 1
+            if available_candidates.size == 0:
+                break
+
+            candidate_idx = int(
+                available_candidates[
+                    random_state.randint(0, len(available_candidates))
+                ]
+            )
+
+            cand_row = X[candidate_idx : candidate_idx + 1]
+            d_xc = self._compute_1_vs_n(cand_row, X, out=d_xc_buf)
+
+            if self.n_clusters == 1:
+                candidate_cost = float(np.sum(d_xc))
+                min_delta = candidate_cost - current_cost
+                min_delta_idx = 0
+            elif (
+                _core is not None
+                and isinstance(d_xc, np.ndarray)
+                and d_xc.flags.c_contiguous
+                and d_xc.dtype in (np.float64, np.float32)
+                and isinstance(near_dist, np.ndarray)
+                and near_dist.flags.c_contiguous
+                and isinstance(second_dist, np.ndarray)
+                and second_dist.flags.c_contiguous
+                and near_dist.dtype == d_xc.dtype
+                and isinstance(near_idx_map, np.ndarray)
+                and near_idx_map.flags.c_contiguous
+            ):
+                best_m, min_delta_val, _ = _core.fastpam1_delta(
+                    near_idx_map,
+                    near_dist,
+                    second_dist,
+                    d_xc,
+                    n_samples,
+                    self.n_clusters,
+                    delta_arr_buf,
+                )
+                min_delta_idx = int(best_m)
+                min_delta = float(min_delta_val)
+            else:
+                removal_loss = np.zeros(self.n_clusters)
+                diff = second_dist - near_dist
+                with np.errstate(invalid="ignore"):
+                    removal_loss += np.bincount(
+                        near_idx_map, weights=diff, minlength=self.n_clusters
+                    )
+
+                mask_better_than_nearest = d_xc < near_dist
+                delta_td_plus_xc: float = float(
+                    np.sum(
+                        d_xc[mask_better_than_nearest]
+                        - near_dist[mask_better_than_nearest]
+                    )
+                )
+
+                total_delta = removal_loss + delta_td_plus_xc
+
+                mask_better_than_second = d_xc < second_dist
+
+                term1 = (
+                    near_dist[mask_better_than_nearest]
+                    - second_dist[mask_better_than_nearest]
+                )
+                idx1 = near_idx_map[mask_better_than_nearest]
+                with np.errstate(invalid="ignore"):
+                    total_delta += np.bincount(
+                        idx1, weights=term1, minlength=self.n_clusters
+                    )
+
+                mask_case2 = (~mask_better_than_nearest) & mask_better_than_second
+                term2 = d_xc[mask_case2] - second_dist[mask_case2]
+                idx2 = near_idx_map[mask_case2]
+                with np.errstate(invalid="ignore"):
+                    total_delta += np.bincount(
+                        idx2, weights=term2, minlength=self.n_clusters
+                    )
+
+                min_delta_idx = int(np.argmin(total_delta))
+                min_delta = total_delta[min_delta_idx]
+
+            if min_delta < _DELTA_TOL:
+                old_medoid = current_medoids_indices[min_delta_idx]
+                current_medoids_indices[min_delta_idx] = candidate_idx
+
+                # Incremental distance matrix update in O(1) distance calls
+                medoids_dist[:, min_delta_idx] = d_xc
+                near_idx_map, near_dist, second_dist = self._compute_2min(medoids_dist)
+                current_cost = float(np.sum(near_dist))
+
+                # Update persistent mask on accepted swap
+                non_medoid_mask[old_medoid] = True
+                non_medoid_mask[candidate_idx] = False
+                available_candidates = np.flatnonzero(non_medoid_mask)
+
+                i = 0
+                swap_count += 1
+            else:
+                i += 1
+
+        return current_cost, current_medoids_indices, eval_count, swap_count

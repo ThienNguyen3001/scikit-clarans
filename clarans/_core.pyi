@@ -19,6 +19,7 @@ def fastpam1_delta(
     d_xc: np.ndarray,
     n_samples: int,
     n_clusters: int,
+    delta_buf: np.ndarray | None = None,
 ) -> Tuple[int, float, np.ndarray]: ...
 
 def update_cache_2min(

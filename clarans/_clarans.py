@@ -380,132 +380,16 @@ class CLARANS(ClusterMixin, TransformerMixin, BaseEstimator):
         best_n_swaps = 0
 
         deterministic_medoids = self._prepare_initial_medoids(X, random_state)
-
         self._setup_distance_engine(X)
 
+        d_xc_buf = np.empty(n_samples, dtype=np.float64)
+
         for loc_idx in range(self.num_local):
-            if deterministic_medoids is not None:
-                current_medoids_indices = deterministic_medoids.copy()
-            else:
-                current_medoids_indices = self._initialize_medoids(X, random_state)
-
-            if self.cost_evaluation == "delta":
-                near_idx_map, near_dist, second_dist = self._update_cache(
-                    X, current_medoids_indices
+            current_cost, current_medoids_indices, eval_count, swap_count = (
+                self._single_local_search(
+                    X, random_state, deterministic_medoids, d_xc_buf
                 )
-                current_cost = float(np.sum(near_dist))
-            else:
-                current_cost = calculate_cost(X, current_medoids_indices, self.metric)
-
-            # Maintain persistent non-medoid mask across iterations to avoid
-            # re-allocating O(n) memory and rescanning every single iteration.
-            non_medoid_mask = np.ones(n_samples, dtype=bool)
-            non_medoid_mask[current_medoids_indices] = False
-            available_candidates = np.flatnonzero(non_medoid_mask)
-
-            i = 0
-            swap_count = 0
-            eval_count = 0
-
-            while i < self.max_neighbors_:
-                eval_count += 1
-                random_medoid_pos = random_state.randint(0, self.n_clusters)
-
-                if available_candidates.size == 0:
-                    break
-
-                random_non_medoid_candidate = random_state.choice(available_candidates)
-
-                if self.cost_evaluation == "delta":
-                    cand_row = X[
-                        random_non_medoid_candidate : random_non_medoid_candidate + 1
-                    ]
-                    d_xc = self._compute_1_vs_n(cand_row, X)
-
-                    if self.n_clusters == 1:
-                        candidate_cost = float(np.sum(d_xc))
-                        total_delta = candidate_cost - current_cost
-                    elif (
-                        _core is not None
-                        and isinstance(d_xc, np.ndarray)
-                        and d_xc.flags.c_contiguous
-                        and d_xc.dtype in (np.float64, np.float32)
-                        and isinstance(near_dist, np.ndarray)
-                        and near_dist.flags.c_contiguous
-                        and isinstance(second_dist, np.ndarray)
-                        and second_dist.flags.c_contiguous
-                        and near_dist.dtype == d_xc.dtype
-                    ):
-                        near_idx_c = np.ascontiguousarray(near_idx_map, dtype=np.intp)
-                        total_delta = float(
-                            _core.clarans_delta(
-                                near_idx_c,
-                                near_dist,
-                                second_dist,
-                                d_xc,
-                                random_medoid_pos,
-                                n_samples,
-                            )
-                        )
-                    else:
-                        is_assigned_to_m = near_idx_map == random_medoid_pos
-                        delta_assigned = (
-                            np.minimum(
-                                second_dist[is_assigned_to_m], d_xc[is_assigned_to_m]
-                            )
-                            - near_dist[is_assigned_to_m]
-                        )
-                        delta_others = np.minimum(
-                            0.0,
-                            d_xc[~is_assigned_to_m] - near_dist[~is_assigned_to_m],
-                        )
-                        total_delta = float(
-                            np.sum(delta_assigned) + np.sum(delta_others)
-                        )
-
-                    if total_delta < _DELTA_TOL:
-                        old_medoid = current_medoids_indices[random_medoid_pos]
-                        current_medoids_indices[random_medoid_pos] = (
-                            random_non_medoid_candidate
-                        )
-                        near_idx_map, near_dist, second_dist = self._update_cache(
-                            X, current_medoids_indices
-                        )
-                        current_cost = float(np.sum(near_dist))
-
-                        # Update persistent mask on accepted swap
-                        non_medoid_mask[old_medoid] = True
-                        non_medoid_mask[random_non_medoid_candidate] = False
-                        available_candidates = np.flatnonzero(non_medoid_mask)
-
-                        i = 0
-                        swap_count += 1
-                    else:
-                        i += 1
-                else:
-                    neighbor_medoids_indices = current_medoids_indices.copy()
-                    neighbor_medoids_indices[random_medoid_pos] = (
-                        random_non_medoid_candidate
-                    )
-
-                    neighbor_cost = calculate_cost(
-                        X, neighbor_medoids_indices, self.metric
-                    )
-
-                    if neighbor_cost < current_cost + _DELTA_TOL:
-                        old_medoid = current_medoids_indices[random_medoid_pos]
-                        current_medoids_indices = neighbor_medoids_indices
-                        current_cost = neighbor_cost
-
-                        # Update persistent mask on accepted swap
-                        non_medoid_mask[old_medoid] = True
-                        non_medoid_mask[random_non_medoid_candidate] = False
-                        available_candidates = np.flatnonzero(non_medoid_mask)
-
-                        i = 0
-                        swap_count += 1
-                    else:
-                        i += 1
+            )
 
             if current_cost < best_cost + _DELTA_TOL:
                 best_cost = current_cost
@@ -517,6 +401,154 @@ class CLARANS(ClusterMixin, TransformerMixin, BaseEstimator):
         self.n_swaps_ = best_n_swaps
 
         return self._finalize_fit(X, best_cost, best_medoids)
+
+    def _single_local_search(
+        self,
+        X: np.ndarray | "spmatrix",
+        random_state: np.random.RandomState,
+        deterministic_medoids: np.ndarray | None,
+        d_xc_buf: np.ndarray | None = None,
+    ) -> tuple[float, np.ndarray, int, int]:
+        """Perform a single local search from initial medoids to a local optimum."""
+        n_samples = X.shape[0]
+        if deterministic_medoids is not None:
+            current_medoids_indices = deterministic_medoids.copy()
+        else:
+            current_medoids_indices = self._initialize_medoids(X, random_state)
+
+        if self.cost_evaluation == "delta":
+            medoids_dist = self._compute_medoids_distances(X, current_medoids_indices)
+            if not medoids_dist.flags.c_contiguous:
+                medoids_dist = np.ascontiguousarray(medoids_dist)
+            near_idx_map, near_dist, second_dist = self._compute_2min(medoids_dist)
+            current_cost = float(np.sum(near_dist))
+        else:
+            medoids_dist = None
+            current_cost = calculate_cost(X, current_medoids_indices, self.metric)
+            near_idx_map = None
+            near_dist = None
+            second_dist = None
+
+        # Maintain persistent non-medoid mask across iterations
+        non_medoid_mask = np.ones(n_samples, dtype=bool)
+        non_medoid_mask[current_medoids_indices] = False
+        available_candidates = np.flatnonzero(non_medoid_mask)
+
+        i = 0
+        swap_count = 0
+        eval_count = 0
+
+        while i < self.max_neighbors_:
+            eval_count += 1
+            random_medoid_pos = int(random_state.randint(0, self.n_clusters))
+
+            if available_candidates.size == 0:
+                break
+
+            # Fast direct index draw matching random_state.choice 100% bit-exact
+            random_non_medoid_candidate = int(
+                available_candidates[
+                    random_state.randint(0, len(available_candidates))
+                ]
+            )
+
+            if self.cost_evaluation == "delta":
+                cand_row = X[
+                    random_non_medoid_candidate : random_non_medoid_candidate + 1
+                ]
+                d_xc = self._compute_1_vs_n(cand_row, X, out=d_xc_buf)
+
+                if self.n_clusters == 1:
+                    candidate_cost = float(np.sum(d_xc))
+                    total_delta = candidate_cost - current_cost
+                elif (
+                    _core is not None
+                    and isinstance(d_xc, np.ndarray)
+                    and d_xc.flags.c_contiguous
+                    and d_xc.dtype in (np.float64, np.float32)
+                    and isinstance(near_dist, np.ndarray)
+                    and near_dist.flags.c_contiguous
+                    and isinstance(second_dist, np.ndarray)
+                    and second_dist.flags.c_contiguous
+                    and near_dist.dtype == d_xc.dtype
+                    and isinstance(near_idx_map, np.ndarray)
+                    and near_idx_map.flags.c_contiguous
+                ):
+                    total_delta = float(
+                        _core.clarans_delta(
+                            near_idx_map,
+                            near_dist,
+                            second_dist,
+                            d_xc,
+                            random_medoid_pos,
+                            n_samples,
+                        )
+                    )
+                else:
+                    assert near_idx_map is not None
+                    assert near_dist is not None
+                    assert second_dist is not None
+                    is_assigned_to_m = near_idx_map == random_medoid_pos
+                    delta_assigned = (
+                        np.minimum(
+                            second_dist[is_assigned_to_m], d_xc[is_assigned_to_m]
+                        )
+                        - near_dist[is_assigned_to_m]
+                    )
+                    delta_others = np.minimum(
+                        0.0,
+                        d_xc[~is_assigned_to_m] - near_dist[~is_assigned_to_m],
+                    )
+                    total_delta = float(
+                        np.sum(delta_assigned) + np.sum(delta_others)
+                    )
+
+                if total_delta < _DELTA_TOL:
+                    old_medoid = current_medoids_indices[random_medoid_pos]
+                    current_medoids_indices[random_medoid_pos] = (
+                        random_non_medoid_candidate
+                    )
+
+                    # Incremental update: update only the swapped column in O(1) distance calls
+                    assert medoids_dist is not None
+                    medoids_dist[:, random_medoid_pos] = d_xc
+                    near_idx_map, near_dist, second_dist = self._compute_2min(medoids_dist)
+                    current_cost = float(np.sum(near_dist))
+
+                    # Update persistent mask on accepted swap
+                    non_medoid_mask[old_medoid] = True
+                    non_medoid_mask[random_non_medoid_candidate] = False
+                    available_candidates = np.flatnonzero(non_medoid_mask)
+
+                    i = 0
+                    swap_count += 1
+                else:
+                    i += 1
+            else:
+                neighbor_medoids_indices = current_medoids_indices.copy()
+                neighbor_medoids_indices[random_medoid_pos] = (
+                    random_non_medoid_candidate
+                )
+
+                neighbor_cost = calculate_cost(
+                    X, neighbor_medoids_indices, self.metric
+                )
+
+                if neighbor_cost < current_cost + _DELTA_TOL:
+                    old_medoid = current_medoids_indices[random_medoid_pos]
+                    current_medoids_indices = neighbor_medoids_indices
+                    current_cost = neighbor_cost
+
+                    non_medoid_mask[old_medoid] = True
+                    non_medoid_mask[random_non_medoid_candidate] = False
+                    available_candidates = np.flatnonzero(non_medoid_mask)
+
+                    i = 0
+                    swap_count += 1
+                else:
+                    i += 1
+
+        return current_cost, current_medoids_indices, eval_count, swap_count
 
     def _setup_distance_engine(self, X: np.ndarray | "spmatrix") -> None:
         """Determine the most efficient distance calculation engine.
@@ -560,47 +592,49 @@ class CLARANS(ClusterMixin, TransformerMixin, BaseEstimator):
         self._scipy_metric = None
         self._dm_instance = None
 
-    def _compute_1_vs_n(self, cand_row: Any, X: np.ndarray | "spmatrix") -> np.ndarray:
+    def _compute_1_vs_n(
+        self,
+        cand_row: Any,
+        X: np.ndarray | "spmatrix",
+        out: np.ndarray | None = None,
+    ) -> np.ndarray:
         """Compute distances from a single candidate sample to all samples in X."""
         engine = getattr(self, "_dist_engine", "pairwise")
         if engine == "cdist":
+            if out is not None and out.dtype == np.float64:
+                cdist(cand_row, X, metric=self._scipy_metric, out=out.reshape(1, -1))
+                return out
             return cdist(cand_row, X, metric=self._scipy_metric)[0]
-        elif engine == "distance_metric" and self._dm_instance is not None:
-            return self._dm_instance.pairwise(cand_row, X)[0]
         elif engine == "precomputed":
-            return (
+            row_arr = (
                 cand_row.toarray().ravel()
                 if hasattr(cand_row, "toarray")
                 else np.asarray(cand_row).ravel()
             )
+            if out is not None:
+                np.copyto(out, row_arr)
+                return out
+            return row_arr
+        elif engine == "distance_metric" and self._dm_instance is not None:
+            res = self._dm_instance.pairwise(cand_row, X)[0]
+            if out is not None:
+                np.copyto(out, res)
+                return out
+            return res
         else:
-            return pairwise_distances(cand_row, X, metric=self.metric).ravel()
+            res = pairwise_distances(cand_row, X, metric=self.metric).ravel()
+            if out is not None:
+                np.copyto(out, res)
+                return out
+            return res
 
-    def _update_cache(
+    def _compute_medoids_distances(
         self, X: np.ndarray | "spmatrix", medoids_indices: Sequence[int] | np.ndarray
-    ) -> tuple[np.ndarray, np.ndarray, np.ndarray]:
-        """Compute nearest and second-nearest medoid information on-the-fly.
-
-        Parameters
-        ----------
-        X : array-like of shape (n_samples, n_features)
-            The data matrix.
-        medoids_indices : array-like of shape (n_clusters,)
-            Indices of the current medoids.
-
-        Returns
-        -------
-        near_idx_map : ndarray of shape (n_samples,)
-            Index (0..k-1) of the nearest medoid for each sample.
-        near_dist : ndarray of shape (n_samples,)
-            Distance from each sample to its nearest medoid.
-        second_dist : ndarray of shape (n_samples,)
-            Distance from each sample to its second nearest medoid.
-        """
-        n_samples = X.shape[0]
+    ) -> np.ndarray:
+        """Compute distances from all samples in X to the given medoids."""
         if self.metric == "precomputed":
             sub_mat = X[:, medoids_indices]
-            subD = (
+            return (
                 sub_mat.toarray()
                 if hasattr(sub_mat, "toarray")
                 else np.asarray(sub_mat)
@@ -609,12 +643,17 @@ class CLARANS(ClusterMixin, TransformerMixin, BaseEstimator):
             medoids = X[medoids_indices]
             engine = getattr(self, "_dist_engine", "pairwise")
             if engine == "cdist" and isinstance(X, np.ndarray) and not issparse(X):
-                subD = cdist(X, medoids, metric=self._scipy_metric)
+                return cdist(X, medoids, metric=self._scipy_metric)
             elif engine == "distance_metric" and self._dm_instance is not None:
-                subD = self._dm_instance.pairwise(X, medoids)
+                return self._dm_instance.pairwise(X, medoids)
             else:
-                subD = pairwise_distances(X, medoids, metric=self.metric)
+                return pairwise_distances(X, medoids, metric=self.metric)
 
+    def _compute_2min(
+        self, subD: np.ndarray
+    ) -> tuple[np.ndarray, np.ndarray, np.ndarray]:
+        """Compute nearest and second-nearest medoid info from subD distance matrix."""
+        n_samples = subD.shape[0]
         if self.n_clusters >= 2:
             if (
                 _core is not None
@@ -637,6 +676,15 @@ class CLARANS(ClusterMixin, TransformerMixin, BaseEstimator):
             near_idx_map = np.zeros(n_samples, dtype=int)
 
         return near_idx_map, near_dist, second_dist
+
+    def _update_cache(
+        self, X: np.ndarray | "spmatrix", medoids_indices: Sequence[int] | np.ndarray
+    ) -> tuple[np.ndarray, np.ndarray, np.ndarray]:
+        """Compute nearest and second-nearest medoid information on-the-fly."""
+        subD = self._compute_medoids_distances(X, medoids_indices)
+        if not subD.flags.c_contiguous:
+            subD = np.ascontiguousarray(subD)
+        return self._compute_2min(subD)
 
     def _validate_input_and_params(self, X):
         """Validate estimator parameters and input data array."""

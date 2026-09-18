@@ -69,21 +69,33 @@ def fastpam1_delta(
     const floating[::1] d_xc,
     Py_ssize_t n_samples,
     Py_ssize_t n_clusters,
+    floating[::1] delta_buf = None,
 ):
     """
     Compute FastPAM1 delta cost for all k clusters in a single O(n) pass.
     Replaces 3 np.bincount calls and 3 boolean masks with a single pass.
+    If delta_buf is provided, reuses it with zero Python allocations.
     """
     cdef:
-        cnp.ndarray[floating, ndim=1] total_delta_np = np.zeros(
-            n_clusters, dtype=np.float64 if floating is double else np.float32
-        )
-        floating[::1] delta_arr = total_delta_np
+        cnp.ndarray[floating, ndim=1] total_delta_np = None
+        floating[::1] delta_arr
         floating delta_td = 0.0
         Py_ssize_t j, m, best_m = 0
         floating d1, d2, dc, best_val
 
+    if delta_buf is None:
+        total_delta_np = np.zeros(
+            n_clusters, dtype=np.float64 if floating is double else np.float32
+        )
+        delta_arr = total_delta_np
+    else:
+        delta_arr = delta_buf
+
     with nogil:
+        if delta_buf is not None:
+            for m in range(n_clusters):
+                delta_arr[m] = 0.0
+
         for j in range(n_samples):
             m = near_idx_map[j]
             d1 = near_dist[j]
@@ -106,7 +118,7 @@ def fastpam1_delta(
                 best_val = delta_arr[m]
                 best_m = m
 
-    return best_m, best_val, total_delta_np
+    return best_m, best_val, total_delta_np if total_delta_np is not None else np.asarray(delta_arr)
 
 
 # ===========================================================================
