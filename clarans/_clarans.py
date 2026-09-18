@@ -17,7 +17,12 @@ from ._initialization import (
     initialize_heuristic,
     initialize_k_medoids_plus_plus,
 )
-from .utils import _SCIPY_METRIC_MAP, _warn_cython_unavailable, calculate_cost
+from .utils import (
+    _SCIPY_METRIC_MAP,
+    _warn_cython_unavailable,
+    calculate_cost,
+    check_medoids,
+)
 
 try:
     from sklearn.metrics._dist_metrics import METRIC_MAPPING64
@@ -26,14 +31,18 @@ try:
 except ImportError:
     _DM_METRICS = set()
 
-_CDIST_EXTRA_METRICS = {"jensenshannon", "kulczynski1"}
+_CDIST_EXTRA_METRICS = {"jensenshannon"}
+_EXCLUDED_METRICS = {"kulczynski1", "wminkowski", "mahalanobis"}
 
 _ALL_VALID_METRICS = frozenset(
-    set(_VALID_METRICS)
-    | _DM_METRICS
-    | _CDIST_EXTRA_METRICS
-    | {"precomputed"}
-    | set(_SCIPY_METRIC_MAP.keys())
+    (
+        set(_VALID_METRICS)
+        | _DM_METRICS
+        | _CDIST_EXTRA_METRICS
+        | {"precomputed"}
+        | set(_SCIPY_METRIC_MAP.keys())
+    )
+    - _EXCLUDED_METRICS
 )
 
 try:
@@ -267,25 +276,42 @@ class CLARANS(ClusterMixin, TransformerMixin, BaseEstimator):
                 X, self.n_clusters, self.metric
             )
         elif hasattr(self.init, "__array__") or isinstance(self.init, list):
-            init_centers = check_array(self.init)
-            if init_centers.shape != (self.n_clusters, n_features):
-                raise ValueError(
-                    f"init array must be of shape ({self.n_clusters}, {n_features})"
-                )
+            init_arr = np.asarray(self.init)
+            if self.metric == "precomputed":
+                if (
+                    init_arr.ndim == 1
+                    and len(init_arr) == self.n_clusters
+                    and np.issubdtype(init_arr.dtype, np.integer)
+                ):
+                    current_medoids_indices = check_medoids(init_arr, n_samples=n_samples)
+                    return np.array(current_medoids_indices, dtype=int)
 
-            if not issparse(X) and not issparse(init_centers):
-                scipy_metric = _SCIPY_METRIC_MAP.get(self.metric, self.metric)
-                try:
-                    D = cdist(init_centers, X, metric=scipy_metric)
-                    current_medoids_indices = np.argmin(D, axis=1)
-                except Exception:
+                init_centers = check_array(self.init)
+                if init_centers.shape != (self.n_clusters, n_features):
+                    raise ValueError(
+                        f"init array must be of shape ({self.n_clusters}, {n_features})"
+                    )
+                current_medoids_indices = np.argmin(init_centers, axis=1)
+            else:
+                init_centers = check_array(self.init)
+                if init_centers.shape != (self.n_clusters, n_features):
+                    raise ValueError(
+                        f"init array must be of shape ({self.n_clusters}, {n_features})"
+                    )
+
+                if not issparse(X) and not issparse(init_centers):
+                    scipy_metric = _SCIPY_METRIC_MAP.get(self.metric, self.metric)
+                    try:
+                        D = cdist(init_centers, X, metric=scipy_metric)
+                        current_medoids_indices = np.argmin(D, axis=1)
+                    except Exception:
+                        current_medoids_indices, _ = pairwise_distances_argmin_min(
+                            init_centers, X, metric=self.metric
+                        )
+                else:
                     current_medoids_indices, _ = pairwise_distances_argmin_min(
                         init_centers, X, metric=self.metric
                     )
-            else:
-                current_medoids_indices, _ = pairwise_distances_argmin_min(
-                    init_centers, X, metric=self.metric
-                )
 
             current_medoids_indices = np.array(current_medoids_indices, dtype=int)
 
@@ -385,14 +411,19 @@ class CLARANS(ClusterMixin, TransformerMixin, BaseEstimator):
             self.max_neighbors_ = int(self.max_neighbors)
 
         best_cost = np.inf
-        best_medoids = np.empty(self.n_clusters, dtype=int)
+        best_medoids = None
         best_n_iter = 0
         best_n_swaps = 0
 
         deterministic_medoids = self._prepare_initial_medoids(X, random_state)
         self._setup_distance_engine(X)
 
-        d_xc_buf = np.empty(n_samples, dtype=np.float64)
+        buf_dtype = (
+            np.float32
+            if (self.metric == "precomputed" and getattr(X, "dtype", None) == np.float32)
+            else np.float64
+        )
+        d_xc_buf = np.empty(n_samples, dtype=buf_dtype)
 
         for loc_idx in range(self.num_local):
             current_cost, current_medoids_indices, eval_count, swap_count = (
@@ -401,11 +432,18 @@ class CLARANS(ClusterMixin, TransformerMixin, BaseEstimator):
                 )
             )
 
-            if current_cost < best_cost + _DELTA_TOL:
+            tol = -max(1e-16, 1e-12 * abs(current_cost))
+            if loc_idx == 0 or current_cost < best_cost + tol:
                 best_cost = current_cost
                 best_medoids = current_medoids_indices.copy()
                 best_n_iter = eval_count
                 best_n_swaps = swap_count
+
+        if best_medoids is None or not np.isfinite(best_cost):
+            raise ValueError(
+                "Clustering failed: all local search iterations produced non-finite "
+                "costs (inf or NaN). Check input data or distance metric."
+            )
 
         self.n_iter_ = best_n_iter
         self.n_swaps_ = best_n_swaps
@@ -466,7 +504,9 @@ class CLARANS(ClusterMixin, TransformerMixin, BaseEstimator):
                 cand_row = X[
                     random_non_medoid_candidate : random_non_medoid_candidate + 1
                 ]
-                d_xc = self._compute_1_vs_n(cand_row, X, out=d_xc_buf)
+                d_xc = self._compute_1_vs_n(
+                    cand_row, X, out=d_xc_buf, candidate_idx=random_non_medoid_candidate
+                )
 
                 if self.n_clusters == 1:
                     candidate_cost = float(np.sum(d_xc))
@@ -513,7 +553,8 @@ class CLARANS(ClusterMixin, TransformerMixin, BaseEstimator):
                         np.sum(delta_assigned) + np.sum(delta_others)
                     )
 
-                if total_delta < _DELTA_TOL:
+                delta_tol = -max(1e-16, 1e-12 * abs(current_cost))
+                if total_delta < delta_tol:
                     old_medoid = current_medoids_indices[random_medoid_pos]
                     current_medoids_indices[random_medoid_pos] = (
                         random_non_medoid_candidate
@@ -544,7 +585,8 @@ class CLARANS(ClusterMixin, TransformerMixin, BaseEstimator):
                     X, neighbor_medoids_indices, self.metric
                 )
 
-                if neighbor_cost < current_cost + _DELTA_TOL:
+                delta_tol = -max(1e-16, 1e-12 * abs(current_cost))
+                if neighbor_cost < current_cost + delta_tol:
                     old_medoid = current_medoids_indices[random_medoid_pos]
                     current_medoids_indices = neighbor_medoids_indices
                     current_cost = neighbor_cost
@@ -607,8 +649,9 @@ class CLARANS(ClusterMixin, TransformerMixin, BaseEstimator):
         cand_row: Any,
         X: np.ndarray | "spmatrix",
         out: np.ndarray | None = None,
+        candidate_idx: int | None = None,
     ) -> np.ndarray:
-        """Compute distances from a single candidate sample to all samples in X."""
+        """Compute distances from all samples in X to a single candidate sample."""
         engine = getattr(self, "_dist_engine", "pairwise")
         if engine == "cdist":
             if out is not None and out.dtype == np.float64:
@@ -616,15 +659,23 @@ class CLARANS(ClusterMixin, TransformerMixin, BaseEstimator):
                 return out
             return cdist(cand_row, X, metric=self._scipy_metric)[0]
         elif engine == "precomputed":
-            row_arr = (
-                cand_row.toarray().ravel()
-                if hasattr(cand_row, "toarray")
-                else np.asarray(cand_row).ravel()
-            )
+            if candidate_idx is not None:
+                col_data = X[:, candidate_idx]
+                col_arr = (
+                    col_data.toarray().ravel()
+                    if hasattr(col_data, "toarray")
+                    else np.asarray(col_data).ravel()
+                )
+            else:
+                col_arr = (
+                    cand_row.toarray().ravel()
+                    if hasattr(cand_row, "toarray")
+                    else np.asarray(cand_row).ravel()
+                )
             if out is not None:
-                np.copyto(out, row_arr)
+                np.copyto(out, col_arr)
                 return out
-            return row_arr
+            return col_arr
         elif engine == "distance_metric" and self._dm_instance is not None:
             res = self._dm_instance.pairwise(cand_row, X)[0]
             if out is not None:
@@ -698,10 +749,15 @@ class CLARANS(ClusterMixin, TransformerMixin, BaseEstimator):
 
     def _validate_input_and_params(self, X):
         """Validate estimator parameters and input data array."""
-        if not isinstance(self.n_clusters, (int, np.integer)) or self.n_clusters < 1:
+        if (
+            not isinstance(self.n_clusters, (int, np.integer))
+            or isinstance(self.n_clusters, (bool, np.bool_))
+            or self.n_clusters < 1
+        ):
             raise ValueError(f"n_clusters must be >= 1; got {self.n_clusters}")
         if (
             not isinstance(self.num_local, (int, np.integer))
+            or isinstance(self.num_local, (bool, np.bool_))
             or self.num_local < 1
         ):
             raise ValueError(f"num_local must be >= 1; got {self.num_local}")

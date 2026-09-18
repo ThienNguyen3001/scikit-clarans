@@ -51,6 +51,9 @@ _SCIPY_METRIC_MAP = {
     "manhattan": "cityblock",
     "l1": "cityblock",
     "l2": "euclidean",
+    "infinity": "chebyshev",
+    "sokalmichener": "matching",
+    "p": "minkowski",
 }
 
 
@@ -78,7 +81,7 @@ def check_medoids(
     ------
     ValueError
         If `medoids` is empty, contains duplicate indices, has invalid dimensions,
-        or has indices outside the valid range [0, n_samples - 1].
+        contains negative indices, or has indices outside the valid range [0, n_samples - 1].
     TypeError
         If `medoids` contains non-integer elements.
     """
@@ -101,8 +104,13 @@ def check_medoids(
     if len(np.unique(medoids_arr)) != len(medoids_arr):
         raise ValueError("medoid_indices must not contain duplicate elements.")
 
+    if np.any(medoids_arr < 0):
+        raise ValueError(
+            f"All medoid indices must be non-negative (>= 0), got min={medoids_arr.min()}."
+        )
+
     if n_samples is not None:
-        if np.any(medoids_arr < 0) or np.any(medoids_arr >= n_samples):
+        if np.any(medoids_arr >= n_samples):
             raise ValueError(
                 f"All medoid indices must be within [0, {n_samples - 1}], "
                 f"got min={medoids_arr.min()}, max={medoids_arr.max()}."

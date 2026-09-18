@@ -10,7 +10,7 @@ import warnings
 import numpy as np
 from scipy.spatial.distance import cdist
 from scipy.sparse import issparse
-from sklearn.metrics import pairwise_distances
+from sklearn.metrics import DistanceMetric, pairwise_distances
 from sklearn.utils import check_random_state
 
 from .utils import _SCIPY_METRIC_MAP
@@ -18,19 +18,31 @@ from .utils import _SCIPY_METRIC_MAP
 
 def _compute_pairwise_distances(X, Y=None, metric="euclidean"):
     """Compute pairwise distances using cdist for dense arrays when possible,
-    falling back to scikit-learn's pairwise_distances."""
+    falling back to scikit-learn's DistanceMetric and pairwise_distances."""
+    scipy_metric = _SCIPY_METRIC_MAP.get(metric, metric) if isinstance(metric, str) else metric
+
     if not issparse(X) and (Y is None or not issparse(Y)):
-        scipy_metric = _SCIPY_METRIC_MAP.get(metric, metric)
         try:
             if Y is None:
                 return cdist(X, X, metric=scipy_metric)
             return cdist(X, Y, metric=scipy_metric)
         except Exception:
             pass
+    else:
+        # DistanceMetric directly supports sparse matrices for metrics like
+        # chebyshev, canberra, cityblock, etc.
+        if isinstance(scipy_metric, str):
+            try:
+                dm = DistanceMetric.get_metric(scipy_metric)
+                if Y is None:
+                    return dm.pairwise(X)
+                return dm.pairwise(X, Y)
+            except Exception:
+                pass
 
     if Y is None:
-        return pairwise_distances(X, metric=metric)
-    return pairwise_distances(X, Y, metric=metric)
+        return pairwise_distances(X, metric=scipy_metric)
+    return pairwise_distances(X, Y, metric=scipy_metric)
 
 
 try:
@@ -71,6 +83,12 @@ def initialize_heuristic(X, n_clusters, metric="euclidean"):
     Adapted from the scikit-learn-extra KMedoids implementation:
     https://scikit-learn-extra.readthedocs.io/en/stable/generated/sklearn_extra.cluster.KMedoids.html
     """
+    n_samples = X.shape[0]
+    if n_clusters >= n_samples:
+        raise ValueError(
+            f"n_clusters must be less than n_samples ({n_samples}); got {n_clusters}"
+        )
+
     if metric == "precomputed":
         D = X
     else:
@@ -119,6 +137,10 @@ def initialize_build(X, n_clusters, metric="euclidean"):
     https://scikit-learn-extra.readthedocs.io/en/stable/generated/sklearn_extra.cluster.KMedoids.html
     """
     n_samples = X.shape[0]
+    if n_clusters >= n_samples:
+        raise ValueError(
+            f"n_clusters must be less than n_samples ({n_samples}); got {n_clusters}"
+        )
 
     medoids = []
 
@@ -230,6 +252,10 @@ def initialize_k_medoids_plus_plus(
     """
     random_state = check_random_state(random_state)
     n_samples = X.shape[0]
+    if n_clusters >= n_samples:
+        raise ValueError(
+            f"n_clusters must be less than n_samples ({n_samples}); got {n_clusters}"
+        )
     medoid_indices = np.empty(n_clusters, dtype=int)
 
     if n_local_trials is None:

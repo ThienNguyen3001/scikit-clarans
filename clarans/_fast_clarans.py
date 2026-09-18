@@ -207,15 +207,20 @@ class FastCLARANS(CLARANS):
             self.max_neighbors_ = int(self.max_neighbors)
 
         best_cost = np.inf
-        best_medoids: np.ndarray = np.empty(self.n_clusters, dtype=int)
+        best_medoids: np.ndarray | None = None
         best_n_iter = 0
         best_n_swaps = 0
 
         deterministic_medoids = self._prepare_initial_medoids(X, random_state)
         self._setup_distance_engine(X)
 
-        d_xc_buf = np.empty(n_samples, dtype=np.float64)
-        delta_arr_buf = np.zeros(self.n_clusters, dtype=np.float64)
+        buf_dtype = (
+            np.float32
+            if (self.metric == "precomputed" and getattr(X, "dtype", None) == np.float32)
+            else np.float64
+        )
+        d_xc_buf = np.empty(n_samples, dtype=buf_dtype)
+        delta_arr_buf = np.zeros(self.n_clusters, dtype=buf_dtype)
 
         for loc_idx in range(self.num_local):
             current_cost, current_medoids_indices, eval_count, swap_count = (
@@ -224,11 +229,18 @@ class FastCLARANS(CLARANS):
                 )
             )
 
-            if current_cost < best_cost + _DELTA_TOL:
+            tol = -max(1e-16, 1e-12 * abs(current_cost))
+            if loc_idx == 0 or current_cost < best_cost + tol:
                 best_cost = current_cost
                 best_medoids = current_medoids_indices.copy()
                 best_n_iter = eval_count
                 best_n_swaps = swap_count
+
+        if best_medoids is None or not np.isfinite(best_cost):
+            raise ValueError(
+                f"Clustering failed: all local searches resulted in non-finite cost ({best_cost}). "
+                "Check your data for NaNs, infinities, zero vectors with cosine distance, or excessive outliers."
+            )
 
         self.n_iter_ = best_n_iter
         self.n_swaps_ = best_n_swaps
@@ -277,7 +289,9 @@ class FastCLARANS(CLARANS):
             )
 
             cand_row = X[candidate_idx : candidate_idx + 1]
-            d_xc = self._compute_1_vs_n(cand_row, X, out=d_xc_buf)
+            d_xc = self._compute_1_vs_n(
+                cand_row, X, out=d_xc_buf, candidate_idx=candidate_idx
+            )
 
             if self.n_clusters == 1:
                 candidate_cost = float(np.sum(d_xc))
@@ -296,6 +310,14 @@ class FastCLARANS(CLARANS):
                 and isinstance(near_idx_map, np.ndarray)
                 and near_idx_map.flags.c_contiguous
             ):
+                delta_buf_arg = (
+                    delta_arr_buf
+                    if (
+                        delta_arr_buf is not None
+                        and delta_arr_buf.dtype == near_dist.dtype
+                    )
+                    else None
+                )
                 best_m, min_delta_val, _ = _core.fastpam1_delta(
                     near_idx_map,
                     near_dist,
@@ -303,7 +325,7 @@ class FastCLARANS(CLARANS):
                     d_xc,
                     n_samples,
                     self.n_clusters,
-                    delta_arr_buf,
+                    delta_buf_arg,
                 )
                 min_delta_idx = int(best_m)
                 min_delta = float(min_delta_val)
@@ -348,7 +370,8 @@ class FastCLARANS(CLARANS):
                 min_delta_idx = int(np.argmin(total_delta))
                 min_delta = total_delta[min_delta_idx]
 
-            if min_delta < _DELTA_TOL:
+            delta_tol = -max(1e-16, 1e-12 * abs(current_cost))
+            if min_delta < delta_tol:
                 old_medoid = current_medoids_indices[min_delta_idx]
                 current_medoids_indices[min_delta_idx] = candidate_idx
 
