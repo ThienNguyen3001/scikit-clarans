@@ -126,7 +126,7 @@ Both estimators share core hyperparameters to balance execution speed and cluste
    * - ``max_neighbors``
      - Both
      - ``'auto'``
-     - Maximum non-improving neighbors to check per search. Defaults to :math:`\max(250, 1.25\% \times k(n-k))` in CLARANS and :math:`\max(250, 2.5\% \times (n-k))` in FastCLARANS.
+     - Maximum non-improving neighbors to check per search. Defaults to :math:`\max(250, 1.25\% \times k(n-k))` in CLARANS and :math:`\max(1, \lfloor 250/k \rfloor, 2.5\% \times (n-k))` in FastCLARANS.
    * - ``init``
      - Both
      - ``k-medoids++``
@@ -164,7 +164,8 @@ Practical Tuning Tips
      **Deterministic initialization**: Strategies such as ``build``, ``heuristic``, or explicit centroid arrays are deterministic. Setting ``num_local > 1`` with these strategies will start all local searches from the exact same medoids. It is recommended to use ``num_local=1`` with deterministic initialization to conserve compute resources.
 
 * **Candidate Exploration** (``max_neighbors``):
-  Leaving ``max_neighbors='auto'`` (the default) is strongly recommended for almost all use cases. It automatically adapts to the problem geometry based on empirical ratios from the original papers (:math:`1.25\% \times k(n-k)` in CLARANS and :math:`2.5\% \times (n-k)` in FastCLARANS). You only need to explicitly specify an integer for ``max_neighbors`` (e.g., ``max_neighbors=200``) if you must enforce a hard upper bound on execution time on very large datasets.
+  Leaving ``max_neighbors='auto'`` (the default) is strongly recommended for almost all use cases. It automatically adapts to the problem geometry based on empirical ratios from the original papers (:math:`\max(250, 1.25\% \times k(n-k))` in CLARANS and :math:`\max(1, \lfloor 250/k \rfloor, 2.5\% \times (n-k))` in FastCLARANS). Because each step in FastCLARANS evaluates all :math:`k` medoids at once, its proportional floor ensures equal search coverage without candidate explosion. You only need to explicitly specify an integer for ``max_neighbors`` (e.g., ``max_neighbors=200``) if you must enforce a hard upper bound on execution time on very large datasets.
+
 
 How It Works (Under the Hood)
 -----------------------------
