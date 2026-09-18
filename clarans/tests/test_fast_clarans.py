@@ -240,14 +240,14 @@ class TestFastCLARANS(unittest.TestCase):
         model = FastCLARANS(n_clusters=3, num_local=1, random_state=42)
         self.assertEqual(model.max_neighbors, "auto")
         model.fit(self.X)
-        expected = max(250, int(0.025 * (100 - 3)))
+        expected = max(1, int(250 / 3), int(0.025 * (100 - 3)))
         self.assertEqual(model.max_neighbors_, expected)
 
     def test_max_neighbors_explicit_auto(self):
         """Explicit max_neighbors='auto' should work identically to default in FastCLARANS."""
         model = FastCLARANS(n_clusters=3, num_local=1, max_neighbors="auto", random_state=42)
         model.fit(self.X)
-        expected = max(250, int(0.025 * (100 - 3)))
+        expected = max(1, int(250 / 3), int(0.025 * (100 - 3)))
         self.assertEqual(model.max_neighbors_, expected)
 
     def test_delta_tolerance_rejects_ghost_swaps(self):

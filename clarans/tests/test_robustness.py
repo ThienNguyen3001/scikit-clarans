@@ -606,15 +606,15 @@ class TestFastCLARANSSpecific(unittest.TestCase):
         """FastCLARANS auto formula should be 2.5% of (n - k), NOT CLARANS's 1.25% * k * (n-k)."""
         m = FastCLARANS(n_clusters=3, random_state=42)
         m.fit(self.X)
-        expected = max(250, int(0.025 * (100 - 3)))
+        expected = max(1, int(250 / 3), int(0.025 * (100 - 3)))
         self.assertEqual(m.max_neighbors_, expected)
 
-        # The values happen to both be 250 for n=100, k=3, so test with larger data
+        # The values differ between algorithms across sample sizes
         clarans_expected = max(250, int(0.0125 * 10 * (50000 - 10)))
         X_large, _ = make_blobs(n_samples=50000, centers=10, random_state=42)
         m_fast = FastCLARANS(n_clusters=10, random_state=42)
         m_fast.fit(X_large)
-        fast_expected = max(250, int(0.025 * (50000 - 10)))
+        fast_expected = max(1, int(250 / 10), int(0.025 * (50000 - 10)))
         self.assertEqual(m_fast.max_neighbors_, fast_expected)
         self.assertNotEqual(fast_expected, clarans_expected)
 

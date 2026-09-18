@@ -71,6 +71,16 @@ class CLARANS(ClusterMixin, TransformerMixin, BaseEstimator):
         requiring manual tuning. Higher values make the algorithm behave more
         like PAM (checking more neighbors); lower values make it faster.
 
+        .. note::
+            In CLARANS, each neighbor evaluation tests a single randomly chosen
+            pair ``(medoid, candidate)``. Setting a very small integer (e.g.
+            ``max_neighbors=40``) checks only a tiny fraction of the
+            ``k * (n - k)`` search space, which often causes CLARANS to fail
+            consecutive tests early and stop prematurely after only a few swaps.
+            Contrast this with ``FastCLARANS``, where each candidate step checks
+            all ``k`` medoids simultaneously via FastPAM1 delta caching.
+
+
     init : {'k-medoids++', 'random', 'heuristic', 'build', array-like}, default='k-medoids++'
         Strategy for selecting initial medoids (adapted from scikit-learn-extra):
 
