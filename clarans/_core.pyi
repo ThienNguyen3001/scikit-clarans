@@ -45,3 +45,10 @@ def kmedoids_pp_trials(
     n_local_trials: int,
     n_current_medoids: int,
 ) -> Tuple[int, float, np.ndarray]: ...
+
+def is_matrix_symmetric(
+    D: np.ndarray,
+    n_samples: int,
+    tol: float = 1e-10,
+) -> bool: ...
+

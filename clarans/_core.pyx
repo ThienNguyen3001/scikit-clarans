@@ -281,3 +281,37 @@ def kmedoids_pp_trials(
                     best_v[i] = temp_v[i]
 
     return best_cand, best_pot, best_dist_sq
+
+
+# ===========================================================================
+# 6. Precomputed matrix symmetry check
+# ===========================================================================
+def is_matrix_symmetric(
+    const floating[:, ::1] D,
+    Py_ssize_t n_samples,
+    double tol=1e-10,
+):
+    """
+    Check whether a 2D square matrix is symmetric within tolerance `tol` (D[i, j] == D[j, i]).
+    Scans the upper triangle with immediate Early Exit on the first asymmetric element.
+    Executes in pure C with nogil, allocating 0 bytes of memory.
+    """
+    cdef:
+        Py_ssize_t i, j
+        floating diff
+        int symmetric = 1
+
+    with nogil:
+        for i in range(n_samples):
+            for j in range(i + 1, n_samples):
+                diff = D[i, j] - D[j, i]
+                if diff < 0:
+                    diff = -diff
+                if diff > tol:
+                    symmetric = 0
+                    break
+            if not symmetric:
+                break
+
+    return bool(symmetric)
+

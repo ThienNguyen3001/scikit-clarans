@@ -621,11 +621,18 @@ class CLARANS(ClusterMixin, TransformerMixin, BaseEstimator):
             self._dm_instance = None
             if not issparse(X):
                 n_s = X.shape[0]
-                sample_size = min(100, n_s * n_s)
-                rng = np.random.RandomState(42)
-                idx_i = rng.randint(0, n_s, size=sample_size)
-                idx_j = rng.randint(0, n_s, size=sample_size)
-                if np.allclose(X[idx_i, idx_j], X[idx_j, idx_i]):
+                if (
+                    _core is not None
+                    and hasattr(_core, "is_matrix_symmetric")
+                    and isinstance(X, np.ndarray)
+                    and X.flags.c_contiguous
+                    and X.dtype in (np.float64, np.float32)
+                ):
+                    is_sym = _core.is_matrix_symmetric(X, n_s, 1e-10)
+                else:
+                    is_sym = bool(np.allclose(X, X.T))
+
+                if is_sym:
                     self._precomputed_source = X
                     self._precomputed_is_sym = True
                 else:
@@ -877,8 +884,6 @@ class CLARANS(ClusterMixin, TransformerMixin, BaseEstimator):
 
         if hasattr(self, "_precomputed_source"):
             del self._precomputed_source
-        if hasattr(self, "_precomputed_is_sym"):
-            del self._precomputed_is_sym
 
         return self
 

@@ -268,6 +268,30 @@ class TestCythonCore(unittest.TestCase):
         self.assertAlmostEqual(ref_best_pot, cy_best_pot, places=10)
         np.testing.assert_allclose(ref_best_dist_sq, cy_best_dist_sq, rtol=1e-10)
 
+    # -----------------------------------------------------------------------
+    # 6. is_matrix_symmetric vs NumPy
+    # -----------------------------------------------------------------------
+    def test_is_matrix_symmetric_float64_and_float32(self):
+        for dtype in (np.float64, np.float32):
+            n_samples = 50
+            mat = self.rng.uniform(0.1, 10.0, size=(n_samples, n_samples)).astype(dtype)
+            sym_mat = np.ascontiguousarray(0.5 * (mat + mat.T))
+
+            # Strictly symmetric
+            self.assertTrue(_core.is_matrix_symmetric(sym_mat, n_samples, 1e-6))
+
+            # Asymmetric perturbation
+            asym_mat = sym_mat.copy()
+            asym_mat[10, 20] += 0.5
+            self.assertFalse(_core.is_matrix_symmetric(asym_mat, n_samples, 1e-6))
+
+            # Perturbation below tolerance
+            near_sym = sym_mat.copy()
+            near_sym[10, 20] += 1e-8
+            near_sym[20, 10] -= 1e-8
+            self.assertTrue(_core.is_matrix_symmetric(near_sym, n_samples, 1e-6))
+
 
 if __name__ == "__main__":
     unittest.main()
+

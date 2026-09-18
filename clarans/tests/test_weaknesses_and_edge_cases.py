@@ -167,6 +167,42 @@ class TestPrecomputedMatrixFlaws(unittest.TestCase):
                 f"{ModelClass.__name__} inertia_ should match calculate_cost on asymmetric matrices",
             )
 
+    def test_precomputed_partially_asymmetric_matrix_detected(self):
+        """A matrix that is symmetric everywhere except at index >= 100 must be
+        deterministically identified as asymmetric by the pure C kernel.
+        """
+        rng = np.random.RandomState(42)
+        X = rng.randn(120, 4)
+        D_sym = pairwise_distances(X, metric="euclidean")
+
+        # Perfectly symmetric matrix should be marked symmetric
+        m_sym = CLARANS(n_clusters=3, metric="precomputed", random_state=42).fit(D_sym)
+        self.assertTrue(m_sym._precomputed_is_sym)
+
+        # Perturb only point 101 (pairs in 0..99 remain symmetric)
+        D_asym = D_sym.copy()
+        D_asym[101, 5] += 10.0  # D[101, 5] != D[5, 101]
+
+        for ModelClass in [CLARANS, FastCLARANS]:
+            m = ModelClass(
+                n_clusters=3,
+                metric="precomputed",
+                num_local=2,
+                max_neighbors=50,
+                random_state=42,
+            ).fit(D_asym)
+
+            self.assertFalse(
+                m._precomputed_is_sym,
+                f"{ModelClass.__name__} failed to detect asymmetry at index 101",
+            )
+            true_cost = calculate_cost(D_asym, m.medoid_indices_, metric="precomputed")
+            self.assertLess(
+                abs(m.inertia_ - true_cost),
+                1e-5,
+                f"{ModelClass.__name__} cost discrepancy on asymmetric matrix",
+            )
+
     def test_precomputed_nonzero_diagonal_self_cluster_inversion(self):
         """If precomputed distance matrix has D_ii > D_ij, medoids
         are assigned to other medoids' clusters instead of their own cluster.
