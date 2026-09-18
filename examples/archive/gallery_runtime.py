@@ -1,6 +1,5 @@
-"""Archived: gallery_runtime example (full content copied for history)."""
-
-from pathlib import Path
+"""Generate `runtime_scaling.png` comparing runtimes for different data sizes.
+"""
 import time
 import matplotlib
 matplotlib.use("Agg")
@@ -11,40 +10,56 @@ from sklearn.cluster import KMeans
 
 
 def main():
-    Ns = [200, 500, 1000, 2000, 5000, 10000]
+    plt.style.use("default")
+    plt.rcParams.update({
+        "axes.spines.top": False,
+        "axes.spines.right": False,
+        "axes.edgecolor": "#2c3e50",
+    })
+    Ns = [500, 1000, 2000, 4000, 8000]
     clarans_times = []
     fast_times = []
     kmeans_times = []
 
     for N in Ns:
-        X, _ = make_blobs(n_samples=N, centers=5, random_state=42)
+        X, _ = make_blobs(n_samples=N, centers=4, cluster_std=0.60, random_state=42)
 
-        t0 = time.perf_counter()
-        CLARANS(n_clusters=5, random_state=42).fit(X)
-        clarans_times.append(time.perf_counter() - t0)
+        tc, tf, tk = 0.0, 0.0, 0.0
+        n_repeats = 2
+        for seed in range(42, 42 + n_repeats):
+            t0 = time.perf_counter()
+            CLARANS(n_clusters=4, num_local=2, random_state=seed).fit(X)
+            tc += time.perf_counter() - t0
 
-        t0 = time.perf_counter()
-        FastCLARANS(n_clusters=5, random_state=42).fit(X)
-        fast_times.append(time.perf_counter() - t0)
+            t0 = time.perf_counter()
+            FastCLARANS(n_clusters=4, num_local=2, random_state=seed).fit(X)
+            tf += time.perf_counter() - t0
 
-        t0 = time.perf_counter()
-        KMeans(n_clusters=4, random_state=42).fit(X)
-        kmeans_times.append(time.perf_counter() - t0)
+            t0 = time.perf_counter()
+            KMeans(n_clusters=4, random_state=seed, n_init=10).fit(X)
+            tk += time.perf_counter() - t0
 
-    fig, ax = plt.subplots(figsize=(6, 4))
-    ax.plot(Ns, clarans_times, marker="o", label="CLARANS")
-    ax.plot(Ns, fast_times, marker="o", label="FastCLARANS")
-    ax.plot(Ns, kmeans_times, marker="o", label="KMeans")
-    ax.set_xlabel("n samples")
-    ax.set_ylabel("time (s)")
-    ax.set_title("Runtime scaling")
-    ax.legend()
+        clarans_times.append(tc / n_repeats)
+        fast_times.append(tf / n_repeats)
+        kmeans_times.append(tk / n_repeats)
+
+    fig, ax = plt.subplots(figsize=(6.2, 4.2), dpi=200)
+    ax.yaxis.grid(True, linestyle="--", linewidth=0.6, color="#e5e5e5")
+    ax.xaxis.grid(False)
+
+    ax.plot(Ns, clarans_times, marker="o", markersize=5, linewidth=1.6, color="#2b5c8f", label="CLARANS")
+    ax.plot(Ns, fast_times, marker="s", markersize=5, linewidth=1.6, color="#1b9e77", label="FastCLARANS")
+    ax.plot(Ns, kmeans_times, marker="^", markersize=5, linewidth=1.6, color="#d95f02", label="K-Means")
+
+    ax.set_xlabel("Number of samples ($N$)")
+    ax.set_ylabel("Runtime (seconds)")
+    ax.set_title("Runtime Scaling vs. Dataset Size (num_local=2)", pad=10)
+    ax.legend(loc="upper left", frameon=False)
+    plt.tight_layout()
 
     out = "runtime_scaling.png"
-    fig.savefig(out, bbox_inches="tight", dpi=150)
+    fig.savefig(out, dpi=200)
     print(f"Saved {out}")
-
-    print(kmeans_times, clarans_times, fast_times)
 
 
 if __name__ == "__main__":
