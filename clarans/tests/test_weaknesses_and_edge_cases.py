@@ -6,9 +6,10 @@ numerical vulnerabilities, and validation blind spots are properly resolved:
 
 1. Numerical Extremes & Overflow:
    - Overflow to inf handled gracefully via ValueError instead of uninitialized IndexError.
-   - Zero vectors in Cosine distance handled via ValueError instead of uninitialized IndexError.
-   - Dynamic relative tolerance (-max(1e-16, 1e-12 * abs(cost))) enables optimization on micro-scale data.
-   - Custom callable metric returning NaN properly raises ValueError.
+    - Zero vectors in Cosine distance handled via ValueError instead of uninitialized IndexError.
+    - Dynamic relative tolerance (-max(1e-16, 1e-12 * abs(cost))) enables optimization
+      on micro-scale data.
+    - Custom callable metric returning NaN properly raises ValueError.
 
 2. Precomputed Matrix Robustness:
    - Asymmetric distance matrices (D != D.T) correctly use column indexing for candidate distances.
@@ -17,9 +18,10 @@ numerical vulnerabilities, and validation blind spots are properly resolved:
    - Negative distances in precomputed matrix produce predictable results.
 
 3. Parameter Validation & Utility Robustness:
-   - Boolean values for num_local and n_clusters are rejected with ValueError.
-   - check_medoids rejects negative indices even when n_samples is None.
-   - initialize_build, initialize_heuristic, and initialize_k_medoids_plus_plus raise descriptive ValueError when K >= N.
+    - Boolean values for num_local and n_clusters are rejected with ValueError.
+    - check_medoids rejects negative indices even when n_samples is None.
+    - initialize_build, initialize_heuristic, and initialize_k_medoids_plus_plus raise
+      descriptive ValueError when K >= N.
 
 4. Dataset Structure Corner Cases:
    - Fewer unique points than clusters (N_unique < K) handled gracefully.
@@ -31,10 +33,12 @@ numerical vulnerabilities, and validation blind spots are properly resolved:
    - Concurrent predict() and transform() calls on a shared fitted model.
 
 6. Metric vs. Init Cross-Compatibility:
-   - Precomputed metric with explicit init array succeeds without error.
-   - Sparse matrix with Chebyshev metric works across k-medoids++, heuristic, build, and random.
-   - Scipy/DistanceMetric aliases (e.g., 'infinity', 'sokalmichener', 'p') supported across all inits.
-   - Obsolete/unsupported metrics without required parameters ('mahalanobis') cleanly rejected at validation.
+    - Precomputed metric with explicit init array succeeds without error.
+    - Sparse matrix with Chebyshev metric works across k-medoids++, heuristic, build, and random.
+    - Scipy/DistanceMetric aliases (e.g., 'infinity', 'sokalmichener', 'p') supported
+      across all inits.
+    - Obsolete/unsupported metrics without required parameters ('mahalanobis') cleanly
+      rejected at validation.
 """
 
 from concurrent.futures import ThreadPoolExecutor
@@ -164,7 +168,8 @@ class TestPrecomputedMatrixFlaws(unittest.TestCase):
             self.assertLess(
                 discrepancy,
                 1e-5,
-                f"{ModelClass.__name__} inertia_ should match calculate_cost on asymmetric matrices",
+                f"{ModelClass.__name__} inertia_ should match calculate_cost on "
+                "asymmetric matrices",
             )
 
     def test_precomputed_partially_asymmetric_matrix_detected(self):
@@ -256,7 +261,9 @@ class TestPrecomputedMatrixFlaws(unittest.TestCase):
             [-2.0, -3.0, 0.0],
         ])
         m = CLARANS(n_clusters=2, metric="precomputed", random_state=42).fit(D)
-        self.assertLess(m.inertia_, 0.0, "Model accepted negative distances and produced negative inertia")
+        self.assertLess(
+            m.inertia_, 0.0, "Model accepted negative distances and produced negative inertia"
+        )
 
 
 # ===========================================================================
@@ -297,7 +304,9 @@ class TestTypeValidationAndUtilityBlindSpots(unittest.TestCase):
         self.assertIn("n_clusters", str(ctx.exception).lower())
 
     def test_initialize_heuristic_and_kmedoids_pp_boundary(self):
-        """initialize_heuristic and initialize_k_medoids_plus_plus raise descriptive ValueError when K >= N."""
+        """initialize_heuristic and initialize_k_medoids_plus_plus raise descriptive
+        ValueError when K >= N.
+        """
         X = np.array([[1.0, 2.0], [3.0, 4.0]])
         with self.assertRaises(ValueError):
             initialize_heuristic(X, n_clusters=3)

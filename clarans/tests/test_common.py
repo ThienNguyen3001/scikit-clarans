@@ -1,11 +1,8 @@
-from sklearn.utils.estimator_checks import check_estimator
+from sklearn.utils.estimator_checks import parametrize_with_checks
 
 from clarans import CLARANS, FastCLARANS
 
 
-def test_clarans_estimator():
-    check_estimator(CLARANS(n_clusters=2))
-
-
-def test_fast_clarans_estimator():
-    check_estimator(FastCLARANS(n_clusters=2))
+@parametrize_with_checks([CLARANS(n_clusters=2), FastCLARANS(n_clusters=2)])
+def test_all_estimators(estimator, check):
+    check(estimator)

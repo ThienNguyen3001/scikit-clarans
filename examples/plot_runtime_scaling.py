@@ -1,22 +1,24 @@
-"""Generate `runtime_scaling.png` comparing runtimes for different data sizes.
 """
+==============================================
+Runtime Scaling vs. Dataset Size (num_local=2)
+==============================================
+
+This example plots empirical execution times across increasing dataset sizes N
+for CLARANS, FastCLARANS, and K-Means.
+"""
+
+# Authors: Ngọc Thiện Nguyễn <thiennguyen03001@gmail.com>
+# License: MIT
+
 import time
-import matplotlib
-matplotlib.use("Agg")
 import matplotlib.pyplot as plt
 from sklearn.datasets import make_blobs
-from clarans import CLARANS, FastCLARANS
 from sklearn.cluster import KMeans
+from clarans import CLARANS, FastCLARANS
 
 
 def main():
-    plt.style.use("default")
-    plt.rcParams.update({
-        "axes.spines.top": False,
-        "axes.spines.right": False,
-        "axes.edgecolor": "#2c3e50",
-    })
-    Ns = [500, 1000, 2000, 4000, 8000]
+    Ns = [400, 800, 1500, 3000]
     clarans_times = []
     fast_times = []
     kmeans_times = []
@@ -43,23 +45,44 @@ def main():
         fast_times.append(tf / n_repeats)
         kmeans_times.append(tk / n_repeats)
 
-    fig, ax = plt.subplots(figsize=(6.2, 4.2), dpi=200)
+    fig, ax = plt.subplots(figsize=(6.5, 4.5))
     ax.yaxis.grid(True, linestyle="--", linewidth=0.6, color="#e5e5e5")
     ax.xaxis.grid(False)
 
-    ax.plot(Ns, clarans_times, marker="o", markersize=5, linewidth=1.6, color="#2b5c8f", label="CLARANS")
-    ax.plot(Ns, fast_times, marker="s", markersize=5, linewidth=1.6, color="#1b9e77", label="FastCLARANS")
-    ax.plot(Ns, kmeans_times, marker="^", markersize=5, linewidth=1.6, color="#d95f02", label="K-Means")
+    ax.plot(
+        Ns,
+        clarans_times,
+        marker="o",
+        markersize=5,
+        linewidth=1.6,
+        color="#2b5c8f",
+        label="CLARANS",
+    )
+    ax.plot(
+        Ns,
+        fast_times,
+        marker="s",
+        markersize=5,
+        linewidth=1.6,
+        color="#1b9e77",
+        label="FastCLARANS",
+    )
+    ax.plot(
+        Ns,
+        kmeans_times,
+        marker="^",
+        markersize=5,
+        linewidth=1.6,
+        color="#d95f02",
+        label="K-Means",
+    )
 
     ax.set_xlabel("Number of samples ($N$)")
     ax.set_ylabel("Runtime (seconds)")
     ax.set_title("Runtime Scaling vs. Dataset Size (num_local=2)", pad=10)
     ax.legend(loc="upper left", frameon=False)
     plt.tight_layout()
-
-    out = "runtime_scaling.png"
-    fig.savefig(out, dpi=200)
-    print(f"Saved {out}")
+    plt.show()
 
 
 if __name__ == "__main__":

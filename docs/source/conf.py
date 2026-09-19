@@ -32,7 +32,22 @@ extensions = [
     "sphinx.ext.intersphinx",
     "sphinx.ext.mathjax",
     "sphinx_copybutton",
+    "sphinx_gallery.gen_gallery",
 ]
+
+# Sphinx-Gallery settings (scikit-learn standard)
+sphinx_gallery_conf = {
+    "examples_dirs": "../../examples",
+    "gallery_dirs": "auto_examples",
+    "filename_pattern": r"plot_",
+    "ignore_pattern": r"__init__\.py",
+    "download_all_examples": True,
+    "capture_repr": ("_repr_html_", "__repr__"),
+    "matplotlib_animations": False,
+    "image_scrapers": ("matplotlib",),
+    "show_memory": False,
+    "plot_gallery": "True",
+}
 
 # Copybutton settings: strip Python/terminal prompts when copying
 copybutton_prompt_text = r"^>>> |^\.\.\. |^\$ "

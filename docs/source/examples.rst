@@ -9,7 +9,7 @@ Quickstart
 
 A minimal quickstart example:
 
-.. literalinclude:: ../../examples/01_quick_start.py
+.. literalinclude:: ../../examples/plot_quick_start.py
    :language: python
 
 Compare initializations
@@ -17,7 +17,7 @@ Compare initializations
 
 Use this script to compare initialization strategies and runtimes:
 
-.. literalinclude:: ../../examples/02_compare_initializations.py
+.. literalinclude:: ../../examples/plot_initialization_comparison.py
    :language: python
 
 Different distance metrics
@@ -25,19 +25,19 @@ Different distance metrics
 
 See how different metrics affect the clustering result:
 
-.. literalinclude:: ../../examples/03_metrics_demo.py
+.. literalinclude:: ../../examples/plot_metrics_demo.py
    :language: python
 
 Using sparse inputs
 -------------------
 
-.. literalinclude:: ../../examples/04_sparse_input.py
+.. literalinclude:: ../../examples/plot_sparse_input.py
    :language: python
 
 Grid-search and pipelines
 -------------------------
 
-.. literalinclude:: ../../examples/05_pipeline_gridsearch.py
+.. literalinclude:: ../../examples/plot_pipeline_gridsearch.py
    :language: python
 
 Predicting on new data
@@ -45,7 +45,7 @@ Predicting on new data
 
 Assign unseen samples to their nearest fitted cluster medoid:
 
-.. literalinclude:: ../../examples/06_predict_new_data.py
+.. literalinclude:: ../../examples/plot_predict_new_data.py
    :language: python
 
 Custom initial medoids
@@ -53,7 +53,7 @@ Custom initial medoids
 
 Provide user-specified candidate centers for domain-guided seeding:
 
-.. literalinclude:: ../../examples/07_custom_init_centers.py
+.. literalinclude:: ../../examples/plot_custom_init_centers.py
    :language: python
 
 Performance tuning
@@ -61,7 +61,7 @@ Performance tuning
 
 Observe trade-offs between ``num_local``, ``max_neighbors``, runtime, and solution cost:
 
-.. literalinclude:: ../../examples/08_performance_tuning.py
+.. literalinclude:: ../../examples/plot_parameter_sensitivity.py
    :language: python
 
 CLARANS vs FastCLARANS
@@ -69,7 +69,7 @@ CLARANS vs FastCLARANS
 
 Benchmark runtime, memory, and solution quality between the two algorithms:
 
-.. literalinclude:: ../../examples/09_compare_fastclarans_clarans.py
+.. literalinclude:: ../../examples/plot_clarans_vs_fastclarans.py
    :language: python
 
 Feature transformation
@@ -77,7 +77,7 @@ Feature transformation
 
 Transform datasets into a cluster-distance representation using ``transform()``:
 
-.. literalinclude:: ../../examples/10_transform_data.py
+.. literalinclude:: ../../examples/plot_transform_data.py
    :language: python
 
 Precomputed distance matrices
@@ -85,7 +85,7 @@ Precomputed distance matrices
 
 Cluster non-vector or graph datasets using a precomputed pairwise distance matrix (``metric="precomputed"``):
 
-.. literalinclude:: ../../examples/11_precomputed_distances.py
+.. literalinclude:: ../../examples/plot_precomputed_distances.py
    :language: python
 
 Interactive Demo & Additional Resources

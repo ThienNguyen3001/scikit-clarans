@@ -32,3 +32,17 @@ before-test = "pip install --upgrade pip"
 [tool.cibuildwheel.windows]
 archs = ["AMD64"]
 
+[tool.black]
+line-length = 100
+target-version = ["py39", "py310", "py311", "py312", "py313"]
+include = '\.pyi?$'
+exclude = '''
+/(
+    \.git
+  | \.mypy_cache
+  | \.pytest_cache
+  | build
+  | dist
+)/
+'''
+

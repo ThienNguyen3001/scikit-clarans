@@ -96,7 +96,7 @@ fast_model.fit(X)
 This repository includes a number of runnable examples in the `examples/` folder showing common usage patterns and integrations. Run any example with:
 
 ```bash
-python examples/01_quick_start.py
+python examples/plot_quick_start.py
 ```
 
 ## Documentation

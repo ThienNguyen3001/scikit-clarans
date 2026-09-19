@@ -1,21 +1,26 @@
-"""Generate `comparison_clustering.png`.
-
-Side-by-side comparison of CLARANS, FastCLARANS and scikit-learn's KMeans.
 """
+==========================================================
+Side-by-Side Comparison: CLARANS, FastCLARANS, and K-Means
+==========================================================
+
+This example performs a direct visual and performance comparison between
+classic CLARANS, FastCLARANS, and scikit-learn's standard KMeans clusterer.
+"""
+
+# Authors: Ngọc Thiện Nguyễn <thiennguyen03001@gmail.com>
+# License: MIT
+
 import time
-import matplotlib
-matplotlib.use("Agg")
 import matplotlib.pyplot as plt
 from sklearn.datasets import make_blobs
+from sklearn.cluster import KMeans
 from clarans import CLARANS, FastCLARANS
 from clarans.utils import calculate_cost
-from sklearn.cluster import KMeans
 
 COLORS = ["#2b5c8f", "#d95f02", "#7570b3"]
 
 
 def main():
-    plt.style.use("default")
     X, _ = make_blobs(n_samples=600, centers=3, cluster_std=0.70, random_state=42)
     models = [
         ("CLARANS", CLARANS(n_clusters=3, num_local=5, random_state=42), "x", "Medoid"),
@@ -23,13 +28,12 @@ def main():
         ("K-Means", KMeans(n_clusters=3, random_state=42, n_init=10), "+", "Centroid"),
     ]
 
-    fig, axes = plt.subplots(1, 3, figsize=(12.0, 3.8), dpi=200)
+    fig, axes = plt.subplots(1, 3, figsize=(12.0, 3.8))
 
     for ax, (name, model, marker, label_name) in zip(axes, models):
         t0 = time.perf_counter()
         model.fit(X)
-        t1 = time.perf_counter()
-        elapsed = t1 - t0
+        elapsed = time.perf_counter() - t0
 
         for k in range(3):
             mask = model.labels_ == k
@@ -38,9 +42,14 @@ def main():
         centers = getattr(model, "cluster_centers_", None)
         if centers is not None:
             ax.scatter(
-                centers[:, 0], centers[:, 1],
-                marker=marker, s=85, c="black", linewidths=1.8,
-                label=label_name, zorder=5
+                centers[:, 0],
+                centers[:, 1],
+                marker=marker,
+                s=85,
+                c="black",
+                linewidths=1.8,
+                label=label_name,
+                zorder=5,
             )
 
         if hasattr(model, "medoid_indices_"):
@@ -57,17 +66,23 @@ def main():
             spine.set_linewidth(0.8)
 
         ax.text(
-            0.05, 0.05, stat_str,
+            0.05,
+            0.05,
+            stat_str,
             transform=ax.transAxes,
-            fontsize=8.5, color="#333333",
-            bbox=dict(boxstyle="round,pad=0.25", facecolor="white", edgecolor="#cccccc", alpha=0.85)
+            fontsize=8.5,
+            color="#333333",
+            bbox=dict(
+                boxstyle="round,pad=0.25",
+                facecolor="white",
+                edgecolor="#cccccc",
+                alpha=0.85,
+            ),
         )
         ax.legend(loc="upper right", frameon=False, fontsize=9)
 
     plt.tight_layout()
-    out = "comparison_clustering.png"
-    fig.savefig(out, dpi=200)
-    print(f"Saved {out}")
+    plt.show()
 
 
 if __name__ == "__main__":

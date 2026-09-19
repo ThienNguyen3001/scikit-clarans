@@ -9,7 +9,7 @@ from scipy.spatial.distance import cdist
 from scipy.sparse import issparse
 from sklearn.base import BaseEstimator, ClusterMixin, TransformerMixin
 from sklearn.metrics import DistanceMetric, pairwise_distances_argmin_min, pairwise_distances
-from sklearn.metrics.pairwise import _VALID_METRICS
+from sklearn.metrics.pairwise import PAIRWISE_DISTANCE_FUNCTIONS
 from sklearn.utils.validation import check_array, check_is_fitted, check_random_state
 
 from ._initialization import (
@@ -25,18 +25,22 @@ from .utils import (
 )
 
 try:
-    from sklearn.metrics._dist_metrics import METRIC_MAPPING64
-
-    _DM_METRICS = {k for k in METRIC_MAPPING64.keys() if k != "pyfunc"}
-except ImportError:
-    _DM_METRICS = set()
+    _DM_METRICS = {m for m in DistanceMetric.get_valid_metric_ids() if m != "pyfunc"}
+except (AttributeError, TypeError):
+    _DM_METRICS = {
+        "braycurtis", "canberra", "chebyshev", "cityblock", "correlation",
+        "cosine", "dice", "euclidean", "hamming", "haversine", "infinity",
+        "jaccard", "kulsinski", "l1", "l2", "mahalanobis", "manhattan",
+        "matching", "minkowski", "p", "rogerstanimoto", "russellrao",
+        "seuclidean", "sokalmichener", "sokalsneath", "sqeuclidean", "yule",
+    }
 
 _CDIST_EXTRA_METRICS = {"jensenshannon"}
 _EXCLUDED_METRICS = {"kulczynski1", "wminkowski", "mahalanobis"}
 
 _ALL_VALID_METRICS = frozenset(
     (
-        set(_VALID_METRICS)
+        set(PAIRWISE_DISTANCE_FUNCTIONS.keys())
         | _DM_METRICS
         | _CDIST_EXTRA_METRICS
         | {"precomputed"}
@@ -58,7 +62,12 @@ _DELTA_TOL = -1e-12
 
 
 class CLARANS(ClusterMixin, TransformerMixin, BaseEstimator):
-    """
+    """Clustering Large Applications based on RANdomized Search (CLARANS).
+
+    CLARANS is an efficient k-medoids clustering algorithm that searches for
+    optimal medoids by examining a randomized subset of neighboring medoid
+    configurations on the graph G_{n, k}.
+
     Parameters
     ----------
     n_clusters : int, default=8
@@ -1034,21 +1043,14 @@ class CLARANS(ClusterMixin, TransformerMixin, BaseEstimator):
             Transformed feature names.
         """
         check_is_fitted(self, "_n_features_out")
-        try:
-            from sklearn.utils.validation import _generate_get_feature_names_out
-
-            return _generate_get_feature_names_out(
-                self, self._n_features_out, input_features=input_features
-            )
-        except ImportError:
-            if input_features is not None and hasattr(self, "feature_names_in_"):
-                if len(input_features) != len(self.feature_names_in_):
-                    raise ValueError(
-                        f"input_features should have length equal to the number of "
-                        f"features ({len(self.feature_names_in_)}), got {len(input_features)}"
-                    )
-            class_name = self.__class__.__name__.lower()
-            return np.asarray(
-                [f"{class_name}{i}" for i in range(self._n_features_out)],
-                dtype=object,
-            )
+        if input_features is not None and hasattr(self, "feature_names_in_"):
+            if len(input_features) != len(self.feature_names_in_):
+                raise ValueError(
+                    f"input_features should have length equal to the number of "
+                    f"features ({len(self.feature_names_in_)}), got {len(input_features)}"
+                )
+        class_name = self.__class__.__name__.lower()
+        return np.asarray(
+            [f"{class_name}{i}" for i in range(self._n_features_out)],
+            dtype=object,
+        )

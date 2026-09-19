@@ -1,9 +1,17 @@
-"""Generate `parameter_sensitivity.png` showing cost/runtime for parameter grid.
 """
+==================================================
+Parameter Sensitivity: num_local vs. max_neighbors
+==================================================
+
+This example visualizes the trade-off between clustering solution cost and
+execution runtime across a grid of `num_local` and `max_neighbors` parameters.
+"""
+
+# Authors: Ngọc Thiện Nguyễn <thiennguyen03001@gmail.com>
+# License: MIT
+
 import time
 import numpy as np
-import matplotlib
-matplotlib.use("Agg")
 import matplotlib.pyplot as plt
 from sklearn.datasets import make_blobs
 from clarans import CLARANS
@@ -11,12 +19,6 @@ from clarans.utils import calculate_cost
 
 
 def main():
-    plt.style.use("default")
-    plt.rcParams.update({
-        "axes.spines.top": False,
-        "axes.spines.right": False,
-        "axes.edgecolor": "#2c3e50",
-    })
     X, _ = make_blobs(n_samples=500, centers=4, cluster_std=0.60, random_state=42)
     num_locals = [1, 2, 5]
     max_neighbors = [50, 150, 300, 500]
@@ -32,7 +34,7 @@ def main():
             time_grid[i, j] = time.perf_counter() - t0
             cost_grid[i, j] = calculate_cost(X, model.medoid_indices_)
 
-    fig, axes = plt.subplots(1, 2, figsize=(11.5, 4.2), dpi=200)
+    fig, axes = plt.subplots(1, 2, figsize=(11.5, 4.2))
 
     # Cost Heatmap: Blues
     im0 = axes[0].imshow(cost_grid, cmap="Blues", origin="lower", aspect="auto")
@@ -53,9 +55,13 @@ def main():
             norm = (val - cost_min) / (cost_max - cost_min + 1e-8)
             text_color = "white" if norm > 0.65 else "#222222"
             axes[0].text(
-                j, i, f"{val:.1f}",
-                ha="center", va="center",
-                color=text_color, fontsize=9
+                j,
+                i,
+                f"{val:.1f}",
+                ha="center",
+                va="center",
+                color=text_color,
+                fontsize=9,
             )
 
     # Runtime Heatmap: YlOrRd
@@ -77,15 +83,17 @@ def main():
             norm = (val - time_min) / (time_max - time_min + 1e-8)
             text_color = "white" if norm > 0.65 else "#222222"
             axes[1].text(
-                j, i, f"{val:.2f}s",
-                ha="center", va="center",
-                color=text_color, fontsize=9
+                j,
+                i,
+                f"{val:.2f}s",
+                ha="center",
+                va="center",
+                color=text_color,
+                fontsize=9,
             )
 
     plt.tight_layout()
-    out = "parameter_sensitivity.png"
-    fig.savefig(out, dpi=200)
-    print(f"Saved {out}")
+    plt.show()
 
 
 if __name__ == "__main__":

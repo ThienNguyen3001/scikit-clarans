@@ -73,12 +73,17 @@ instance/
 # Sphinx documentation
 docs/_build/
 docs/build/
+docs/source/auto_examples/
+docs/source/generated/
+docs/source/sg_execution_times.rst
+scratch/
 
 # PyBuilder
 target/
 
 # Jupyter Notebook
 .ipynb_checkpoints
+*.ipynb
 
 # IPython
 profile_default/

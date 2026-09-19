@@ -1,7 +1,15 @@
-"""Generate `silhouette_vs_k.png` comparing CLARANS, FastCLARANS, and KMeans.
 """
-import matplotlib
-matplotlib.use("Agg")
+============================================================
+Cluster Quality vs. Number of Clusters (Silhouette Analysis)
+============================================================
+
+This example evaluates clustering quality across different values of k using
+the Silhouette coefficient for CLARANS, FastCLARANS, and K-Means.
+"""
+
+# Authors: Ngọc Thiện Nguyễn <thiennguyen03001@gmail.com>
+# License: MIT
+
 import matplotlib.pyplot as plt
 from sklearn.datasets import make_blobs
 from sklearn.cluster import KMeans
@@ -10,13 +18,6 @@ from clarans import CLARANS, FastCLARANS
 
 
 def main():
-    plt.style.use("default")
-    plt.rcParams.update({
-        "axes.spines.top": False,
-        "axes.spines.right": False,
-        "axes.edgecolor": "#2c3e50",
-    })
-
     X, _ = make_blobs(n_samples=500, centers=4, cluster_std=0.60, random_state=42)
     ks = list(range(2, 9))
     methods = {
@@ -38,7 +39,7 @@ def main():
                 score = float("nan")
             results[name].append(score)
 
-    fig, ax = plt.subplots(figsize=(6.2, 4.2), dpi=200)
+    fig, ax = plt.subplots(figsize=(6.5, 4.5))
     ax.yaxis.grid(True, linestyle="--", linewidth=0.6, color="#e5e5e5")
     ax.xaxis.grid(False)
 
@@ -47,9 +48,13 @@ def main():
 
     for name, scores in results.items():
         ax.plot(
-            ks, scores,
-            marker=markers[name], markersize=5, linewidth=1.6,
-            color=colors[name], label=name
+            ks,
+            scores,
+            marker=markers[name],
+            markersize=5,
+            linewidth=1.6,
+            color=colors[name],
+            label=name,
         )
 
     ax.axvline(x=4, color="#7f8c8d", linestyle=":", linewidth=1.2, label="Optimal ($k=4$)")
@@ -60,10 +65,7 @@ def main():
     ax.set_xticks(ks)
     ax.legend(loc="upper right", frameon=False)
     plt.tight_layout()
-
-    out = "silhouette_vs_k.png"
-    fig.savefig(out, dpi=200)
-    print(f"Saved {out}")
+    plt.show()
 
 
 if __name__ == "__main__":

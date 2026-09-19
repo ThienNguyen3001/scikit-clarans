@@ -13,7 +13,7 @@ from typing import TYPE_CHECKING, Any
 import numpy as np
 from numpy.typing import ArrayLike
 
-from ._clarans import CLARANS, _DELTA_TOL
+from ._clarans import CLARANS
 from .utils import _warn_cython_unavailable
 
 try:
@@ -238,8 +238,9 @@ class FastCLARANS(CLARANS):
 
         if best_medoids is None or not np.isfinite(best_cost):
             raise ValueError(
-                f"Clustering failed: all local searches resulted in non-finite cost ({best_cost}). "
-                "Check your data for NaNs, infinities, zero vectors with cosine distance, or excessive outliers."
+                f"Clustering failed: all local searches resulted in non-finite cost "
+                f"({best_cost}). Check your data for NaNs, infinities, zero vectors "
+                "with cosine distance, or excessive outliers."
             )
 
         self.n_iter_ = best_n_iter

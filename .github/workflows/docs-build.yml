@@ -5,10 +5,14 @@ on:
     branches: ["main"]
     paths:
       - 'docs/**'
+      - 'examples/**'
+      - 'clarans/**'
   pull_request:
     branches: ["main"]
     paths:
       - 'docs/**'
+      - 'examples/**'
+      - 'clarans/**'
 
 concurrency:
   group: ${{ github.workflow }}-${{ github.ref }}
