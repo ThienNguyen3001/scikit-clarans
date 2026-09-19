@@ -79,6 +79,9 @@ class FastCLARANS(CLARANS):
         and ``sklearn.metrics.DistanceMetric`` (e.g., 'euclidean',
         'manhattan', 'cosine', 'chebyshev', 'precomputed') or a callable.
 
+    metric_params : dict, default=None
+        Additional keyword arguments for the metric function.
+
     random_state : int, RandomState instance or None, default=None
         Controls random number generation for reproducibility.
 
@@ -144,6 +147,7 @@ class FastCLARANS(CLARANS):
         max_neighbors: int | str = "auto",
         init: str | ArrayLike = "k-medoids++",
         metric: str | Any = "euclidean",
+        metric_params: dict[str, Any] | None = None,
         random_state: int | np.random.RandomState | None = None,
     ) -> None:
         super().__init__(
@@ -152,6 +156,7 @@ class FastCLARANS(CLARANS):
             max_neighbors=max_neighbors,
             init=init,
             metric=metric,
+            metric_params=metric_params,
             random_state=random_state,
             cost_evaluation="delta",
         )

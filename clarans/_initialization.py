@@ -16,16 +16,17 @@ from sklearn.utils import check_random_state
 from .utils import _SCIPY_METRIC_MAP
 
 
-def _compute_pairwise_distances(X, Y=None, metric="euclidean"):
+def _compute_pairwise_distances(X, Y=None, metric="euclidean", metric_params=None):
     """Compute pairwise distances using cdist for dense arrays when possible,
     falling back to scikit-learn's DistanceMetric and pairwise_distances."""
     scipy_metric = _SCIPY_METRIC_MAP.get(metric, metric) if isinstance(metric, str) else metric
+    params = metric_params if metric_params is not None else {}
 
     if not issparse(X) and (Y is None or not issparse(Y)):
         try:
             if Y is None:
-                return cdist(X, X, metric=scipy_metric)
-            return cdist(X, Y, metric=scipy_metric)
+                return cdist(X, X, metric=scipy_metric, **params)
+            return cdist(X, Y, metric=scipy_metric, **params)
         except Exception:
             pass
     else:
@@ -33,7 +34,7 @@ def _compute_pairwise_distances(X, Y=None, metric="euclidean"):
         # chebyshev, canberra, cityblock, etc.
         if isinstance(scipy_metric, str):
             try:
-                dm = DistanceMetric.get_metric(scipy_metric)
+                dm = DistanceMetric.get_metric(scipy_metric, **params)
                 if Y is None:
                     return dm.pairwise(X)
                 return dm.pairwise(X, Y)
@@ -41,8 +42,8 @@ def _compute_pairwise_distances(X, Y=None, metric="euclidean"):
                 pass
 
     if Y is None:
-        return pairwise_distances(X, metric=scipy_metric)
-    return pairwise_distances(X, Y, metric=scipy_metric)
+        return pairwise_distances(X, metric=scipy_metric, **params)
+    return pairwise_distances(X, Y, metric=scipy_metric, **params)
 
 
 try:
@@ -51,7 +52,7 @@ except ImportError:
     _core = None  # type: ignore[assignment]
 
 
-def initialize_heuristic(X, n_clusters, metric="euclidean"):
+def initialize_heuristic(X, n_clusters, metric="euclidean", metric_params=None):
     """
     Initialize medoids using a heuristic approach.
 
@@ -67,6 +68,9 @@ def initialize_heuristic(X, n_clusters, metric="euclidean"):
 
     metric : str or callable, default='euclidean'
         The metric to use when calculating distance between instances in a feature array.
+
+    metric_params : dict, default=None
+        Additional keyword arguments for the metric function.
 
     Returns
     -------
@@ -92,7 +96,7 @@ def initialize_heuristic(X, n_clusters, metric="euclidean"):
     if metric == "precomputed":
         D = X
     else:
-        D = _compute_pairwise_distances(X, metric=metric)
+        D = _compute_pairwise_distances(X, metric=metric, metric_params=metric_params)
 
     if hasattr(D, "toarray"):
         dist_sums = np.asarray(D.sum(axis=1)).ravel()
@@ -102,7 +106,7 @@ def initialize_heuristic(X, n_clusters, metric="euclidean"):
     return current_medoids_indices
 
 
-def initialize_build(X, n_clusters, metric="euclidean"):
+def initialize_build(X, n_clusters, metric="euclidean", metric_params=None):
     """
     Initialize medoids using the PAM BUILD step.
 
@@ -119,6 +123,9 @@ def initialize_build(X, n_clusters, metric="euclidean"):
 
     metric : str or callable, default='euclidean'
         The metric to use when calculating distance between instances in a feature array.
+
+    metric_params : dict, default=None
+        Additional keyword arguments for the metric function.
 
     Returns
     -------
@@ -159,7 +166,7 @@ def initialize_build(X, n_clusters, metric="euclidean"):
         else:
             D = np.asarray(X)
     else:
-        D = _compute_pairwise_distances(X, metric=metric)
+        D = _compute_pairwise_distances(X, metric=metric, metric_params=metric_params)
 
     dist_sums = D.sum(axis=1)
     first_medoid = int(np.argmin(dist_sums))
@@ -212,7 +219,7 @@ def initialize_build(X, n_clusters, metric="euclidean"):
 
 
 def initialize_k_medoids_plus_plus(
-    X, n_clusters, random_state=None, metric="euclidean", n_local_trials=None
+    X, n_clusters, random_state=None, metric="euclidean", n_local_trials=None, metric_params=None
 ):
     """
     Initialize medoids using k-medoids++ (similar to k-means++).
@@ -234,6 +241,9 @@ def initialize_k_medoids_plus_plus(
     n_local_trials : int, default=None
         The number of local seeding trials for each center. If None,
         defaults to ``2 + int(np.log(n_clusters))`` as recommended by Arthur & Vassilvitskii.
+
+    metric_params : dict, default=None
+        Additional keyword arguments for the metric function.
 
     Returns
     -------
@@ -276,6 +286,7 @@ def initialize_k_medoids_plus_plus(
             X,
             first_row,
             metric=metric,
+            metric_params=metric_params,
         ).flatten()
 
     closest_dist_sq = closest**2
@@ -307,7 +318,10 @@ def initialize_k_medoids_plus_plus(
         else:
             candidates_X = X[candidate_ids]
             dists_candidates = (
-                _compute_pairwise_distances(candidates_X, X, metric=metric) ** 2
+                _compute_pairwise_distances(
+                    candidates_X, X, metric=metric, metric_params=metric_params
+                )
+                ** 2
             )
 
         best_candidate = None

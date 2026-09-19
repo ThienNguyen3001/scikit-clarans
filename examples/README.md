@@ -31,9 +31,9 @@ List of Gallery Examples (Sphinx-Gallery convention: `plot_*.py`)
 - `plot_silhouette_vs_k.py`: Silhouette analysis across number of clusters k.
 
 ### 4. Advanced Ecosystem Integration
-- `plot_metrics_demo.py`: Impact of different distance metrics (Euclidean, Manhattan, Cosine).
+- `plot_metrics_demo.py`: Impact of distance metrics and `metric_params` (Euclidean, Manhattan, Minkowski p=3, Mahalanobis).
 - `plot_sparse_input.py`: Clustering on SciPy CSR/CSC sparse matrices.
-- `plot_pipeline_gridsearch.py`: Model selection and hyperparameter tuning with GridSearchCV.
+- `plot_pipeline_gridsearch.py`: Model selection and hyperparameter tuning (k, metric_params) with GridSearchCV.
 - `plot_predict_new_data.py`: Assigning unseen query samples to nearest fitted medoids.
 - `plot_custom_init_centers.py`: Supplying user-defined domain coordinates as initial seeds.
 - `plot_transform_data.py`: Using CLARANS as a feature transformer (cluster-distance space).

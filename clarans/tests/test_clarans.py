@@ -799,5 +799,81 @@ class TestUtilsHelpers(unittest.TestCase):
                 self.assertEqual(len(w), 1)
 
 
+class TestCLARANSMetricParams(unittest.TestCase):
+    """Test suite for metric_params parameter in CLARANS."""
+
+    def setUp(self):
+        np.random.seed(42)
+        self.X = np.random.randn(30, 3)
+
+    def test_minkowski_with_p(self):
+        """CLARANS should support Minkowski metric with p passed via metric_params."""
+        model = CLARANS(
+            n_clusters=2, metric="minkowski", metric_params={"p": 3}, random_state=42
+        )
+        model.fit(self.X)
+        self.assertEqual(model.labels_.shape, (len(self.X),))
+        self.assertEqual(model.cluster_centers_.shape, (2, 3))
+        preds = model.predict(self.X[:5])
+        self.assertEqual(preds.shape, (5,))
+        trans = model.transform(self.X[:5])
+        self.assertEqual(trans.shape, (5, 2))
+
+    def test_mahalanobis_with_vi(self):
+        """CLARANS should support Mahalanobis metric with VI in metric_params."""
+        VI = np.linalg.inv(np.cov(self.X.T))
+        model = CLARANS(
+            n_clusters=2, metric="mahalanobis", metric_params={"VI": VI}, random_state=42
+        )
+        model.fit(self.X)
+        self.assertEqual(model.labels_.shape, (len(self.X),))
+        preds = model.predict(self.X[:5])
+        self.assertEqual(preds.shape, (5,))
+        trans = model.transform(self.X[:5])
+        self.assertEqual(trans.shape, (5, 2))
+
+    def test_mahalanobis_missing_vi_raises(self):
+        """CLARANS with mahalanobis and no VI should raise ValueError."""
+        with self.assertRaises(ValueError) as ctx:
+            CLARANS(n_clusters=2, metric="mahalanobis", random_state=42).fit(self.X)
+        self.assertIn("vi", str(ctx.exception).lower())
+
+        with self.assertRaises(ValueError) as ctx:
+            CLARANS(
+                n_clusters=2, metric="mahalanobis", metric_params={}, random_state=42
+            ).fit(self.X)
+        self.assertIn("vi", str(ctx.exception).lower())
+
+    def test_custom_callable_with_metric_params(self):
+        """CLARANS should forward metric_params to custom callable metric."""
+        def custom_dist(x, y, weight=1.0):
+            return np.sum(np.abs(x - y)) * weight
+
+        model = CLARANS(
+            n_clusters=2,
+            metric=custom_dist,
+            metric_params={"weight": 2.5},
+            random_state=42,
+        )
+        model.fit(self.X)
+        self.assertEqual(model.labels_.shape, (len(self.X),))
+
+    def test_invalid_metric_params_type(self):
+        """Non-dict metric_params should raise ValueError."""
+        with self.assertRaises(ValueError) as ctx:
+            CLARANS(n_clusters=2, metric_params="not_a_dict", random_state=42).fit(
+                self.X
+            )
+        self.assertIn("metric_params", str(ctx.exception).lower())
+
+    def test_clone_preserves_metric_params(self):
+        """clone should preserve metric_params correctly."""
+        from sklearn.base import clone
+
+        model = CLARANS(metric="minkowski", metric_params={"p": 4})
+        cloned = clone(model)
+        self.assertEqual(cloned.metric_params, {"p": 4})
+
+
 if __name__ == "__main__":
     unittest.main()

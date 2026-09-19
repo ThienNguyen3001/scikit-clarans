@@ -36,7 +36,7 @@ except (AttributeError, TypeError):
     }
 
 _CDIST_EXTRA_METRICS = {"jensenshannon"}
-_EXCLUDED_METRICS = {"kulczynski1", "wminkowski", "mahalanobis"}
+_EXCLUDED_METRICS = {"kulczynski1", "wminkowski"}
 
 _ALL_VALID_METRICS = frozenset(
     (
@@ -116,6 +116,9 @@ class CLARANS(ClusterMixin, TransformerMixin, BaseEstimator):
         ``sklearn.metrics.pairwise_distances``, ``scipy.spatial.distance.cdist``,
         and ``sklearn.metrics.DistanceMetric`` (e.g., 'euclidean',
         'manhattan', 'cosine', 'chebyshev', 'precomputed') or a callable.
+
+    metric_params : dict, default=None
+        Additional keyword arguments for the metric function.
 
     random_state : int, RandomState instance or None, default=None
         Determines random number generation for medoid swaps and random
@@ -203,6 +206,7 @@ class CLARANS(ClusterMixin, TransformerMixin, BaseEstimator):
         max_neighbors="auto",
         init="k-medoids++",
         metric="euclidean",
+        metric_params=None,
         random_state=None,
         cost_evaluation="delta",
     ):
@@ -211,6 +215,7 @@ class CLARANS(ClusterMixin, TransformerMixin, BaseEstimator):
         self.max_neighbors = max_neighbors
         self.init = init
         self.metric = metric
+        self.metric_params = metric_params
         self.random_state = random_state
         self.cost_evaluation = cost_evaluation
 
@@ -274,15 +279,15 @@ class CLARANS(ClusterMixin, TransformerMixin, BaseEstimator):
             )
         elif isinstance(self.init, str) and self.init == "k-medoids++":
             current_medoids_indices = initialize_k_medoids_plus_plus(
-                X, self.n_clusters, random_state, self.metric
+                X, self.n_clusters, random_state, self.metric, metric_params=self.metric_params
             )
         elif isinstance(self.init, str) and self.init == "heuristic":
             current_medoids_indices = initialize_heuristic(
-                X, self.n_clusters, self.metric
+                X, self.n_clusters, self.metric, metric_params=self.metric_params
             )
         elif isinstance(self.init, str) and self.init == "build":
             current_medoids_indices = initialize_build(
-                X, self.n_clusters, self.metric
+                X, self.n_clusters, self.metric, metric_params=self.metric_params
             )
         elif hasattr(self.init, "__array__") or isinstance(self.init, list):
             init_arr = np.asarray(self.init)
@@ -308,18 +313,19 @@ class CLARANS(ClusterMixin, TransformerMixin, BaseEstimator):
                         f"init array must be of shape ({self.n_clusters}, {n_features})"
                     )
 
+                params = self.metric_params if self.metric_params is not None else {}
                 if not issparse(X) and not issparse(init_centers):
                     scipy_metric = _SCIPY_METRIC_MAP.get(self.metric, self.metric)
                     try:
-                        D = cdist(init_centers, X, metric=scipy_metric)
+                        D = cdist(init_centers, X, metric=scipy_metric, **params)
                         current_medoids_indices = np.argmin(D, axis=1)
                     except Exception:
                         current_medoids_indices, _ = pairwise_distances_argmin_min(
-                            init_centers, X, metric=self.metric
+                            init_centers, X, metric=self.metric, metric_kwargs=params
                         )
                 else:
                     current_medoids_indices, _ = pairwise_distances_argmin_min(
-                        init_centers, X, metric=self.metric
+                        init_centers, X, metric=self.metric, metric_kwargs=params
                     )
 
             current_medoids_indices = np.array(current_medoids_indices, dtype=int)
@@ -481,7 +487,9 @@ class CLARANS(ClusterMixin, TransformerMixin, BaseEstimator):
             current_cost = float(np.sum(near_dist))
         else:
             medoids_dist = None
-            current_cost = calculate_cost(X, current_medoids_indices, self.metric)
+            current_cost = calculate_cost(
+                X, current_medoids_indices, self.metric, metric_params=self.metric_params
+            )
             near_idx_map = None
             near_dist = None
             second_dist = None
@@ -652,11 +660,13 @@ class CLARANS(ClusterMixin, TransformerMixin, BaseEstimator):
                 self._precomputed_is_sym = False
             return
 
+        params = self.metric_params if self.metric_params is not None else {}
+
         # 1. Try SciPy cdist for dense NumPy array
         if isinstance(X, np.ndarray) and not issparse(X) and isinstance(self.metric, str):
             mapped_metric = _SCIPY_METRIC_MAP.get(self.metric, self.metric)
             try:
-                cdist(X[:1], X[:1], metric=mapped_metric)
+                cdist(X[:1], X[:1], metric=mapped_metric, **params)
                 self._dist_engine = "cdist"
                 self._scipy_metric = mapped_metric
                 self._dm_instance = None
@@ -666,7 +676,7 @@ class CLARANS(ClusterMixin, TransformerMixin, BaseEstimator):
 
         # 2. Try Scikit-Learn DistanceMetric (supports CSR sparse matrix & callable functions)
         try:
-            self._dm_instance = DistanceMetric.get_metric(self.metric)
+            self._dm_instance = DistanceMetric.get_metric(self.metric, **params)
             self._dm_instance.pairwise(X[:1], X[:1])
             self._dist_engine = "distance_metric"
             self._scipy_metric = None
@@ -688,11 +698,18 @@ class CLARANS(ClusterMixin, TransformerMixin, BaseEstimator):
     ) -> np.ndarray:
         """Compute distances from all samples in X to a single candidate sample."""
         engine = getattr(self, "_dist_engine", "pairwise")
+        params = self.metric_params if self.metric_params is not None else {}
         if engine == "cdist":
             if out is not None and out.dtype == np.float64:
-                cdist(cand_row, X, metric=self._scipy_metric, out=out.reshape(1, -1))
+                cdist(
+                    cand_row,
+                    X,
+                    metric=self._scipy_metric,
+                    out=out.reshape(1, -1),
+                    **params,
+                )
                 return out
-            return cdist(cand_row, X, metric=self._scipy_metric)[0]
+            return cdist(cand_row, X, metric=self._scipy_metric, **params)[0]
         elif engine == "precomputed":
             if candidate_idx is not None:
                 source = getattr(self, "_precomputed_source", X)
@@ -721,7 +738,9 @@ class CLARANS(ClusterMixin, TransformerMixin, BaseEstimator):
                 return out
             return res
         else:
-            res = pairwise_distances(cand_row, X, metric=self.metric).ravel()
+            res = pairwise_distances(
+                cand_row, X, metric=self.metric, **params
+            ).ravel()
             if out is not None:
                 np.copyto(out, res)
                 return out
@@ -741,12 +760,13 @@ class CLARANS(ClusterMixin, TransformerMixin, BaseEstimator):
         else:
             medoids = X[medoids_indices]
             engine = getattr(self, "_dist_engine", "pairwise")
+            params = self.metric_params if self.metric_params is not None else {}
             if engine == "cdist" and isinstance(X, np.ndarray) and not issparse(X):
-                return cdist(X, medoids, metric=self._scipy_metric)
+                return cdist(X, medoids, metric=self._scipy_metric, **params)
             elif engine == "distance_metric" and self._dm_instance is not None:
                 return self._dm_instance.pairwise(X, medoids)
             else:
-                return pairwise_distances(X, medoids, metric=self.metric)
+                return pairwise_distances(X, medoids, metric=self.metric, **params)
 
     def _compute_2min(
         self, subD: np.ndarray
@@ -819,6 +839,19 @@ class CLARANS(ClusterMixin, TransformerMixin, BaseEstimator):
                 f"{{'brute_force', 'delta'}}. Got {self.cost_evaluation!r} instead."
             )
 
+        if self.metric_params is not None and not isinstance(self.metric_params, dict):
+            raise ValueError(
+                f"The 'metric_params' parameter of {self.__class__.__name__} "
+                f"must be a dict or None. Got {self.metric_params!r} instead."
+            )
+
+        if self.metric == "mahalanobis":
+            if not self.metric_params or "VI" not in self.metric_params:
+                raise ValueError(
+                    "The 'mahalanobis' metric requires the inverse covariance matrix 'VI' "
+                    "to be specified in 'metric_params' (e.g. metric_params={'VI': VI})."
+                )
+
         if not callable(self.metric):
             if not isinstance(self.metric, str) or self.metric not in _ALL_VALID_METRICS:
                 options_repr = "{" + ", ".join(repr(m) for m in sorted(_ALL_VALID_METRICS)) + "}"
@@ -877,18 +910,19 @@ class CLARANS(ClusterMixin, TransformerMixin, BaseEstimator):
             self.labels_ = np.argmin(dist_to_medoids, axis=1)
         else:
             self.cluster_centers_ = X[self.medoid_indices_]
+            params = self.metric_params if self.metric_params is not None else {}
             if not issparse(X):
                 scipy_metric = _SCIPY_METRIC_MAP.get(self.metric, self.metric)
                 try:
-                    D = cdist(X, self.cluster_centers_, metric=scipy_metric)
+                    D = cdist(X, self.cluster_centers_, metric=scipy_metric, **params)
                     self.labels_ = np.argmin(D, axis=1)
                 except Exception:
                     self.labels_, _ = pairwise_distances_argmin_min(
-                        X, self.cluster_centers_, metric=self.metric
+                        X, self.cluster_centers_, metric=self.metric, metric_kwargs=params
                     )
             else:
                 self.labels_, _ = pairwise_distances_argmin_min(
-                    X, self.cluster_centers_, metric=self.metric
+                    X, self.cluster_centers_, metric=self.metric, metric_kwargs=params
                 )
 
         if hasattr(self, "_precomputed_source"):
@@ -957,16 +991,17 @@ class CLARANS(ClusterMixin, TransformerMixin, BaseEstimator):
                         f"{self.n_features_in_} features as input"
                     )
 
+        params = self.metric_params if self.metric_params is not None else {}
         if not issparse(X):
             scipy_metric = _SCIPY_METRIC_MAP.get(self.metric, self.metric)
             try:
-                D = cdist(X, self.cluster_centers_, metric=scipy_metric)
+                D = cdist(X, self.cluster_centers_, metric=scipy_metric, **params)
                 return np.argmin(D, axis=1)
             except Exception:
                 pass
 
         labels, _ = pairwise_distances_argmin_min(
-            X, self.cluster_centers_, metric=self.metric
+            X, self.cluster_centers_, metric=self.metric, metric_kwargs=params
         )
         return labels
 
@@ -1015,14 +1050,17 @@ class CLARANS(ClusterMixin, TransformerMixin, BaseEstimator):
             else:
                 X = check_array(X, accept_sparse=["csr", "csc"])
 
+        params = self.metric_params if self.metric_params is not None else {}
         if not issparse(X):
             scipy_metric = _SCIPY_METRIC_MAP.get(self.metric, self.metric)
             try:
-                return cdist(X, self.cluster_centers_, metric=scipy_metric)
+                return cdist(X, self.cluster_centers_, metric=scipy_metric, **params)
             except Exception:
                 pass
 
-        return pairwise_distances(X, self.cluster_centers_, metric=self.metric)
+        return pairwise_distances(
+            X, self.cluster_centers_, metric=self.metric, **params
+        )
 
     def get_feature_names_out(self, input_features=None) -> np.ndarray:
         """

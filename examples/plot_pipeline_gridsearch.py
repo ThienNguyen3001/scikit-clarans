@@ -29,8 +29,9 @@ def main():
     X, _ = make_blobs(n_samples=300, centers=3, n_features=6, random_state=42)
 
     param_grid = {
-        "n_clusters": [2, 3, 4],
-        "num_local": [2, 4],
+        "n_clusters": [2, 3],
+        "metric": ["minkowski"],
+        "metric_params": [{"p": 1}, {"p": 2}],
         "init": ["k-medoids++", "random"],
     }
 
@@ -51,7 +52,7 @@ def main():
     # Plot scores for each candidate parameter set
     mean_scores = grid_search.cv_results_["mean_test_score"]
     labels = [
-        f"k={p['n_clusters']}, {p['init']}"
+        f"k={p['n_clusters']}, p={p['metric_params']['p']}, {p['init']}"
         for p in grid_search.cv_results_["params"]
     ]
 
