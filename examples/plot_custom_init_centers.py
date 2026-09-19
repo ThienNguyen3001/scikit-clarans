@@ -23,7 +23,7 @@ def main():
     # User defines 3 approximate initial seeds (e.g. from domain knowledge)
     user_seeds = np.array([[-5.0, -5.0], [0.0, 5.0], [5.0, -2.0]])
 
-    model = CLARANS(n_clusters=3, init=user_seeds, num_local=3, random_state=42)
+    model = CLARANS(n_clusters=3, init=user_seeds, num_local=1, random_state=42)
     model.fit(X)
 
     plt.figure(figsize=(7, 5))
