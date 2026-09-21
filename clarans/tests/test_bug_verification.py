@@ -8,7 +8,6 @@ Tests are now written to verify the bugs are FIXED:
 
 import threading
 import unittest
-import warnings
 from unittest.mock import patch
 
 import numpy as np
@@ -152,7 +151,6 @@ class TestBug11Fix_ArgpartitionPerformance(unittest.TestCase):
 
     def test_compute_2min_correctness_after_fix(self):
         """Verify argpartition gives correct 2-min results."""
-        rng = np.random.RandomState(42)
         X, _ = make_blobs(n_samples=50, centers=5, random_state=42)
 
         model = CLARANS(n_clusters=5, random_state=42)
@@ -202,9 +200,9 @@ class TestBug13Fix_ThreadSafeWarning(unittest.TestCase):
     def test_double_checked_locking_pattern(self):
         """Source should use double-checked locking pattern."""
         import inspect
-        source = inspect.getsource(
-            __import__("clarans.utils", fromlist=["_warn_cython_unavailable"])._warn_cython_unavailable
-        )
+        from clarans.utils import _warn_cython_unavailable
+
+        source = inspect.getsource(_warn_cython_unavailable)
 
         # Double-checked locking: check flag, acquire lock, check flag again
         self.assertIn("_cython_warning_lock", source, "Should reference the lock")

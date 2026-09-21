@@ -58,8 +58,6 @@ if TYPE_CHECKING:
     from scipy.sparse import spmatrix
 
 
-
-
 class CLARANS(ClusterMixin, TransformerMixin, BaseEstimator):
     """Clustering Large Applications based on RANdomized Search (CLARANS).
 
