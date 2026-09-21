@@ -57,8 +57,7 @@ except ImportError:
 if TYPE_CHECKING:
     from scipy.sparse import spmatrix
 
-# Numerical tolerance for swap decisions to avoid ghost swaps caused by float64 roundoff noise.
-_DELTA_TOL = -1e-12
+
 
 
 class CLARANS(ClusterMixin, TransformerMixin, BaseEstimator):
@@ -471,6 +470,9 @@ class CLARANS(ClusterMixin, TransformerMixin, BaseEstimator):
                 best_n_swaps = swap_count
 
         if best_medoids is None or not np.isfinite(best_cost):
+            # Clean up internal references to input data to prevent memory leak
+            if hasattr(self, "_precomputed_source"):
+                del self._precomputed_source
             raise ValueError(
                 "Clustering failed: all local search iterations produced non-finite "
                 "costs (inf or NaN). Check input data or distance metric."
@@ -801,9 +803,11 @@ class CLARANS(ClusterMixin, TransformerMixin, BaseEstimator):
             ):
                 return _core.update_cache_2min(subD, n_samples, self.n_clusters)
 
-            sorted_idx = np.argsort(subD, axis=1)
-            smallest_idx = sorted_idx[:, 0]
-            second_smallest_idx = sorted_idx[:, 1]
+            # argpartition(., 1) is O(n*k) vs full sort O(n*k*log k).
+            # For kth=1: position 0 holds the smallest, position 1 the 2nd smallest.
+            part_idx = np.argpartition(subD, 1, axis=1)[:, :2]
+            smallest_idx = part_idx[:, 0]
+            second_smallest_idx = part_idx[:, 1]
 
             near_dist = subD[np.arange(n_samples), smallest_idx]
             second_dist = subD[np.arange(n_samples), second_smallest_idx]

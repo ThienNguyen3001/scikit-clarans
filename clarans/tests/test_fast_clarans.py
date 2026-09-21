@@ -252,11 +252,6 @@ class TestFastCLARANS(unittest.TestCase):
 
     def test_delta_tolerance_rejects_ghost_swaps(self):
         """Tolerance should prevent ghost swaps in FastCLARANS."""
-        from clarans._clarans import _DELTA_TOL
-
-        self.assertLess(_DELTA_TOL, 0)
-        self.assertEqual(_DELTA_TOL, -1e-12)
-
         X_dup = np.array([[0.0, 0.0], [0.0, 0.0], [10.0, 10.0], [10.0, 10.0]])
         model = FastCLARANS(n_clusters=2, num_local=1, max_neighbors=50, random_state=42)
         model.fit(X_dup)

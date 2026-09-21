@@ -103,6 +103,7 @@ def initialize_heuristic(X, n_clusters, metric="euclidean", metric_params=None):
     else:
         dist_sums = np.sum(D, axis=0)
     current_medoids_indices = np.argpartition(dist_sums, n_clusters - 1)[:n_clusters]
+    current_medoids_indices.sort()  # Ensure deterministic ordering across platforms
     return current_medoids_indices
 
 

@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+import threading
 import warnings
 from typing import TYPE_CHECKING, Callable, Sequence
 import numpy as np
@@ -18,6 +19,7 @@ except ImportError:
     _core = None  # type: ignore[assignment]
     HAS_CYTHON = False
 
+_cython_warning_lock = threading.Lock()
 _cython_warning_issued = False
 
 
@@ -29,15 +31,17 @@ def _warn_cython_unavailable() -> None:
     """Issue an EfficiencyWarning once per session if Cython core is missing."""
     global _cython_warning_issued
     if not HAS_CYTHON and not _cython_warning_issued:
-        _cython_warning_issued = True
-        warnings.warn(
-            "Compiled Cython extensions (_core) are not available; falling back to "
-            "pure Python/NumPy implementation. Performance will be significantly slower. "
-            "To enable C-extension acceleration, compile via `pip install -e .` or "
-            "build from source.",
-            EfficiencyWarning,
-            stacklevel=3,
-        )
+        with _cython_warning_lock:
+            if not _cython_warning_issued:
+                _cython_warning_issued = True
+                warnings.warn(
+                    "Compiled Cython extensions (_core) are not available; falling back to "
+                    "pure Python/NumPy implementation. Performance will be significantly slower. "
+                    "To enable C-extension acceleration, compile via `pip install -e .` or "
+                    "build from source.",
+                    EfficiencyWarning,
+                    stacklevel=3,
+                )
 
 
 __all__ = [

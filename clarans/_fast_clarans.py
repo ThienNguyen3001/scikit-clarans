@@ -246,6 +246,9 @@ class FastCLARANS(CLARANS):
                 best_n_swaps = swap_count
 
         if best_medoids is None or not np.isfinite(best_cost):
+            # Clean up internal references to input data to prevent memory leak
+            if hasattr(self, "_precomputed_source"):
+                del self._precomputed_source
             raise ValueError(
                 f"Clustering failed: all local searches resulted in non-finite cost "
                 f"({best_cost}). Check your data for NaNs, infinities, zero vectors "
