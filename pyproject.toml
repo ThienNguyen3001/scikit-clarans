@@ -1,11 +1,80 @@
 [build-system]
+build-backend = "mesonpy"
 requires = [
-    "setuptools>=64",
-    "wheel",
+    "meson-python>=0.15.0",
+    "ninja",
     "Cython>=3.0",
-    "numpy",
+    "numpy>=2.0.0",
 ]
-build-backend = "setuptools.build_meta"
+
+[project]
+name = "scikit-clarans"
+version = "0.3.0"
+description = "A scikit-learn compatible implementation of CLARANS clustering algorithm"
+readme = "README.md"
+requires-python = ">=3.9"
+license = {text = "MIT"}
+authors = [
+    {name = "Ngọc Thiện Nguyễn", email = "thiennguyen03001@gmail.com"}
+]
+classifiers = [
+    "Development Status :: 3 - Alpha",
+    "Environment :: Console",
+    "Intended Audience :: Developers",
+    "Intended Audience :: Science/Research",
+    "License :: OSI Approved :: MIT License",
+    "Operating System :: OS Independent",
+    "Programming Language :: Python :: 3",
+    "Programming Language :: Python :: 3.9",
+    "Programming Language :: Python :: 3.10",
+    "Programming Language :: Python :: 3.11",
+    "Programming Language :: Python :: 3.12",
+    "Programming Language :: Python :: 3.13",
+    "Topic :: Scientific/Engineering",
+]
+keywords = ["clustering", "sklearn", "scikit-learn", "clarans", "k-medoids"]
+dependencies = [
+    "numpy",
+    "scikit-learn",
+    "scipy",
+]
+
+[project.optional-dependencies]
+dev = [
+    "pytest",
+    "pytest-cov",
+    "flake8",
+    "mypy",
+    "pandas",
+    "sphinx>=5.0",
+    "sphinx-rtd-theme",
+    "sphinx-copybutton",
+    "sphinx-autodoc-typehints",
+    "cython>=3.0",
+    "ninja",
+    "meson-python>=0.15.0",
+]
+test = [
+    "pytest",
+    "pytest-cov",
+    "flake8",
+    "pandas",
+]
+docs = [
+    "sphinx>=5.0",
+    "sphinx-rtd-theme",
+    "sphinx-copybutton",
+    "sphinx-autodoc-typehints",
+    "sphinx-gallery",
+    "pillow",
+    "matplotlib",
+]
+
+[project.urls]
+Homepage = "https://github.com/ThienNguyen3001/scikit-clarans"
+Repository = "https://github.com/ThienNguyen3001/scikit-clarans"
+Issues = "https://github.com/ThienNguyen3001/scikit-clarans/issues"
+Documentation = "https://scikit-clarans.readthedocs.io/"
 
 [tool.mypy]
 ignore_missing_imports = true
@@ -31,6 +100,7 @@ before-test = "pip install --upgrade pip"
 
 [tool.cibuildwheel.windows]
 archs = ["AMD64"]
+config-settings = { "setup-args" = "--vsenv" }
 
 [tool.black]
 line-length = 100
@@ -45,4 +115,3 @@ exclude = '''
   | dist
 )/
 '''
-

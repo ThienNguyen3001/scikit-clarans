@@ -11,6 +11,7 @@ clarans/_core.c
 # Distribution / packaging
 .Python
 build/
+.mesonpy*/
 develop-eggs/
 dist/
 downloads/
