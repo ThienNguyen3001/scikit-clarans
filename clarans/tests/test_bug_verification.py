@@ -19,11 +19,6 @@ from clarans._initialization import (
     initialize_heuristic,
 )
 
-try:
-    from clarans import _core
-except ImportError:
-    _core = None
-
 
 # ============================================================================
 # Bug #4 Fix: _precomputed_source cleaned up on fit failure
