@@ -1,5 +1,6 @@
 python_test_sources = [
   '__init__.py',
+  'test_bug_verification.py',
   'test_clarans.py',
   'test_common.py',
   'test_cython_core.py',
