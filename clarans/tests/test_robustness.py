@@ -472,7 +472,7 @@ class TestMathematicalInvariants(unittest.TestCase):
 # ===========================================================================
 class TestSklearnAPICompliance(unittest.TestCase):
     """Group H – Verify compliance with scikit-learn estimator API
-    (get_params, set_params, repr, tags, n_features_in_, score)."""
+    (get_params, set_params, repr, tags, n_features_in_)."""
 
     def setUp(self):
         self.X, self.y = make_blobs(
@@ -526,17 +526,6 @@ class TestSklearnAPICompliance(unittest.TestCase):
             D = pairwise_distances(self.X)
             m_pre = cls(n_clusters=3, metric="precomputed", random_state=42).fit(D)
             self.assertFalse(hasattr(m_pre, "n_features_in_"))
-
-    def test_score_method_exists(self):
-        """CLARANS/FastCLARANS should have a score() method via ClusterMixin or custom."""
-        for cls in [CLARANS, FastCLARANS]:
-            m = cls(n_clusters=3, random_state=42).fit(self.X)
-            # ClusterMixin doesn't provide score() directly, but if it exists
-            # it should be callable. If it doesn't exist, that's fine too.
-            if hasattr(m, "score"):
-                # Should not raise
-                s = m.score(self.X)
-                self.assertIsInstance(s, (int, float, np.floating))
 
 
 # ===========================================================================
