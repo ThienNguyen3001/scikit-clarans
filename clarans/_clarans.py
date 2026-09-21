@@ -110,6 +110,9 @@ class CLARANS(ClusterMixin, TransformerMixin, BaseEstimator):
           (minimizing distance to all others).
         - ``'build'``: The greedy initialization from the original PAM
           algorithm. High quality but slow (O(N^2)).
+        - array-like: If an array is passed, it should be of shape
+          ``(n_clusters, n_features)`` giving the initial centers, or
+          ``(n_clusters,)`` of integer indices if ``metric='precomputed'``.
 
     metric : str or callable, default='euclidean'
         The distance metric to use. Supports all metrics from
@@ -307,7 +310,16 @@ class CLARANS(ClusterMixin, TransformerMixin, BaseEstimator):
                     )
                 current_medoids_indices = np.argmin(init_centers, axis=1)
             else:
-                init_centers = check_array(self.init)
+                try:
+                    init_centers = check_array(self.init)
+                except ValueError as err:
+                    if "Expected 2D array, got 1D array instead" in str(err):
+                        raise ValueError(
+                            f"init array must be 2D of shape ({self.n_clusters}, {n_features}). "
+                            "If you want to specify medoid indices, use metric='precomputed' "
+                            "or pass X[indices] as initial centers."
+                        ) from err
+                    raise
                 if init_centers.shape != (self.n_clusters, n_features):
                     raise ValueError(
                         f"init array must be of shape ({self.n_clusters}, {n_features})"
@@ -448,7 +460,11 @@ class CLARANS(ClusterMixin, TransformerMixin, BaseEstimator):
             )
 
             tol = -max(1e-16, 1e-12 * abs(current_cost))
-            if loc_idx == 0 or current_cost < best_cost + tol:
+            if (
+                loc_idx == 0
+                or not np.isfinite(best_cost)
+                or (np.isfinite(current_cost) and current_cost < best_cost + tol)
+            ):
                 best_cost = current_cost
                 best_medoids = current_medoids_indices.copy()
                 best_n_iter = eval_count
@@ -603,7 +619,10 @@ class CLARANS(ClusterMixin, TransformerMixin, BaseEstimator):
                 )
 
                 neighbor_cost = calculate_cost(
-                    X, neighbor_medoids_indices, self.metric
+                    X,
+                    neighbor_medoids_indices,
+                    self.metric,
+                    metric_params=self.metric_params,
                 )
 
                 delta_tol = -max(1e-16, 1e-12 * abs(current_cost))

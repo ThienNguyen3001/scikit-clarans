@@ -504,5 +504,122 @@ class TestMetricInitCrossCompatibility(unittest.TestCase):
             self.assertIn("metric", str(ctx.exception).lower())
 
 
+# ===========================================================================
+# 7. Bug Fix Verification & Algorithmic Invariants
+# ===========================================================================
+class TestAlgorithmBugFixesAndEdgeCases(unittest.TestCase):
+    """Verifies targeted bug fixes for metric_params, NaN freeze, init, and asymmetric distance."""
+
+    def test_brute_force_passes_metric_params(self):
+        """Bug A: Brute force neighbor cost calculation must pass metric_params."""
+        X, _ = make_blobs(n_samples=20, n_features=2, centers=2, random_state=42)
+
+        def custom_metric(x, y, weight=1.0):
+            return weight * np.sum(np.abs(x - y))
+
+        model = CLARANS(
+            n_clusters=2,
+            metric=custom_metric,
+            metric_params={"weight": 2.5},
+            cost_evaluation="brute_force",
+            num_local=1,
+            max_neighbors=5,
+            random_state=42,
+        )
+        model.fit(X)
+        self.assertEqual(len(model.medoid_indices_), 2)
+        self.assertTrue(np.isfinite(model.inertia_))
+
+    def test_nan_freeze_recovery_clarans(self):
+        """Bug B: CLARANS should not freeze when the first local search iteration is NaN."""
+        X, _ = make_blobs(n_samples=20, n_features=2, centers=2, random_state=42)
+        model = CLARANS(n_clusters=2, num_local=2, random_state=42)
+
+        call_idx = 0
+        original_single_search = model._single_local_search
+
+        def mock_search(X_in, rng, det, buf):
+            nonlocal call_idx
+            cost, medoids, evals, swaps = original_single_search(X_in, rng, det, buf)
+            if call_idx == 0:
+                cost = float("nan")
+            call_idx += 1
+            return cost, medoids, evals, swaps
+
+        with patch.object(model, "_single_local_search", side_effect=mock_search):
+            model.fit(X)
+            self.assertTrue(np.isfinite(model.inertia_))
+            self.assertIsNotNone(model.medoid_indices_)
+
+    def test_nan_freeze_recovery_fast_clarans(self):
+        """Bug B: FastCLARANS should not freeze when the first local search iteration is NaN."""
+        X, _ = make_blobs(n_samples=20, n_features=2, centers=2, random_state=42)
+        model = FastCLARANS(n_clusters=2, num_local=2, random_state=42)
+
+        call_idx = 0
+        original_single_search = model._single_local_search
+
+        def mock_search(X_in, rng, det, d_buf, delta_buf):
+            nonlocal call_idx
+            cost, medoids, evals, swaps = original_single_search(
+                X_in, rng, det, d_buf, delta_buf
+            )
+            if call_idx == 0:
+                cost = float("nan")
+            call_idx += 1
+            return cost, medoids, evals, swaps
+
+        with patch.object(model, "_single_local_search", side_effect=mock_search):
+            model.fit(X)
+            self.assertTrue(np.isfinite(model.inertia_))
+            self.assertIsNotNone(model.medoid_indices_)
+
+    def test_k_medoids_pp_fallback_metric_params(self):
+        """Bug C: Fallback branch of initialize_k_medoids_plus_plus must pass metric_params."""
+        X, _ = make_blobs(n_samples=15, n_features=2, centers=2, random_state=42)
+
+        def custom_metric(x, y, scale=1.0):
+            return scale * np.linalg.norm(x - y)
+
+        with patch("clarans._initialization._core", None):
+            medoids = initialize_k_medoids_plus_plus(
+                X,
+                n_clusters=2,
+                metric=custom_metric,
+                metric_params={"scale": 2.0},
+                n_local_trials=1,
+                random_state=42,
+            )
+            self.assertEqual(len(medoids), 2)
+
+    def test_asymmetric_precomputed_distance_sum(self):
+        """Bug D: Precomputed asymmetric distance matrices must sum columns (axis=0)."""
+        D = np.array(
+            [
+                [0.0, 10.0, 10.0],
+                [1.0, 0.0, 10.0],
+                [1.0, 10.0, 0.0],
+            ]
+        )
+        medoids_h = initialize_heuristic(D, n_clusters=1, metric="precomputed")
+        self.assertEqual(medoids_h[0], 0)
+
+        medoids_b = initialize_build(D, n_clusters=1, metric="precomputed")
+        self.assertEqual(medoids_b[0], 0)
+
+    def test_init_array_sklearn_standard_and_clear_error(self):
+        """Bug F / Bug 1: init array must adhere to sklearn standard (2D for features)."""
+        X = np.array([[1.0, 2.0], [3.0, 4.0], [5.0, 6.0], [7.0, 8.0]])
+        init_centers = np.array([[1.0, 2.0], [7.0, 8.0]])
+        model = CLARANS(n_clusters=2, init=init_centers, random_state=42)
+        model.fit(X)
+        self.assertEqual(len(model.cluster_centers_), 2)
+
+        init_1d = np.array([0, 2])
+        with self.assertRaises(ValueError) as ctx:
+            CLARANS(n_clusters=2, init=init_1d, random_state=42).fit(X)
+        self.assertIn("init array must be 2D of shape (2, 2)", str(ctx.exception))
+
+
 if __name__ == "__main__":
     unittest.main()

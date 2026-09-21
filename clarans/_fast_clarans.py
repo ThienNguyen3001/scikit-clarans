@@ -235,7 +235,11 @@ class FastCLARANS(CLARANS):
             )
 
             tol = -max(1e-16, 1e-12 * abs(current_cost))
-            if loc_idx == 0 or current_cost < best_cost + tol:
+            if (
+                loc_idx == 0
+                or not np.isfinite(best_cost)
+                or (np.isfinite(current_cost) and current_cost < best_cost + tol)
+            ):
                 best_cost = current_cost
                 best_medoids = current_medoids_indices.copy()
                 best_n_iter = eval_count

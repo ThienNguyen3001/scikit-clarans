@@ -99,9 +99,9 @@ def initialize_heuristic(X, n_clusters, metric="euclidean", metric_params=None):
         D = _compute_pairwise_distances(X, metric=metric, metric_params=metric_params)
 
     if hasattr(D, "toarray"):
-        dist_sums = np.asarray(D.sum(axis=1)).ravel()
+        dist_sums = np.asarray(D.sum(axis=0)).ravel()
     else:
-        dist_sums = np.sum(D, axis=1)
+        dist_sums = np.sum(D, axis=0)
     current_medoids_indices = np.argpartition(dist_sums, n_clusters - 1)[:n_clusters]
     return current_medoids_indices
 
@@ -168,7 +168,7 @@ def initialize_build(X, n_clusters, metric="euclidean", metric_params=None):
     else:
         D = _compute_pairwise_distances(X, metric=metric, metric_params=metric_params)
 
-    dist_sums = D.sum(axis=1)
+    dist_sums = D.sum(axis=0)
     first_medoid = int(np.argmin(dist_sums))
     medoids.append(first_medoid)
 
@@ -379,7 +379,9 @@ def initialize_k_medoids_plus_plus(
                     else np.asarray(cand_row).ravel()
                 )
             else:
-                row_dist = _compute_pairwise_distances(cand_row, X, metric=metric).ravel()
+                row_dist = _compute_pairwise_distances(
+                    cand_row, X, metric=metric, metric_params=metric_params
+                ).ravel()
             best_dist_sq = np.minimum(closest_dist_sq, row_dist**2)
             best_pot = float(best_dist_sq.sum())
 
