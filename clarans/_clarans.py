@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+import inspect
 import warnings
 from typing import TYPE_CHECKING, Any, Sequence
 
@@ -23,6 +24,19 @@ from .utils import (
     calculate_cost,
     check_medoids,
 )
+
+# Detect whether check_array expects 'ensure_all_finite' (scikit-learn >= 1.6)
+# or 'force_all_finite' (< 1.6)
+_FINITE_PARAM = (
+    "ensure_all_finite"
+    if "ensure_all_finite" in inspect.signature(check_array).parameters
+    else "force_all_finite"
+)
+
+
+def _finite_kwarg(allow_nan: bool) -> dict[str, Any]:
+    return {_FINITE_PARAM: "allow-nan" if allow_nan else True}
+
 
 try:
     _DM_METRICS = {m for m in DistanceMetric.get_valid_metric_ids() if m != "pyfunc"}
@@ -228,8 +242,7 @@ class CLARANS(ClusterMixin, TransformerMixin, BaseEstimator):
         """
         is_deterministic = (
             (isinstance(self.init, str) and self.init in ("build", "heuristic"))
-            or hasattr(self.init, "__array__")
-            or isinstance(self.init, list)
+            or not isinstance(self.init, str)
         )
         if is_deterministic:
             if self.num_local > 1:
@@ -273,24 +286,31 @@ class CLARANS(ClusterMixin, TransformerMixin, BaseEstimator):
         n_samples, n_features = X.shape
         all_indices = np.arange(n_samples)
 
-        if isinstance(self.init, str) and self.init == "random":
-            current_medoids_indices = random_state.choice(
-                n_samples, self.n_clusters, replace=False
-            )
-        elif isinstance(self.init, str) and self.init == "k-medoids++":
-            current_medoids_indices = initialize_k_medoids_plus_plus(
-                X, self.n_clusters, random_state, self.metric, metric_params=self.metric_params
-            )
-        elif isinstance(self.init, str) and self.init == "heuristic":
-            current_medoids_indices = initialize_heuristic(
-                X, self.n_clusters, self.metric, metric_params=self.metric_params
-            )
-        elif isinstance(self.init, str) and self.init == "build":
-            current_medoids_indices = initialize_build(
-                X, self.n_clusters, self.metric, metric_params=self.metric_params
-            )
-        elif hasattr(self.init, "__array__") or isinstance(self.init, list):
-            init_arr = np.asarray(self.init)
+        if isinstance(self.init, str):
+            if self.init == "random":
+                current_medoids_indices = random_state.choice(
+                    n_samples, self.n_clusters, replace=False
+                )
+            elif self.init == "k-medoids++":
+                current_medoids_indices = initialize_k_medoids_plus_plus(
+                    X, self.n_clusters, random_state, self.metric, metric_params=self.metric_params
+                )
+            elif self.init == "heuristic":
+                current_medoids_indices = initialize_heuristic(
+                    X, self.n_clusters, self.metric, metric_params=self.metric_params
+                )
+            elif self.init == "build":
+                current_medoids_indices = initialize_build(
+                    X, self.n_clusters, self.metric, metric_params=self.metric_params
+                )
+            else:
+                raise ValueError(f"Unknown init method: {self.init!r}")
+        else:
+            try:
+                init_arr = np.asarray(self.init)
+            except Exception as err:
+                raise ValueError(f"Could not convert init to array: {err}") from err
+
             if self.metric == "precomputed":
                 if (
                     init_arr.ndim == 1
@@ -360,8 +380,6 @@ class CLARANS(ClusterMixin, TransformerMixin, BaseEstimator):
                 current_medoids_indices = np.concatenate(
                     [current_medoids_indices, fillers]
                 )
-        else:
-            raise ValueError(f"Unknown init method: {self.init}")
 
         return np.array(current_medoids_indices, dtype=int)
 
@@ -372,12 +390,16 @@ class CLARANS(ClusterMixin, TransformerMixin, BaseEstimator):
         """
         tags = super().__sklearn_tags__()
         tags.input_tags.sparse = True
+        tags.input_tags.allow_nan = (self.metric == "nan_euclidean")
         if self.metric == "precomputed":
             tags.input_tags.pairwise = True
         return tags
 
     def _more_tags(self):
-        return {"pairwise": self.metric == "precomputed"}
+        return {
+            "pairwise": self.metric == "precomputed",
+            "allow_nan": self.metric == "nan_euclidean",
+        }
 
     def fit(self, X: ArrayLike | "spmatrix", y: Any = None) -> "CLARANS":
         """
@@ -664,12 +686,15 @@ class CLARANS(ClusterMixin, TransformerMixin, BaseEstimator):
                     and X.flags.c_contiguous
                     and X.dtype in (np.float64, np.float32)
                 ):
-                    is_sym = _core.is_matrix_symmetric(X, n_s, 1e-10)
+                    is_sym = _core.is_matrix_symmetric(X, n_s, 1e-5, 1e-8)
                 else:
                     is_sym = bool(np.allclose(X, X.T))
 
                 if is_sym:
-                    self._precomputed_source = X
+                    self._precomputed_source = (
+                        X if (isinstance(X, np.ndarray) and X.flags.c_contiguous)
+                        else np.ascontiguousarray(X)
+                    )
                     self._precomputed_is_sym = True
                 else:
                     self._precomputed_source = np.ascontiguousarray(X.T)
@@ -881,19 +906,26 @@ class CLARANS(ClusterMixin, TransformerMixin, BaseEstimator):
                     f"{options_repr} or a callable. Got {self.metric!r} instead."
                 )
 
+        allow_nan = (self.metric == "nan_euclidean")
+        finite_kw = _finite_kwarg(allow_nan)
         try:
             from sklearn.utils.validation import validate_data
 
             X = validate_data(
-                self, X=X, ensure_min_samples=2, accept_sparse=["csr", "csc"]
+                self, X=X, ensure_min_samples=2, accept_sparse=["csr", "csc"],
+                **finite_kw
             )
         except ImportError:
             if hasattr(self, "_validate_data"):
                 X = self._validate_data(
-                    X, ensure_min_samples=2, accept_sparse=["csr", "csc"]
+                    X, ensure_min_samples=2, accept_sparse=["csr", "csc"],
+                    **finite_kw
                 )
             else:
-                X = check_array(X, ensure_min_samples=2, accept_sparse=["csr", "csc"])
+                X = check_array(
+                    X, ensure_min_samples=2, accept_sparse=["csr", "csc"],
+                    **finite_kw
+                )
                 self.n_features_in_ = X.shape[1]
 
         random_state = check_random_state(self.random_state)
@@ -994,15 +1026,26 @@ class CLARANS(ClusterMixin, TransformerMixin, BaseEstimator):
                 dist_to_medoids = dist_to_medoids.toarray()
             return np.argmin(dist_to_medoids, axis=1)
 
+        allow_nan = (self.metric == "nan_euclidean")
+        finite_kw = _finite_kwarg(allow_nan)
         try:
             from sklearn.utils.validation import validate_data
 
-            X = validate_data(self, X=X, reset=False, accept_sparse=["csr", "csc"])
+            X = validate_data(
+                self, X=X, reset=False, accept_sparse=["csr", "csc"],
+                **finite_kw
+            )
         except ImportError:
             if hasattr(self, "_validate_data"):
-                X = self._validate_data(X, reset=False, accept_sparse=["csr", "csc"])
+                X = self._validate_data(
+                    X, reset=False, accept_sparse=["csr", "csc"],
+                    **finite_kw
+                )
             else:
-                X = check_array(X, accept_sparse=["csr", "csc"])
+                X = check_array(
+                    X, accept_sparse=["csr", "csc"],
+                    **finite_kw
+                )
                 if (
                     hasattr(self, "n_features_in_")
                     and X.shape[1] != self.n_features_in_
@@ -1062,14 +1105,25 @@ class CLARANS(ClusterMixin, TransformerMixin, BaseEstimator):
                 else np.asarray(dist_to_medoids)
             )
 
+        allow_nan = (self.metric == "nan_euclidean")
+        finite_kw = _finite_kwarg(allow_nan)
         try:
             from sklearn.utils.validation import validate_data
-            X = validate_data(self, X=X, reset=False, accept_sparse=["csr", "csc"])
+            X = validate_data(
+                self, X=X, reset=False, accept_sparse=["csr", "csc"],
+                **finite_kw
+            )
         except ImportError:
             if hasattr(self, "_validate_data"):
-                X = self._validate_data(X, reset=False, accept_sparse=["csr", "csc"])
+                X = self._validate_data(
+                    X, reset=False, accept_sparse=["csr", "csc"],
+                    **finite_kw
+                )
             else:
-                X = check_array(X, accept_sparse=["csr", "csc"])
+                X = check_array(
+                    X, accept_sparse=["csr", "csc"],
+                    **finite_kw
+                )
 
         params = self.metric_params if self.metric_params is not None else {}
         if not issparse(X):
@@ -1082,6 +1136,30 @@ class CLARANS(ClusterMixin, TransformerMixin, BaseEstimator):
         return pairwise_distances(
             X, self.cluster_centers_, metric=self.metric, **params
         )
+
+    def score(self, X: ArrayLike | "spmatrix", y: Any = None) -> float:
+        """Opposite of the total distance of samples to their closest cluster center.
+
+        Enables direct integration with GridSearchCV and cross_val_score.
+        Uses transform(X) to evaluate distances to learned medoids on both
+        train and unseen test data.
+
+        Parameters
+        ----------
+        X : {array-like, sparse matrix} of shape (n_samples, n_features)
+            or (n_samples, n_train_samples) if metric='precomputed'.
+            New data to score.
+
+        y : Ignored, default=None
+            Not used, present here for API consistency with scikit-learn.
+
+        Returns
+        -------
+        score : float
+            Opposite of the total cost (sum of distances to the closest center).
+        """
+        check_is_fitted(self)
+        return -float(np.sum(np.min(self.transform(X), axis=1)))
 
     def get_feature_names_out(self, input_features=None) -> np.ndarray:
         """

@@ -275,14 +275,15 @@ def initialize_k_medoids_plus_plus(
     first_medoid = random_state.randint(0, n_samples)
     medoid_indices[0] = first_medoid
 
-    first_row = X[first_medoid : first_medoid + 1]
     if metric == "precomputed":
+        col_m = X[:, first_medoid]
         closest = (
-            first_row.toarray().ravel()
-            if hasattr(first_row, "toarray")
-            else np.asarray(first_row).ravel()
+            col_m.toarray().ravel()
+            if hasattr(col_m, "toarray")
+            else np.asarray(col_m).ravel()
         )
     else:
+        first_row = X[first_medoid : first_medoid + 1]
         closest = _compute_pairwise_distances(
             X,
             first_row,
@@ -308,22 +309,19 @@ def initialize_k_medoids_plus_plus(
         np.clip(candidate_ids, 0, n_samples - 1, out=candidate_ids)
 
         if metric == "precomputed":
-            dists_candidates = (
-                (
-                    X[candidate_ids].toarray()
-                    if hasattr(X, "toarray")
-                    else np.asarray(X[candidate_ids])
-                )
-                ** 2
+            cols = X[:, candidate_ids]
+            cols_dense = (
+                cols.toarray()
+                if hasattr(cols, "toarray")
+                else np.asarray(cols)
             )
+            dists_candidates = np.ascontiguousarray((cols_dense.T)**2)
         else:
             candidates_X = X[candidate_ids]
-            dists_candidates = (
-                _compute_pairwise_distances(
-                    candidates_X, X, metric=metric, metric_params=metric_params
-                )
-                ** 2
+            cand_dists = _compute_pairwise_distances(
+                X, candidates_X, metric=metric, metric_params=metric_params
             )
+            dists_candidates = np.ascontiguousarray((cand_dists.T)**2)
 
         best_candidate = None
         best_pot = None
@@ -372,16 +370,17 @@ def initialize_k_medoids_plus_plus(
         if best_candidate is None:
             remaining = np.setdiff1d(np.arange(n_samples), medoid_indices[:c])
             best_candidate = int(random_state.choice(remaining))
-            cand_row = X[best_candidate : best_candidate + 1]
             if metric == "precomputed":
+                col_cand = X[:, best_candidate]
                 row_dist = (
-                    cand_row.toarray().ravel()
-                    if hasattr(cand_row, "toarray")
-                    else np.asarray(cand_row).ravel()
+                    col_cand.toarray().ravel()
+                    if hasattr(col_cand, "toarray")
+                    else np.asarray(col_cand).ravel()
                 )
             else:
+                cand_row = X[best_candidate : best_candidate + 1]
                 row_dist = _compute_pairwise_distances(
-                    cand_row, X, metric=metric, metric_params=metric_params
+                    X, cand_row, metric=metric, metric_params=metric_params
                 ).ravel()
             best_dist_sq = np.minimum(closest_dist_sq, row_dist**2)
             best_pot = float(best_dist_sq.sum())

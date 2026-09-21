@@ -49,6 +49,7 @@ def kmedoids_pp_trials(
 def is_matrix_symmetric(
     D: np.ndarray,
     n_samples: int,
-    tol: float = 1e-10,
+    rtol: float = 1e-5,
+    atol: float = 1e-8,
 ) -> bool: ...
 

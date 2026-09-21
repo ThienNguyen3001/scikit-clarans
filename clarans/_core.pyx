@@ -13,7 +13,7 @@ Conforming to scikit-learn Cython production standards:
 
 import numpy as np
 cimport numpy as cnp
-from libc.math cimport sqrt, INFINITY
+from libc.math cimport sqrt, INFINITY, isnan
 
 # Initialize NumPy C API
 cnp.import_array()
@@ -89,6 +89,10 @@ def fastpam1_delta(
         )
         delta_arr = total_delta_np
     else:
+        if delta_buf.shape[0] < n_clusters:
+            raise ValueError(
+                f"delta_buf length ({delta_buf.shape[0]}) must be >= n_clusters ({n_clusters})"
+            )
         delta_arr = delta_buf
 
     with nogil:
@@ -289,25 +293,34 @@ def kmedoids_pp_trials(
 def is_matrix_symmetric(
     const floating[:, ::1] D,
     Py_ssize_t n_samples,
-    double tol=1e-10,
+    double rtol=1e-5,
+    double atol=1e-8,
 ):
     """
-    Check whether a 2D square matrix is symmetric within tolerance `tol` (D[i, j] == D[j, i]).
+    Check whether a 2D square matrix is symmetric within tolerance (D[i, j] == D[j, i]).
+    Follows NumPy's allclose standard: |D[i, j] - D[j, i]| <= atol + rtol * |D[j, i]|.
+    Also returns False immediately if any element is NaN.
     Scans the upper triangle with immediate Early Exit on the first asymmetric element.
     Executes in pure C with nogil, allocating 0 bytes of memory.
     """
     cdef:
         Py_ssize_t i, j
-        floating diff
+        floating val_ij, val_ji, diff, threshold
         int symmetric = 1
 
     with nogil:
         for i in range(n_samples):
             for j in range(i + 1, n_samples):
-                diff = D[i, j] - D[j, i]
+                val_ij = D[i, j]
+                val_ji = D[j, i]
+                if isnan(val_ij) or isnan(val_ji):
+                    symmetric = 0
+                    break
+                diff = val_ij - val_ji
                 if diff < 0:
                     diff = -diff
-                if diff > tol:
+                threshold = atol + rtol * (val_ji if val_ji >= 0 else -val_ji)
+                if diff > threshold:
                     symmetric = 0
                     break
             if not symmetric:
