@@ -151,6 +151,8 @@ def calculate_cost(
     cost : float
         The total sum of distances from each point to its nearest medoid.
     """
+    medoid_indices = check_medoids(medoid_indices, n_samples=X.shape[0])
+
     if metric == "precomputed":
         dist_sub = X[:, medoid_indices]
         if hasattr(dist_sub, "toarray"):

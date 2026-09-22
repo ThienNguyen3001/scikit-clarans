@@ -13,7 +13,7 @@ Conforming to scikit-learn Cython production standards:
 
 import numpy as np
 cimport numpy as cnp
-from libc.math cimport sqrt, INFINITY, isnan
+from libc.math cimport sqrt, INFINITY, isnan, isinf
 
 # Initialize NumPy C API
 cnp.import_array()
@@ -164,7 +164,17 @@ def update_cache_2min(
 
     with nogil:
         for i in range(n_samples):
-            if subD[i, 0] <= subD[i, 1]:
+            if isnan(subD[i, 0]):
+                m1_val = subD[i, 1]
+                m1_idx = 1
+                m2_val = subD[i, 0]
+                m2_idx = 0
+            elif isnan(subD[i, 1]):
+                m1_val = subD[i, 0]
+                m1_idx = 0
+                m2_val = subD[i, 1]
+                m2_idx = 1
+            elif subD[i, 0] <= subD[i, 1]:
                 m1_val = subD[i, 0]
                 m1_idx = 0
                 m2_val = subD[i, 1]
@@ -177,12 +187,14 @@ def update_cache_2min(
 
             for m in range(2, n_clusters):
                 d = subD[i, m]
-                if d < m1_val:
+                if isnan(d):
+                    continue
+                if isnan(m1_val) or d < m1_val:
                     m2_val = m1_val
                     m2_idx = m1_idx
                     m1_val = d
                     m1_idx = m
-                elif d < m2_val:
+                elif isnan(m2_val) or d < m2_val:
                     m2_val = d
                     m2_idx = m
             near_idx_map[i] = m1_idx
@@ -316,7 +328,15 @@ def is_matrix_symmetric(
                 if isnan(val_ij) or isnan(val_ji):
                     symmetric = 0
                     break
+                if val_ij == val_ji:
+                    continue
+                if isinf(val_ij) or isinf(val_ji):
+                    symmetric = 0
+                    break
                 diff = val_ij - val_ji
+                if isnan(diff):
+                    symmetric = 0
+                    break
                 if diff < 0:
                     diff = -diff
                 threshold = atol + rtol * (val_ji if val_ji >= 0 else -val_ji)

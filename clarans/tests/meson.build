@@ -5,6 +5,7 @@ python_test_sources = [
   'test_clarans.py',
   'test_common.py',
   'test_cython_core.py',
+  'test_deep_audit_bugs.py',
   'test_ecosystem_and_advanced.py',
   'test_fast_clarans.py',
   'test_robustness.py',
