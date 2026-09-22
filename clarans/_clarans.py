@@ -746,14 +746,14 @@ class CLARANS(ClusterMixin, TransformerMixin, BaseEstimator):
         if engine == "cdist":
             if out is not None and out.dtype == np.float64:
                 cdist(
-                    X,
                     cand_row,
+                    X,
                     metric=self._scipy_metric,
-                    out=out.reshape(-1, 1),
+                    out=out.reshape(1, -1),
                     **params,
                 )
                 return out
-            return cdist(X, cand_row, metric=self._scipy_metric, **params).ravel()
+            return cdist(cand_row, X, metric=self._scipy_metric, **params)[0]
         elif engine == "precomputed":
             if candidate_idx is not None:
                 source = getattr(self, "_precomputed_source", X)
