@@ -8,6 +8,7 @@ python_test_sources = [
   'test_initialization.py',
   'test_regressions.py',
   'test_robustness.py',
+  'test_bug_verification.py',
 ]
 
 py.install_sources(
