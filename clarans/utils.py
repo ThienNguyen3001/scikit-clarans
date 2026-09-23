@@ -33,7 +33,6 @@ def _warn_cython_unavailable() -> None:
     if not HAS_CYTHON and not _cython_warning_issued:
         with _cython_warning_lock:
             if not _cython_warning_issued:
-                _cython_warning_issued = True
                 warnings.warn(
                     "Compiled Cython extensions (_core) are not available; falling back to "
                     "pure Python/NumPy implementation. Performance will be significantly slower. "
@@ -42,6 +41,7 @@ def _warn_cython_unavailable() -> None:
                     EfficiencyWarning,
                     stacklevel=3,
                 )
+                _cython_warning_issued = True
 
 
 __all__ = [

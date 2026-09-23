@@ -227,38 +227,39 @@ class FastCLARANS(CLARANS):
         d_xc_buf = np.empty(n_samples, dtype=buf_dtype)
         delta_arr_buf = np.zeros(self.n_clusters, dtype=buf_dtype)
 
-        for loc_idx in range(self.num_local):
-            current_cost, current_medoids_indices, eval_count, swap_count = (
-                self._single_local_search(
-                    X, random_state, deterministic_medoids, d_xc_buf, delta_arr_buf
+        try:
+            for loc_idx in range(self.num_local):
+                current_cost, current_medoids_indices, eval_count, swap_count = (
+                    self._single_local_search(
+                        X, random_state, deterministic_medoids, d_xc_buf, delta_arr_buf
+                    )
                 )
-            )
 
-            tol = -max(1e-16, 1e-12 * abs(current_cost))
-            if (
-                loc_idx == 0
-                or not np.isfinite(best_cost)
-                or (np.isfinite(current_cost) and current_cost < best_cost + tol)
-            ):
-                best_cost = current_cost
-                best_medoids = current_medoids_indices.copy()
-                best_n_iter = eval_count
-                best_n_swaps = swap_count
+                tol = -max(1e-16, 1e-12 * abs(current_cost))
+                if (
+                    loc_idx == 0
+                    or not np.isfinite(best_cost)
+                    or (np.isfinite(current_cost) and current_cost < best_cost + tol)
+                ):
+                    best_cost = current_cost
+                    best_medoids = current_medoids_indices.copy()
+                    best_n_iter = eval_count
+                    best_n_swaps = swap_count
 
-        if best_medoids is None or not np.isfinite(best_cost):
-            # Clean up internal references to input data to prevent memory leak
+            if best_medoids is None or not np.isfinite(best_cost):
+                raise ValueError(
+                    f"Clustering failed: all local searches resulted in non-finite cost "
+                    f"({best_cost}). Check your data for NaNs, infinities, zero vectors "
+                    "with cosine distance, or excessive outliers."
+                )
+
+            self.n_iter_ = best_n_iter
+            self.n_swaps_ = best_n_swaps
+
+            return self._finalize_fit(X, best_cost, best_medoids)
+        finally:
             if hasattr(self, "_precomputed_source"):
                 del self._precomputed_source
-            raise ValueError(
-                f"Clustering failed: all local searches resulted in non-finite cost "
-                f"({best_cost}). Check your data for NaNs, infinities, zero vectors "
-                "with cosine distance, or excessive outliers."
-            )
-
-        self.n_iter_ = best_n_iter
-        self.n_swaps_ = best_n_swaps
-
-        return self._finalize_fit(X, best_cost, best_medoids)
 
     def _single_local_search(
         self,

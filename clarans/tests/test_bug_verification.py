@@ -226,9 +226,9 @@ class TestBug3_PrecomputedViewAliasing(unittest.TestCase):
         Confirm whether returned vector shares memory with the input matrix.
     """
 
-    def test_precomputed_symmetric_matrix_returns_view_sharing_memory(self):
+    def test_precomputed_symmetric_matrix_returns_safe_copy_not_sharing_memory(self):
         """For a symmetric C-contiguous distance matrix D, _compute_1_vs_n
-        returns a view that shares memory with D.
+        without out buffer returns a safe copy that does NOT share memory with D.
         """
         rng = np.random.RandomState(42)
         X = rng.randn(20, 3)
@@ -240,20 +240,19 @@ class TestBug3_PrecomputedViewAliasing(unittest.TestCase):
 
         d_xc = model._compute_1_vs_n(None, D, candidate_idx=2)
 
-        # CONFIRMED: d_xc shares memory with D
-        self.assertTrue(
+        # FIXED: d_xc does NOT share memory with D
+        self.assertFalse(
             np.shares_memory(d_xc, D),
-            "d_xc should share memory with input matrix D when precomputed and symmetric",
+            "d_xc should NOT share memory with input matrix D (safe copy prevents aliasing)",
         )
-        self.assertIs(d_xc.base, D, "d_xc base should be D")
 
-    def test_mutation_of_returned_view_mutates_source_matrix(self):
-        """Demonstrates that in-place mutation of the returned view mutates
-        the source distance matrix D.
+    def test_mutation_of_returned_vector_does_not_mutate_source_matrix(self):
+        """Demonstrates that in-place mutation of the returned vector does NOT
+        mutate the source distance matrix D.
         """
         rng = np.random.RandomState(42)
         D = pairwise_distances(rng.randn(10, 2))
-        original_entry = D[3, 5]
+        original_entry = float(D[3, 5])
 
         model = CLARANS(n_clusters=2, metric="precomputed", random_state=42)
         model._setup_distance_engine(D)
@@ -261,16 +260,16 @@ class TestBug3_PrecomputedViewAliasing(unittest.TestCase):
         d_xc = model._compute_1_vs_n(None, D, candidate_idx=3)
         d_xc[5] += 999.0
 
-        # CONFIRMED: mutating d_xc mutates D[3, 5]
+        # FIXED: mutating d_xc does NOT mutate D[3, 5]
         self.assertEqual(
             D[3, 5],
-            original_entry + 999.0,
-            "Mutating d_xc view directly altered source matrix D",
+            original_entry,
+            "Mutating d_xc must NOT alter source distance matrix D",
         )
 
-    def test_precomputed_engine_bypasses_out_buffer(self):
+    def test_precomputed_engine_honors_out_buffer(self):
         """When out=d_xc_buf is passed to _compute_1_vs_n with precomputed engine,
-        the buffer is ignored and the returned array is NOT the buffer.
+        the buffer is populated in-place and returned.
         """
         D = pairwise_distances(np.random.RandomState(42).randn(15, 2))
         model = CLARANS(n_clusters=2, metric="precomputed", random_state=42)
@@ -279,15 +278,13 @@ class TestBug3_PrecomputedViewAliasing(unittest.TestCase):
         buf = np.zeros(15, dtype=np.float64)
         result = model._compute_1_vs_n(None, D, candidate_idx=1, out=buf)
 
-        self.assertIsNot(
+        # FIXED: buffer is honored and returned
+        self.assertIs(
             result,
             buf,
-            "Precomputed engine should bypass out buffer (returns view instead of copying into out)",
+            "Precomputed engine should populate and return the caller's out buffer",
         )
-        self.assertTrue(
-            np.all(buf == 0.0),
-            "Buffer was left unmodified because precomputed engine ignored out parameter",
-        )
+        np.testing.assert_allclose(buf, D[1])
 
 
 # ============================================================================
@@ -303,12 +300,12 @@ class TestBug4_PrecomputedSourceMemoryLeak(unittest.TestCase):
         `_precomputed_source` remains attached to the model, leaking the full matrix.
 
     VERIFICATION GOAL:
-        Confirm that an exception during local search leaves `_precomputed_source`
-        dangling on both CLARANS and FastCLARANS instances.
+        Confirm that with try...finally in place, an exception during local search
+        unconditionally cleans up `_precomputed_source` on both CLARANS and FastCLARANS.
     """
 
-    def test_clarans_leaks_precomputed_source_on_unhandled_exception(self):
-        """CLARANS: An unhandled exception during local search leaves _precomputed_source."""
+    def test_clarans_cleans_up_precomputed_source_on_unhandled_exception(self):
+        """CLARANS: An unhandled exception during local search cleans up _precomputed_source."""
         D = np.random.RandomState(42).rand(25, 25)
         model = CLARANS(n_clusters=3, metric="precomputed", random_state=42)
 
@@ -319,15 +316,14 @@ class TestBug4_PrecomputedSourceMemoryLeak(unittest.TestCase):
             with self.assertRaises(RuntimeError):
                 model.fit(D)
 
-        # CONFIRMED BUG: _precomputed_source was NOT cleaned up!
-        self.assertTrue(
+        # FIXED: _precomputed_source was cleaned up in finally block!
+        self.assertFalse(
             hasattr(model, "_precomputed_source"),
-            "CONFIRMED BUG: _precomputed_source leaked on model after unhandled exception",
+            "FIXED: _precomputed_source was cleaned up even when exception occurred",
         )
-        self.assertEqual(model._precomputed_source.shape, D.shape)
 
-    def test_fastclarans_leaks_precomputed_source_on_unhandled_exception(self):
-        """FastCLARANS: An unhandled exception during local search leaves _precomputed_source."""
+    def test_fastclarans_cleans_up_precomputed_source_on_unhandled_exception(self):
+        """FastCLARANS: An unhandled exception during local search cleans up _precomputed_source."""
         D = np.random.RandomState(42).rand(25, 25)
         model = FastCLARANS(n_clusters=3, metric="precomputed", random_state=42)
 
@@ -338,10 +334,10 @@ class TestBug4_PrecomputedSourceMemoryLeak(unittest.TestCase):
             with self.assertRaises(RuntimeError):
                 model.fit(D)
 
-        # CONFIRMED BUG: _precomputed_source was NOT cleaned up!
-        self.assertTrue(
+        # FIXED: _precomputed_source was cleaned up in finally block!
+        self.assertFalse(
             hasattr(model, "_precomputed_source"),
-            "CONFIRMED BUG: FastCLARANS leaked _precomputed_source on unhandled exception",
+            "FIXED: FastCLARANS cleaned up _precomputed_source even when exception occurred",
         )
 
 
@@ -438,19 +434,20 @@ class TestBug10_WarningFlagOrder(unittest.TestCase):
     """Verifies Bug #10 from bug_report.md.
 
     CLAIM in bug_report.md:
-        In `_warn_cython_unavailable()`, `_cython_warning_issued = True` is set
-        BEFORE `warnings.warn(...)`. If `warnings.warn(...)` raises an exception
-        (e.g., when filtered as error), the flag is already set, permanently
+        In `_warn_cython_unavailable()`, `_cython_warning_issued = True` was set
+        BEFORE `warnings.warn(...)`. If `warnings.warn(...)` raised an exception
+        (e.g., when filtered as error), the flag was already set, permanently
         suppressing the warning on future invocations.
 
     VERIFICATION GOAL:
-        Demonstrate that raising an error on warning leaves the flag set to True.
+        Demonstrate that with the fix, raising an error on warning leaves the
+        flag False until warning succeeds.
     """
 
-    def test_flag_set_before_warn_suppresses_subsequent_warnings(self):
+    def test_flag_not_set_when_warn_raises_error(self):
         """When EfficiencyWarning is filtered as 'error', _warn_cython_unavailable
-        raises the error. Because flag was set before warn, a subsequent call
-        under 'always' filter will NOT issue the warning.
+        raises the error. Because flag is set AFTER warn, the flag remains False,
+        and a subsequent call under 'always' filter WILL issue the warning.
         """
         from clarans import utils
 
@@ -466,21 +463,22 @@ class TestBug10_WarningFlagOrder(unittest.TestCase):
                     with self.assertRaises(EfficiencyWarning):
                         utils._warn_cython_unavailable()
 
-                # CONFIRMED: flag was set to True despite the exception
-                self.assertTrue(
+                # FIXED: flag remains False because warn raised exception!
+                self.assertFalse(
                     utils._cython_warning_issued,
-                    "CONFIRMED: Flag was prematurely set to True before warnings.warn completed",
+                    "FIXED: Flag must remain False when warnings.warn raises an exception",
                 )
 
-                # Subsequent call with 'always' filter is suppressed
+                # Subsequent call with 'always' filter is properly emitted
                 with warnings.catch_warnings(record=True) as recorded:
                     warnings.simplefilter("always", EfficiencyWarning)
                     utils._warn_cython_unavailable()
                     self.assertEqual(
                         len(recorded),
-                        0,
-                        "Warning was suppressed on subsequent call because flag was prematurely set",
+                        1,
+                        "Warning was properly issued on subsequent call because flag was not set",
                     )
+                    self.assertTrue(utils._cython_warning_issued)
         finally:
             utils._cython_warning_issued = original_flag
 
