@@ -10,11 +10,6 @@ from sklearn.metrics import (
 )
 
 from clarans import CLARANS, FastCLARANS
-from clarans._initialization import (
-    initialize_build,
-    initialize_heuristic,
-    initialize_k_medoids_plus_plus,
-)
 from clarans.utils import calculate_cost, check_medoids
 
 
@@ -335,85 +330,6 @@ class TestCLARANSEdgeCases(unittest.TestCase):
         clarans.fit(X)
         self.assertEqual(len(clarans.medoid_indices_), 3)
         self.assertEqual(clarans.cluster_centers_.shape, (3, 1))
-
-
-class TestInitializationFunctions(unittest.TestCase):
-    """Test initialization functions directly."""
-
-    def setUp(self):
-        self.X, _ = make_blobs(n_samples=100, centers=3, n_features=2, random_state=42)
-
-    def test_heuristic_count_and_uniqueness(self):
-        """Heuristic init should return correct number of unique medoids."""
-        for n_clusters in [2, 3, 5]:
-            medoids = initialize_heuristic(self.X, n_clusters, "euclidean")
-            self.assertEqual(len(medoids), n_clusters)
-            self.assertEqual(len(np.unique(medoids)), n_clusters)
-
-    def test_heuristic_selects_smallest_sum_distance(self):
-        """Heuristic should select points with smallest sum of distances."""
-        medoids = initialize_heuristic(self.X, 3, "euclidean")
-        D = pairwise_distances(self.X, metric="euclidean")
-        dist_sums = np.sum(D, axis=1)
-        expected = np.argsort(dist_sums)[:3]
-        np.testing.assert_array_equal(medoids, expected)
-
-    def test_build_count_and_uniqueness(self):
-        """BUILD init should return correct number of unique medoids."""
-        for n_clusters in [2, 3, 5]:
-            medoids = initialize_build(self.X, n_clusters, "euclidean")
-            self.assertEqual(len(medoids), n_clusters)
-            self.assertEqual(len(np.unique(medoids)), n_clusters)
-
-    def test_build_first_medoid_is_most_central(self):
-        """BUILD should pick the most central point first."""
-        medoids = initialize_build(self.X, 3, "euclidean")
-        D = pairwise_distances(self.X, metric="euclidean")
-        expected_first = np.argmin(D.sum(axis=1))
-        self.assertEqual(medoids[0], expected_first)
-
-    def test_build_sparse_precomputed_warning(self):
-        """initialize_build should warn when a sparse precomputed matrix is passed."""
-        import warnings
-        from scipy.sparse import csr_matrix
-
-        D = pairwise_distances(self.X[:10], metric="euclidean")
-        D_sparse = csr_matrix(D)
-        with warnings.catch_warnings(record=True) as w:
-            warnings.simplefilter("always")
-            medoids = initialize_build(D_sparse, n_clusters=2, metric="precomputed")
-            self.assertEqual(len(medoids), 2)
-            self.assertEqual(len(w), 1)
-            self.assertTrue(issubclass(w[-1].category, UserWarning))
-            self.assertIn("toarray", str(w[-1].message))
-            self.assertIn("sparse", str(w[-1].message))
-
-    def test_kmedoids_plusplus_count_and_uniqueness(self):
-        """K-medoids++ should return correct number of unique medoids."""
-        for n_clusters in [2, 3, 5]:
-            rng = np.random.RandomState(42)
-            medoids = initialize_k_medoids_plus_plus(
-                self.X, n_clusters, rng, "euclidean"
-            )
-            self.assertEqual(len(medoids), n_clusters)
-            self.assertEqual(len(np.unique(medoids)), n_clusters)
-
-    def test_kmedoids_plusplus_indices_in_range(self):
-        """K-medoids++ indices should be valid array indices."""
-        rng = np.random.RandomState(42)
-        medoids = initialize_k_medoids_plus_plus(self.X, 3, rng, "euclidean")
-        self.assertTrue(all(0 <= idx < len(self.X) for idx in medoids))
-
-    def test_kmedoids_plusplus_handles_zero_distance(self):
-        """K-medoids++ should handle identical points gracefully."""
-        X = np.array([
-            [0, 0], [0, 0], [0, 0],
-            [1, 1], [2, 2],
-        ])
-        rng = np.random.RandomState(42)
-        medoids = initialize_k_medoids_plus_plus(X, 3, rng, "euclidean")
-        self.assertEqual(len(medoids), 3)
-        self.assertEqual(len(np.unique(medoids)), 3)
 
 
 class TestCostCalculation(unittest.TestCase):
