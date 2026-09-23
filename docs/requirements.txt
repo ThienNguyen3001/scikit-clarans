@@ -8,3 +8,6 @@ sphinx_copybutton
 sphinx-gallery
 pillow
 matplotlib
+Cython>=3.0
+meson-python>=0.16.0
+ninja

@@ -10,10 +10,13 @@
 import os
 import sys
 
-# Add project root to sys.path so autodoc can import the package
-sys.path.insert(0, os.path.abspath(os.path.join(os.path.dirname(__file__), "..", "..")))
-
-import clarans
+# Prefer importing clarans from the installed environment (with compiled Cython extensions).
+# Only fallback to inserting the project root if it is not installed.
+try:
+    import clarans
+except ImportError:
+    sys.path.insert(0, os.path.abspath(os.path.join(os.path.dirname(__file__), "..", "..")))
+    import clarans
 
 project = "scikit-clarans"
 copyright = "2026, Nguyễn Ngọc Thiện"
