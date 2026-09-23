@@ -19,6 +19,7 @@ def fastpam1_delta(
     d_xc: np.ndarray,
     n_samples: int,
     n_clusters: int,
+    delta_buf: np.ndarray | None = None,
 ) -> Tuple[int, float, np.ndarray]: ...
 
 def update_cache_2min(
@@ -44,3 +45,11 @@ def kmedoids_pp_trials(
     n_local_trials: int,
     n_current_medoids: int,
 ) -> Tuple[int, float, np.ndarray]: ...
+
+def is_matrix_symmetric(
+    D: np.ndarray,
+    n_samples: int,
+    rtol: float = 1e-5,
+    atol: float = 1e-8,
+) -> bool: ...
+

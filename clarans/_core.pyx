@@ -13,7 +13,7 @@ Conforming to scikit-learn Cython production standards:
 
 import numpy as np
 cimport numpy as cnp
-from libc.math cimport sqrt, INFINITY
+from libc.math cimport sqrt, INFINITY, isnan, isinf
 
 # Initialize NumPy C API
 cnp.import_array()
@@ -69,21 +69,37 @@ def fastpam1_delta(
     const floating[::1] d_xc,
     Py_ssize_t n_samples,
     Py_ssize_t n_clusters,
+    floating[::1] delta_buf = None,
 ):
     """
     Compute FastPAM1 delta cost for all k clusters in a single O(n) pass.
     Replaces 3 np.bincount calls and 3 boolean masks with a single pass.
+    If delta_buf is provided, reuses it with zero Python allocations.
     """
     cdef:
-        cnp.ndarray[floating, ndim=1] total_delta_np = np.zeros(
-            n_clusters, dtype=np.float64 if floating is double else np.float32
-        )
-        floating[::1] delta_arr = total_delta_np
+        cnp.ndarray[floating, ndim=1] total_delta_np = None
+        floating[::1] delta_arr
         floating delta_td = 0.0
         Py_ssize_t j, m, best_m = 0
         floating d1, d2, dc, best_val
 
+    if delta_buf is None:
+        total_delta_np = np.zeros(
+            n_clusters, dtype=np.float64 if floating is double else np.float32
+        )
+        delta_arr = total_delta_np
+    else:
+        if delta_buf.shape[0] < n_clusters:
+            raise ValueError(
+                f"delta_buf length ({delta_buf.shape[0]}) must be >= n_clusters ({n_clusters})"
+            )
+        delta_arr = delta_buf
+
     with nogil:
+        if delta_buf is not None:
+            for m in range(n_clusters):
+                delta_arr[m] = 0.0
+
         for j in range(n_samples):
             m = near_idx_map[j]
             d1 = near_dist[j]
@@ -106,7 +122,7 @@ def fastpam1_delta(
                 best_val = delta_arr[m]
                 best_m = m
 
-    return best_m, best_val, total_delta_np
+    return best_m, best_val, total_delta_np if total_delta_np is not None else np.asarray(delta_arr)
 
 
 # ===========================================================================
@@ -148,7 +164,17 @@ def update_cache_2min(
 
     with nogil:
         for i in range(n_samples):
-            if subD[i, 0] <= subD[i, 1]:
+            if isnan(subD[i, 0]):
+                m1_val = subD[i, 1]
+                m1_idx = 1
+                m2_val = subD[i, 0]
+                m2_idx = 0
+            elif isnan(subD[i, 1]):
+                m1_val = subD[i, 0]
+                m1_idx = 0
+                m2_val = subD[i, 1]
+                m2_idx = 1
+            elif subD[i, 0] <= subD[i, 1]:
                 m1_val = subD[i, 0]
                 m1_idx = 0
                 m2_val = subD[i, 1]
@@ -161,12 +187,14 @@ def update_cache_2min(
 
             for m in range(2, n_clusters):
                 d = subD[i, m]
-                if d < m1_val:
+                if isnan(d):
+                    continue
+                if isnan(m1_val) or d < m1_val:
                     m2_val = m1_val
                     m2_idx = m1_idx
                     m1_val = d
                     m1_idx = m
-                elif d < m2_val:
+                elif isnan(m2_val) or d < m2_val:
                     m2_val = d
                     m2_idx = m
             near_idx_map[i] = m1_idx
@@ -269,3 +297,54 @@ def kmedoids_pp_trials(
                     best_v[i] = temp_v[i]
 
     return best_cand, best_pot, best_dist_sq
+
+
+# ===========================================================================
+# 6. Precomputed matrix symmetry check
+# ===========================================================================
+def is_matrix_symmetric(
+    const floating[:, ::1] D,
+    Py_ssize_t n_samples,
+    double rtol=1e-5,
+    double atol=1e-8,
+):
+    """
+    Check whether a 2D square matrix is symmetric within tolerance (D[i, j] == D[j, i]).
+    Follows NumPy's allclose standard: |D[i, j] - D[j, i]| <= atol + rtol * |D[j, i]|.
+    Also returns False immediately if any element is NaN.
+    Scans the upper triangle with immediate Early Exit on the first asymmetric element.
+    Executes in pure C with nogil, allocating 0 bytes of memory.
+    """
+    cdef:
+        Py_ssize_t i, j
+        floating val_ij, val_ji, diff, threshold
+        int symmetric = 1
+
+    with nogil:
+        for i in range(n_samples):
+            for j in range(i + 1, n_samples):
+                val_ij = D[i, j]
+                val_ji = D[j, i]
+                if isnan(val_ij) or isnan(val_ji):
+                    symmetric = 0
+                    break
+                if val_ij == val_ji:
+                    continue
+                if isinf(val_ij) or isinf(val_ji):
+                    symmetric = 0
+                    break
+                diff = val_ij - val_ji
+                if isnan(diff):
+                    symmetric = 0
+                    break
+                if diff < 0:
+                    diff = -diff
+                threshold = atol + rtol * (val_ji if val_ji >= 0 else -val_ji)
+                if diff > threshold:
+                    symmetric = 0
+                    break
+            if not symmetric:
+                break
+
+    return bool(symmetric)
+

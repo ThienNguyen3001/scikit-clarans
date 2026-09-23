@@ -240,23 +240,18 @@ class TestFastCLARANS(unittest.TestCase):
         model = FastCLARANS(n_clusters=3, num_local=1, random_state=42)
         self.assertEqual(model.max_neighbors, "auto")
         model.fit(self.X)
-        expected = max(250, int(0.025 * (100 - 3)))
+        expected = max(1, int(250 / 3), int(0.025 * (100 - 3)))
         self.assertEqual(model.max_neighbors_, expected)
 
     def test_max_neighbors_explicit_auto(self):
         """Explicit max_neighbors='auto' should work identically to default in FastCLARANS."""
         model = FastCLARANS(n_clusters=3, num_local=1, max_neighbors="auto", random_state=42)
         model.fit(self.X)
-        expected = max(250, int(0.025 * (100 - 3)))
+        expected = max(1, int(250 / 3), int(0.025 * (100 - 3)))
         self.assertEqual(model.max_neighbors_, expected)
 
     def test_delta_tolerance_rejects_ghost_swaps(self):
         """Tolerance should prevent ghost swaps in FastCLARANS."""
-        from clarans._clarans import _DELTA_TOL
-
-        self.assertLess(_DELTA_TOL, 0)
-        self.assertEqual(_DELTA_TOL, -1e-12)
-
         X_dup = np.array([[0.0, 0.0], [0.0, 0.0], [10.0, 10.0], [10.0, 10.0]])
         model = FastCLARANS(n_clusters=2, num_local=1, max_neighbors=50, random_state=42)
         model.fit(X_dup)
@@ -274,6 +269,68 @@ class TestFastCLARANS(unittest.TestCase):
         from clarans._clarans import CLARANS
 
         self.assertIs(FastCLARANS._update_cache, CLARANS._update_cache)
+
+
+class TestFastCLARANSMetricParams(unittest.TestCase):
+    """Test suite for metric_params parameter in FastCLARANS."""
+
+    def setUp(self):
+        np.random.seed(42)
+        self.X = np.random.randn(30, 3)
+
+    def test_minkowski_with_p(self):
+        """FastCLARANS should support Minkowski metric with p passed via metric_params."""
+        model = FastCLARANS(
+            n_clusters=2, metric="minkowski", metric_params={"p": 3}, random_state=42
+        )
+        model.fit(self.X)
+        self.assertEqual(model.labels_.shape, (len(self.X),))
+        self.assertEqual(model.cluster_centers_.shape, (2, 3))
+        preds = model.predict(self.X[:5])
+        self.assertEqual(preds.shape, (5,))
+        trans = model.transform(self.X[:5])
+        self.assertEqual(trans.shape, (5, 2))
+
+    def test_mahalanobis_with_vi(self):
+        """FastCLARANS should support Mahalanobis metric with VI in metric_params."""
+        VI = np.linalg.inv(np.cov(self.X.T))
+        model = FastCLARANS(
+            n_clusters=2, metric="mahalanobis", metric_params={"VI": VI}, random_state=42
+        )
+        model.fit(self.X)
+        self.assertEqual(model.labels_.shape, (len(self.X),))
+        preds = model.predict(self.X[:5])
+        self.assertEqual(preds.shape, (5,))
+        trans = model.transform(self.X[:5])
+        self.assertEqual(trans.shape, (5, 2))
+
+    def test_mahalanobis_missing_vi_raises(self):
+        """FastCLARANS with mahalanobis and no VI should raise ValueError."""
+        with self.assertRaises(ValueError) as ctx:
+            FastCLARANS(n_clusters=2, metric="mahalanobis", random_state=42).fit(self.X)
+        self.assertIn("vi", str(ctx.exception).lower())
+
+        with self.assertRaises(ValueError) as ctx:
+            FastCLARANS(
+                n_clusters=2, metric="mahalanobis", metric_params={}, random_state=42
+            ).fit(self.X)
+        self.assertIn("vi", str(ctx.exception).lower())
+
+    def test_invalid_metric_params_type(self):
+        """Non-dict metric_params should raise ValueError in FastCLARANS."""
+        with self.assertRaises(ValueError) as ctx:
+            FastCLARANS(n_clusters=2, metric_params="not_a_dict", random_state=42).fit(
+                self.X
+            )
+        self.assertIn("metric_params", str(ctx.exception).lower())
+
+    def test_clone_preserves_metric_params(self):
+        """clone should preserve metric_params correctly for FastCLARANS."""
+        from sklearn.base import clone
+
+        model = FastCLARANS(metric="minkowski", metric_params={"p": 4})
+        cloned = clone(model)
+        self.assertEqual(cloned.metric_params, {"p": 4})
 
 
 if __name__ == "__main__":

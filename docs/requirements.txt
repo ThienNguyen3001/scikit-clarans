@@ -5,3 +5,6 @@ scikit-learn
 scipy
 sphinx-autodoc-typehints
 sphinx_copybutton
+sphinx-gallery
+pillow
+matplotlib

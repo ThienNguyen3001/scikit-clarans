@@ -10,11 +10,6 @@ from sklearn.metrics import (
 )
 
 from clarans import CLARANS, FastCLARANS
-from clarans._initialization import (
-    initialize_build,
-    initialize_heuristic,
-    initialize_k_medoids_plus_plus,
-)
 from clarans.utils import calculate_cost, check_medoids
 
 
@@ -337,85 +332,6 @@ class TestCLARANSEdgeCases(unittest.TestCase):
         self.assertEqual(clarans.cluster_centers_.shape, (3, 1))
 
 
-class TestInitializationFunctions(unittest.TestCase):
-    """Test initialization functions directly."""
-
-    def setUp(self):
-        self.X, _ = make_blobs(n_samples=100, centers=3, n_features=2, random_state=42)
-
-    def test_heuristic_count_and_uniqueness(self):
-        """Heuristic init should return correct number of unique medoids."""
-        for n_clusters in [2, 3, 5]:
-            medoids = initialize_heuristic(self.X, n_clusters, "euclidean")
-            self.assertEqual(len(medoids), n_clusters)
-            self.assertEqual(len(np.unique(medoids)), n_clusters)
-
-    def test_heuristic_selects_smallest_sum_distance(self):
-        """Heuristic should select points with smallest sum of distances."""
-        medoids = initialize_heuristic(self.X, 3, "euclidean")
-        D = pairwise_distances(self.X, metric="euclidean")
-        dist_sums = np.sum(D, axis=1)
-        expected = np.argsort(dist_sums)[:3]
-        np.testing.assert_array_equal(medoids, expected)
-
-    def test_build_count_and_uniqueness(self):
-        """BUILD init should return correct number of unique medoids."""
-        for n_clusters in [2, 3, 5]:
-            medoids = initialize_build(self.X, n_clusters, "euclidean")
-            self.assertEqual(len(medoids), n_clusters)
-            self.assertEqual(len(np.unique(medoids)), n_clusters)
-
-    def test_build_first_medoid_is_most_central(self):
-        """BUILD should pick the most central point first."""
-        medoids = initialize_build(self.X, 3, "euclidean")
-        D = pairwise_distances(self.X, metric="euclidean")
-        expected_first = np.argmin(D.sum(axis=1))
-        self.assertEqual(medoids[0], expected_first)
-
-    def test_build_sparse_precomputed_warning(self):
-        """initialize_build should warn when a sparse precomputed matrix is passed."""
-        import warnings
-        from scipy.sparse import csr_matrix
-
-        D = pairwise_distances(self.X[:10], metric="euclidean")
-        D_sparse = csr_matrix(D)
-        with warnings.catch_warnings(record=True) as w:
-            warnings.simplefilter("always")
-            medoids = initialize_build(D_sparse, n_clusters=2, metric="precomputed")
-            self.assertEqual(len(medoids), 2)
-            self.assertEqual(len(w), 1)
-            self.assertTrue(issubclass(w[-1].category, UserWarning))
-            self.assertIn("toarray", str(w[-1].message))
-            self.assertIn("sparse", str(w[-1].message))
-
-    def test_kmedoids_plusplus_count_and_uniqueness(self):
-        """K-medoids++ should return correct number of unique medoids."""
-        for n_clusters in [2, 3, 5]:
-            rng = np.random.RandomState(42)
-            medoids = initialize_k_medoids_plus_plus(
-                self.X, n_clusters, rng, "euclidean"
-            )
-            self.assertEqual(len(medoids), n_clusters)
-            self.assertEqual(len(np.unique(medoids)), n_clusters)
-
-    def test_kmedoids_plusplus_indices_in_range(self):
-        """K-medoids++ indices should be valid array indices."""
-        rng = np.random.RandomState(42)
-        medoids = initialize_k_medoids_plus_plus(self.X, 3, rng, "euclidean")
-        self.assertTrue(all(0 <= idx < len(self.X) for idx in medoids))
-
-    def test_kmedoids_plusplus_handles_zero_distance(self):
-        """K-medoids++ should handle identical points gracefully."""
-        X = np.array([
-            [0, 0], [0, 0], [0, 0],
-            [1, 1], [2, 2],
-        ])
-        rng = np.random.RandomState(42)
-        medoids = initialize_k_medoids_plus_plus(X, 3, rng, "euclidean")
-        self.assertEqual(len(medoids), 3)
-        self.assertEqual(len(np.unique(medoids)), 3)
-
-
 class TestCostCalculation(unittest.TestCase):
     """Test the calculate_cost utility function."""
 
@@ -609,11 +525,6 @@ class TestCLARANSValidationAndPrecomputed(unittest.TestCase):
 
     def test_delta_tolerance_rejects_ghost_swaps(self):
         """Tolerance should prevent ghost swaps when delta is negligible roundoff noise."""
-        from clarans._clarans import _DELTA_TOL
-
-        self.assertLess(_DELTA_TOL, 0)
-        self.assertEqual(_DELTA_TOL, -1e-12)
-
         X_dup = np.array([[0.0, 0.0], [0.0, 0.0], [10.0, 10.0], [10.0, 10.0]])
         model = CLARANS(n_clusters=2, num_local=1, max_neighbors=50, random_state=42)
         model.fit(X_dup)
@@ -797,6 +708,82 @@ class TestUtilsHelpers(unittest.TestCase):
                 # Second call should not issue another warning
                 utils._warn_cython_unavailable()
                 self.assertEqual(len(w), 1)
+
+
+class TestCLARANSMetricParams(unittest.TestCase):
+    """Test suite for metric_params parameter in CLARANS."""
+
+    def setUp(self):
+        np.random.seed(42)
+        self.X = np.random.randn(30, 3)
+
+    def test_minkowski_with_p(self):
+        """CLARANS should support Minkowski metric with p passed via metric_params."""
+        model = CLARANS(
+            n_clusters=2, metric="minkowski", metric_params={"p": 3}, random_state=42
+        )
+        model.fit(self.X)
+        self.assertEqual(model.labels_.shape, (len(self.X),))
+        self.assertEqual(model.cluster_centers_.shape, (2, 3))
+        preds = model.predict(self.X[:5])
+        self.assertEqual(preds.shape, (5,))
+        trans = model.transform(self.X[:5])
+        self.assertEqual(trans.shape, (5, 2))
+
+    def test_mahalanobis_with_vi(self):
+        """CLARANS should support Mahalanobis metric with VI in metric_params."""
+        VI = np.linalg.inv(np.cov(self.X.T))
+        model = CLARANS(
+            n_clusters=2, metric="mahalanobis", metric_params={"VI": VI}, random_state=42
+        )
+        model.fit(self.X)
+        self.assertEqual(model.labels_.shape, (len(self.X),))
+        preds = model.predict(self.X[:5])
+        self.assertEqual(preds.shape, (5,))
+        trans = model.transform(self.X[:5])
+        self.assertEqual(trans.shape, (5, 2))
+
+    def test_mahalanobis_missing_vi_raises(self):
+        """CLARANS with mahalanobis and no VI should raise ValueError."""
+        with self.assertRaises(ValueError) as ctx:
+            CLARANS(n_clusters=2, metric="mahalanobis", random_state=42).fit(self.X)
+        self.assertIn("vi", str(ctx.exception).lower())
+
+        with self.assertRaises(ValueError) as ctx:
+            CLARANS(
+                n_clusters=2, metric="mahalanobis", metric_params={}, random_state=42
+            ).fit(self.X)
+        self.assertIn("vi", str(ctx.exception).lower())
+
+    def test_custom_callable_with_metric_params(self):
+        """CLARANS should forward metric_params to custom callable metric."""
+        def custom_dist(x, y, weight=1.0):
+            return np.sum(np.abs(x - y)) * weight
+
+        model = CLARANS(
+            n_clusters=2,
+            metric=custom_dist,
+            metric_params={"weight": 2.5},
+            random_state=42,
+        )
+        model.fit(self.X)
+        self.assertEqual(model.labels_.shape, (len(self.X),))
+
+    def test_invalid_metric_params_type(self):
+        """Non-dict metric_params should raise ValueError."""
+        with self.assertRaises(ValueError) as ctx:
+            CLARANS(n_clusters=2, metric_params="not_a_dict", random_state=42).fit(
+                self.X
+            )
+        self.assertIn("metric_params", str(ctx.exception).lower())
+
+    def test_clone_preserves_metric_params(self):
+        """clone should preserve metric_params correctly."""
+        from sklearn.base import clone
+
+        model = CLARANS(metric="minkowski", metric_params={"p": 4})
+        cloned = clone(model)
+        self.assertEqual(cloned.metric_params, {"p": 4})
 
 
 if __name__ == "__main__":

@@ -1,7 +1,0 @@
-include README.md
-include LICENSE
-include clarans/py.typed
-recursive-include clarans *.py
-recursive-include clarans *.pyx *.pxd *.pyi
-recursive-include examples *.py
-recursive-include docs/source *.rst

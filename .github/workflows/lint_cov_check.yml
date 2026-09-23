@@ -22,14 +22,14 @@ jobs:
         with:
           python-version: "3.12"
           cache: pip
-          cache-dependency-path: setup.py
+          cache-dependency-path: pyproject.toml
 
       - name: Install dependencies
         run: |
           python -m pip install --upgrade pip
-          python -m pip install setuptools wheel
+          python -m pip install meson-python ninja cython numpy
           python -m pip install flake8 mypy pytest pytest-cov pandas
-          python -m pip install -e .
+          python -m pip install -e . --no-build-isolation
 
       - name: Lint with flake8
         run: |

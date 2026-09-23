@@ -10,6 +10,7 @@
 [![Quality Check](https://img.shields.io/github/actions/workflow/status/ThienNguyen3001/scikit-clarans/lint_cov_check.yml?branch=main&label=Quality%20Check)](https://github.com/ThienNguyen3001/scikit-clarans/actions/workflows/lint_cov_check.yml)
 [![PyPI version](https://img.shields.io/pypi/v/scikit-clarans.svg)](https://pypi.org/project/scikit-clarans/)
 [![Open In Colab](https://colab.research.google.com/assets/colab-badge.svg)](https://colab.research.google.com/drive/194aBBu0wZotnun25dXqlOrDj3HYHKo-a?usp=sharing)
+[![PyPI Downloads](https://static.pepy.tech/personalized-badge/scikit-clarans?period=total&units=INTERNATIONAL_SYSTEM&left_color=BLACK&right_color=GREEN&left_text=downloads)](https://pepy.tech/projects/scikit-clarans)
 
 > [!NOTE]
 > **Educational & Research Scope**: `scikit-clarans` is developed primarily for **learning, algorithmic study, and small-to-medium academic research**. It pairs a high-performance **Cython C-extension core** (with pure Python fallback) with an $O(n)$ memory footprint, substantially more scalable and accessible than classic $O(n^2)$ PAM.
@@ -81,7 +82,7 @@ print("Labels:", clarans.labels_)
 from clarans import FastCLARANS
 
 # FastCLARANS computes distances on-the-fly (memory efficient)
-# and samples max(250, 2.5% of non-medoid points) per iteration
+# and samples max(1, 250 // k, 2.5% of non-medoid points) per iteration
 fast_model = FastCLARANS(n_clusters=5, num_local=3, random_state=42)
 fast_model.fit(X)
 ```
@@ -96,7 +97,7 @@ fast_model.fit(X)
 This repository includes a number of runnable examples in the `examples/` folder showing common usage patterns and integrations. Run any example with:
 
 ```bash
-python examples/01_quick_start.py
+python examples/plot_quick_start.py
 ```
 
 ## Documentation
