@@ -135,6 +135,10 @@ Both estimators share core hyperparameters to balance execution speed and cluste
      - Both
      - ``euclidean``
      - Distance metric to use (e.g., ``euclidean``, ``manhattan``, ``cosine``).
+   * - ``metric_params``
+     - Both
+     - ``None``
+     - Additional keyword arguments for the metric function (e.g., ``{"p": 3}`` for Minkowski).
    * - ``cost_evaluation``
      - CLARANS only
      - ``'delta'``
