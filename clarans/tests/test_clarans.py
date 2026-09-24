@@ -818,7 +818,7 @@ class TestCLARANSMetricParams(unittest.TestCase):
             self.assertEqual(f.getvalue(), "")
 
     def test_verbose_level_1(self):
-        """verbose=1 and verbose=True should print local search summaries and best cost."""
+        """verbose=1 and verbose=True should print table header, rows, and best line."""
         import io
         from contextlib import redirect_stdout
 
@@ -828,17 +828,19 @@ class TestCLARANSMetricParams(unittest.TestCase):
                 model = CLARANS(n_clusters=2, num_local=2, max_neighbors=10, verbose=v, random_state=42)
                 model.fit(self.X)
             output = f.getvalue()
-            self.assertIn("[CLARANS] Fitting with", output)
-            self.assertIn("neighbor pairs", output)
-            self.assertIn("[CLARANS] Local search 1/2:", output)
-            self.assertIn("[CLARANS] Local search 1/2 done in", output)
-            self.assertIn("non-improving", output)
-            self.assertIn("[CLARANS] Local search 2/2 done in", output)
-            self.assertIn("[CLARANS] Best cost:", output)
-            self.assertIn("Total:", output)
+            self.assertIn("[CLARANS]", output)
+            self.assertIn("max_neighbors=", output)
+            self.assertIn("Cost", output)
+            self.assertIn("Swaps", output)
+            self.assertIn("Evals", output)
+            self.assertIn("converged", output)
+            self.assertIn("Best: #", output)
+            self.assertIn("Totals:", output)
+            # verbose=1 should NOT print per-swap details
+            self.assertNotIn("Restart", output)
 
     def test_verbose_level_2(self):
-        """verbose=2 should print individual swap details when swaps occur."""
+        """verbose=2 should print per-swap details with Restart labels."""
         import io
         from contextlib import redirect_stdout
 
@@ -847,11 +849,12 @@ class TestCLARANSMetricParams(unittest.TestCase):
             model = CLARANS(n_clusters=2, num_local=1, max_neighbors=50, init="random", verbose=2, random_state=0)
             model.fit(self.X)
         output = f.getvalue()
-        self.assertIn("[CLARANS] Fitting with", output)
-        self.assertIn("[CLARANS] Local search 1/1 done in", output)
+        self.assertIn("[CLARANS]", output)
+        self.assertIn("Restart 1/1:", output)
+        self.assertIn("Best: #", output)
         if model.n_swaps_ > 0:
-            self.assertIn("Swap", output)
-            self.assertIn("Delta:", output)
+            self.assertIn("swap", output)
+            self.assertIn("| d ", output)
 
     def test_verbose_invalid(self):
         """Invalid verbose values should raise ValueError."""

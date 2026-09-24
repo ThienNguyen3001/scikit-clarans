@@ -501,24 +501,23 @@ class CLARANS(ClusterMixin, TransformerMixin, BaseEstimator):
         d_xc_buf = np.empty(n_samples, dtype=buf_dtype)
 
         if self.verbose:
+            _name = self.__class__.__name__
             tot_nb = self.total_neighbors_
             pct = (self.max_neighbors_ / tot_nb * 100) if tot_nb > 0 else 100.0
-            auto_str = (
-                f" (auto: {self.max_neighbors_}/{tot_nb} neighbor pairs ~ {pct:.1f}%)"
-                if self.max_neighbors == "auto"
-                else f" ({self.max_neighbors_}/{tot_nb} neighbor pairs ~ {pct:.1f}%)"
-            )
             print(
-                f"[CLARANS] Fitting with n_clusters={self.n_clusters}, "
-                f"num_local={self.num_local}, max_neighbors={self.max_neighbors_}{auto_str}"
+                f"[{_name}] n={n_samples}, k={self.n_clusters}, "
+                f"metric={self.metric}, num_local={self.num_local}, "
+                f"max_neighbors={self.max_neighbors_}/{tot_nb} ({pct:.1f}%)"
             )
+            if self.verbose < 2:
+                print(f"{'':>4}#  {'Cost':>14}  {'Swaps':>5}  {'Evals':>5}  {'Time(s)':>8}")
 
         start_fit_time = time.perf_counter()
 
         try:
             for loc_idx in range(self.num_local):
-                if self.verbose:
-                    print(f"[CLARANS] Local search {loc_idx + 1}/{self.num_local}:")
+                if self.verbose >= 2:
+                    print(f"  Restart {loc_idx + 1}/{self.num_local}:")
                 loc_start_time = time.perf_counter()
 
                 current_cost, current_medoids_indices, eval_count, swap_count = (
@@ -529,20 +528,6 @@ class CLARANS(ClusterMixin, TransformerMixin, BaseEstimator):
                 loc_elapsed = time.perf_counter() - loc_start_time
                 total_eval_count += eval_count
                 total_swap_count += swap_count
-
-                if self.verbose:
-                    if n_samples == self.n_clusters:
-                        stop_reason = "exhausted candidates (all samples are medoids)"
-                        non_imp_count = 0
-                    else:
-                        stop_reason = "local optimum reached"
-                        non_imp_count = min(self.max_neighbors_, eval_count)
-                    print(
-                        f"[CLARANS] Local search {loc_idx + 1}/{self.num_local} done "
-                        f"in {loc_elapsed:.3f}s (Cost: {current_cost:.5f}, "
-                        f"Swaps: {swap_count}, Evaluated: {eval_count} "
-                        f"[{swap_count} accepted + {non_imp_count} non-improving, {stop_reason}])"
-                    )
 
                 tol = -max(1e-16, 1e-12 * abs(current_cost))
                 if (
@@ -555,6 +540,29 @@ class CLARANS(ClusterMixin, TransformerMixin, BaseEstimator):
                     best_n_iter = eval_count
                     best_n_swaps = swap_count
                     best_loc_idx = loc_idx
+                    is_new_best = True
+                else:
+                    is_new_best = False
+
+                if self.verbose:
+                    stop = (
+                        "exhausted"
+                        if (eval_count - swap_count) < self.max_neighbors_
+                        else "converged"
+                    )
+                    star = "*" if is_new_best else " "
+                    if self.verbose >= 2:
+                        print(
+                            f"    {loc_idx + 1:>2}  {current_cost:>14.5f}{star} "
+                            f" swaps={swap_count}, evals={eval_count}, "
+                            f"{loc_elapsed:.3f}s ({stop})"
+                        )
+                    else:
+                        print(
+                            f"    {loc_idx + 1:>1}  {current_cost:>14.5f}{star} "
+                            f"{swap_count:>5}  {eval_count:>5}  "
+                            f"{loc_elapsed:>7.3f}s  {stop}"
+                        )
 
             if best_medoids is None or not np.isfinite(best_cost):
                 raise ValueError(
@@ -570,10 +578,9 @@ class CLARANS(ClusterMixin, TransformerMixin, BaseEstimator):
             if self.verbose:
                 total_elapsed = time.perf_counter() - start_fit_time
                 print(
-                    f"[CLARANS] Best cost: {best_cost:.5f} "
-                    f"(from local search {best_loc_idx + 1}/{self.num_local}: "
-                    f"{best_n_swaps} swaps, {best_n_iter} evaluations) | "
-                    f"Total: {total_swap_count} swaps, {total_eval_count} evaluations in {total_elapsed:.3f}s"
+                    f"  Best: #{best_loc_idx + 1} | "
+                    f"Totals: {total_swap_count} swaps, "
+                    f"{total_eval_count} evals, {total_elapsed:.3f}s"
                 )
 
             return self._finalize_fit(X, best_cost, best_medoids)
@@ -712,8 +719,8 @@ class CLARANS(ClusterMixin, TransformerMixin, BaseEstimator):
                     swap_count += 1
                     if self.verbose >= 2:
                         print(
-                            f"  Swap {swap_count:4d} | Evaluated: {eval_count:6d} | "
-                            f"Cost: {current_cost:.5f} | Delta: {total_delta:.5f}"
+                            f"      swap {swap_count:3d} | eval {eval_count:5d} | "
+                            f"cost {current_cost:14.5f} | d {total_delta:12.5f}"
                         )
                 else:
                     i += 1
@@ -745,8 +752,8 @@ class CLARANS(ClusterMixin, TransformerMixin, BaseEstimator):
                     swap_count += 1
                     if self.verbose >= 2:
                         print(
-                            f"  Swap {swap_count:4d} | Evaluated: {eval_count:6d} | "
-                            f"Cost: {current_cost:.5f} | Delta: {delta_cost:.5f}"
+                            f"      swap {swap_count:3d} | eval {eval_count:5d} | "
+                            f"cost {current_cost:14.5f} | d {delta_cost:12.5f}"
                         )
                 else:
                     i += 1
