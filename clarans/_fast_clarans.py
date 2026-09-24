@@ -272,8 +272,7 @@ class FastCLARANS(CLARANS):
 
         try:
             for loc_idx in range(self.num_local):
-                if self.verbose >= 2:
-                    print(f"  Restart {loc_idx + 1}/{self.num_local}:")
+                self._current_loc_idx = loc_idx + 1
                 loc_start_time = time.perf_counter()
 
                 current_cost, current_medoids_indices, eval_count, swap_count = (
@@ -342,6 +341,8 @@ class FastCLARANS(CLARANS):
 
             return self._finalize_fit(X, best_cost, best_medoids)
         finally:
+            if hasattr(self, "_current_loc_idx"):
+                del self._current_loc_idx
             if hasattr(self, "_precomputed_source"):
                 del self._precomputed_source
 
@@ -366,6 +367,12 @@ class FastCLARANS(CLARANS):
             medoids_dist = np.ascontiguousarray(medoids_dist)
         near_idx_map, near_dist, second_dist = self._compute_2min(medoids_dist)
         current_cost: float = float(np.sum(near_dist))
+
+        if self.verbose >= 2:
+            r_idx = getattr(self, "_current_loc_idx", 1)
+            print(
+                f"  Restart {r_idx}/{self.num_local} (init cost: {current_cost:.5f}):"
+            )
 
         non_medoid_mask = np.ones(n_samples, dtype=bool)
         non_medoid_mask[current_medoids_indices] = False
@@ -492,7 +499,7 @@ class FastCLARANS(CLARANS):
                 if self.verbose >= 2:
                     print(
                         f"      swap {swap_count:3d} | eval {eval_count:5d} | "
-                        f"cost {current_cost:14.5f} | d {min_delta:12.5f}"
+                        f"cost {current_cost:14.5f} | diff {min_delta:12.5f}"
                     )
             else:
                 i += 1

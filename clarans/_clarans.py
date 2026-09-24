@@ -516,8 +516,7 @@ class CLARANS(ClusterMixin, TransformerMixin, BaseEstimator):
 
         try:
             for loc_idx in range(self.num_local):
-                if self.verbose >= 2:
-                    print(f"  Restart {loc_idx + 1}/{self.num_local}:")
+                self._current_loc_idx = loc_idx + 1
                 loc_start_time = time.perf_counter()
 
                 current_cost, current_medoids_indices, eval_count, swap_count = (
@@ -585,6 +584,8 @@ class CLARANS(ClusterMixin, TransformerMixin, BaseEstimator):
 
             return self._finalize_fit(X, best_cost, best_medoids)
         finally:
+            if hasattr(self, "_current_loc_idx"):
+                del self._current_loc_idx
             if hasattr(self, "_precomputed_source"):
                 del self._precomputed_source
 
@@ -616,6 +617,12 @@ class CLARANS(ClusterMixin, TransformerMixin, BaseEstimator):
             near_idx_map = None
             near_dist = None
             second_dist = None
+
+        if self.verbose >= 2:
+            r_idx = getattr(self, "_current_loc_idx", 1)
+            print(
+                f"  Restart {r_idx}/{self.num_local} (init cost: {current_cost:.5f}):"
+            )
 
         # Maintain persistent non-medoid mask across iterations
         non_medoid_mask = np.ones(n_samples, dtype=bool)
@@ -720,7 +727,7 @@ class CLARANS(ClusterMixin, TransformerMixin, BaseEstimator):
                     if self.verbose >= 2:
                         print(
                             f"      swap {swap_count:3d} | eval {eval_count:5d} | "
-                            f"cost {current_cost:14.5f} | d {total_delta:12.5f}"
+                            f"cost {current_cost:14.5f} | diff {total_delta:12.5f}"
                         )
                 else:
                     i += 1
@@ -753,7 +760,7 @@ class CLARANS(ClusterMixin, TransformerMixin, BaseEstimator):
                     if self.verbose >= 2:
                         print(
                             f"      swap {swap_count:3d} | eval {eval_count:5d} | "
-                            f"cost {current_cost:14.5f} | d {delta_cost:12.5f}"
+                            f"cost {current_cost:14.5f} | diff {delta_cost:12.5f}"
                         )
                 else:
                     i += 1

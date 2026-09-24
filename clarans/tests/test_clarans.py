@@ -850,11 +850,11 @@ class TestCLARANSMetricParams(unittest.TestCase):
             model.fit(self.X)
         output = f.getvalue()
         self.assertIn("[CLARANS]", output)
-        self.assertIn("Restart 1/1:", output)
+        self.assertIn("Restart 1/1 (init cost:", output)
         self.assertIn("Best: #", output)
         if model.n_swaps_ > 0:
             self.assertIn("swap", output)
-            self.assertIn("| d ", output)
+            self.assertIn("| diff ", output)
 
     def test_verbose_invalid(self):
         """Invalid verbose values should raise ValueError."""
