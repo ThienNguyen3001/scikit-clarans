@@ -491,55 +491,56 @@ class CLARANS(ClusterMixin, TransformerMixin, BaseEstimator):
 
         start_fit_time = time.perf_counter()
 
-        for loc_idx in range(self.num_local):
-            if self.verbose:
-                print(f"[CLARANS] Local search {loc_idx + 1}/{self.num_local}:")
-            loc_start_time = time.perf_counter()
+        try:
+            for loc_idx in range(self.num_local):
+                if self.verbose:
+                    print(f"[CLARANS] Local search {loc_idx + 1}/{self.num_local}:")
+                loc_start_time = time.perf_counter()
 
-            current_cost, current_medoids_indices, eval_count, swap_count = (
-                self._single_local_search(
-                    X, random_state, deterministic_medoids, d_xc_buf
+                current_cost, current_medoids_indices, eval_count, swap_count = (
+                    self._single_local_search(
+                        X, random_state, deterministic_medoids, d_xc_buf
+                    )
                 )
-            )
-            loc_elapsed = time.perf_counter() - loc_start_time
+                loc_elapsed = time.perf_counter() - loc_start_time
+
+                if self.verbose:
+                    print(
+                        f"[CLARANS] Local search {loc_idx + 1}/{self.num_local} done "
+                        f"in {loc_elapsed:.3f}s (Cost: {current_cost:.5f}, "
+                        f"Swaps: {swap_count}, Evaluated: {eval_count})"
+                    )
+
+                tol = -max(1e-16, 1e-12 * abs(current_cost))
+                if (
+                    loc_idx == 0
+                    or not np.isfinite(best_cost)
+                    or (np.isfinite(current_cost) and current_cost < best_cost + tol)
+                ):
+                    best_cost = current_cost
+                    best_medoids = current_medoids_indices.copy()
+                    best_n_iter = eval_count
+                    best_n_swaps = swap_count
+
+            if best_medoids is None or not np.isfinite(best_cost):
+                raise ValueError(
+                    "Clustering failed: all local search iterations produced non-finite "
+                    "costs (inf or NaN). Check input data or distance metric."
+                )
+
+            self.n_iter_ = best_n_iter
+            self.n_swaps_ = best_n_swaps
 
             if self.verbose:
+                total_elapsed = time.perf_counter() - start_fit_time
                 print(
-                    f"[CLARANS] Local search {loc_idx + 1}/{self.num_local} done "
-                    f"in {loc_elapsed:.3f}s (Cost: {current_cost:.5f}, "
-                    f"Swaps: {swap_count}, Evaluated: {eval_count})"
+                    f"[CLARANS] Best cost: {best_cost:.5f} achieved in {total_elapsed:.3f}s"
                 )
 
-            tol = -max(1e-16, 1e-12 * abs(current_cost))
-            if (
-                loc_idx == 0
-                or not np.isfinite(best_cost)
-                or (np.isfinite(current_cost) and current_cost < best_cost + tol)
-            ):
-                best_cost = current_cost
-                best_medoids = current_medoids_indices.copy()
-                best_n_iter = eval_count
-                best_n_swaps = swap_count
-
-        if best_medoids is None or not np.isfinite(best_cost):
-            # Clean up internal references to input data to prevent memory leak
+            return self._finalize_fit(X, best_cost, best_medoids)
+        finally:
             if hasattr(self, "_precomputed_source"):
                 del self._precomputed_source
-            raise ValueError(
-                "Clustering failed: all local search iterations produced non-finite "
-                "costs (inf or NaN). Check input data or distance metric."
-            )
-
-        self.n_iter_ = best_n_iter
-        self.n_swaps_ = best_n_swaps
-
-        if self.verbose:
-            total_elapsed = time.perf_counter() - start_fit_time
-            print(
-                f"[CLARANS] Best cost: {best_cost:.5f} achieved in {total_elapsed:.3f}s"
-            )
-
-        return self._finalize_fit(X, best_cost, best_medoids)
 
     def _single_local_search(
         self,
@@ -807,22 +808,45 @@ class CLARANS(ClusterMixin, TransformerMixin, BaseEstimator):
             if candidate_idx is not None:
                 source = getattr(self, "_precomputed_source", X)
                 if isinstance(source, np.ndarray):
-                    return source[candidate_idx]
+                    row_data = source[candidate_idx]
+                    if (
+                        out is not None
+                        and isinstance(out, np.ndarray)
+                        and out.shape[0] == row_data.shape[0]
+                    ):
+                        np.copyto(out, row_data)
+                        return out
+                    return row_data.copy()
                 col_data = (
                     source[candidate_idx]
                     if getattr(self, "_precomputed_is_sym", False)
                     else X[:, candidate_idx]
                 )
-                return (
+                res = (
                     col_data.toarray().ravel()
                     if hasattr(col_data, "toarray")
                     else np.asarray(col_data).ravel()
                 )
+                if (
+                    out is not None
+                    and isinstance(out, np.ndarray)
+                    and out.shape[0] == res.shape[0]
+                ):
+                    np.copyto(out, res)
+                    return out
+                return res
             col_arr = (
                 cand_row.toarray().ravel()
                 if hasattr(cand_row, "toarray")
                 else np.asarray(cand_row).ravel()
             )
+            if (
+                out is not None
+                and isinstance(out, np.ndarray)
+                and out.shape[0] == col_arr.shape[0]
+            ):
+                np.copyto(out, col_arr)
+                return out
             return col_arr
         elif engine == "distance_metric" and self._dm_instance is not None:
             res = self._dm_instance.pairwise(X, cand_row).ravel()

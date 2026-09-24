@@ -1,6 +1,7 @@
 """Type stubs for Cython C-extension module clarans._core."""
 
-from typing import Tuple
+from __future__ import annotations
+
 import numpy as np
 
 def clarans_delta(
@@ -20,13 +21,13 @@ def fastpam1_delta(
     n_samples: int,
     n_clusters: int,
     delta_buf: np.ndarray | None = None,
-) -> Tuple[int, float, np.ndarray]: ...
+) -> tuple[int, float, np.ndarray]: ...
 
 def update_cache_2min(
     subD: np.ndarray,
     n_samples: int,
     n_clusters: int,
-) -> Tuple[np.ndarray, np.ndarray, np.ndarray]: ...
+) -> tuple[np.ndarray, np.ndarray, np.ndarray]: ...
 
 def pam_build_step(
     D: np.ndarray,
@@ -34,7 +35,7 @@ def pam_build_step(
     dist_to_nearest: np.ndarray,
     n_samples: int,
     n_candidates: int,
-) -> Tuple[int, float]: ...
+) -> tuple[int, float]: ...
 
 def kmedoids_pp_trials(
     closest_dist_sq: np.ndarray,
@@ -44,7 +45,7 @@ def kmedoids_pp_trials(
     n_samples: int,
     n_local_trials: int,
     n_current_medoids: int,
-) -> Tuple[int, float, np.ndarray]: ...
+) -> tuple[int, float, np.ndarray]: ...
 
 def is_matrix_symmetric(
     D: np.ndarray,
@@ -52,4 +53,3 @@ def is_matrix_symmetric(
     rtol: float = 1e-5,
     atol: float = 1e-8,
 ) -> bool: ...
-
