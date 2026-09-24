@@ -121,14 +121,34 @@ class TestFastCLARANS(unittest.TestCase):
         self.assertGreaterEqual(model.inertia_, 0)
 
     def test_n_iter_and_n_swaps_attributes(self):
-        """Test that n_iter_ and n_swaps_ are set correctly in FastCLARANS."""
+        """Test that n_iter_, n_swaps_, total_n_iter_, total_n_swaps_, and total_neighbors_ are set correctly in FastCLARANS."""
+        # Multi-restart run
         model = FastCLARANS(n_clusters=3, num_local=2, max_neighbors=50, random_state=42)
         model.fit(self.X)
         self.assertTrue(hasattr(model, "n_iter_"))
         self.assertTrue(hasattr(model, "n_swaps_"))
+        self.assertTrue(hasattr(model, "total_n_iter_"))
+        self.assertTrue(hasattr(model, "total_n_swaps_"))
+        self.assertTrue(hasattr(model, "total_neighbors_"))
+
         self.assertGreaterEqual(model.n_iter_, 1)
         self.assertGreaterEqual(model.n_swaps_, 0)
         self.assertLessEqual(model.n_swaps_, model.n_iter_)
+
+        # Cumulative totals must be >= best run
+        self.assertGreaterEqual(model.total_n_iter_, model.n_iter_)
+        self.assertGreaterEqual(model.total_n_swaps_, model.n_swaps_)
+        self.assertLessEqual(model.total_n_swaps_, model.total_n_iter_)
+
+        # total_neighbors_ check: n - k candidate points
+        n_samples = self.X.shape[0]
+        self.assertEqual(model.total_neighbors_, n_samples - 3)
+
+        # Single-restart run: total must equal best
+        m_single = FastCLARANS(n_clusters=2, num_local=1, max_neighbors=20, random_state=42)
+        m_single.fit(self.X)
+        self.assertEqual(m_single.total_n_iter_, m_single.n_iter_)
+        self.assertEqual(m_single.total_n_swaps_, m_single.n_swaps_)
 
     def test_invalid_parameters(self):
         """Test parameter validation in FastCLARANS."""
@@ -356,10 +376,13 @@ class TestFastCLARANSMetricParams(unittest.TestCase):
                 model.fit(self.X)
             output = f.getvalue()
             self.assertIn("[FastCLARANS] Fitting with", output)
+            self.assertIn("candidate points", output)
             self.assertIn("[FastCLARANS] Local search 1/2:", output)
             self.assertIn("[FastCLARANS] Local search 1/2 done in", output)
+            self.assertIn("non-improving", output)
             self.assertIn("[FastCLARANS] Local search 2/2 done in", output)
             self.assertIn("[FastCLARANS] Best cost:", output)
+            self.assertIn("Total:", output)
 
     def test_verbose_level_2(self):
         """verbose=2 should print individual swap details when swaps occur."""

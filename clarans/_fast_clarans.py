@@ -113,7 +113,11 @@ class FastCLARANS(CLARANS):
 
     max_neighbors_ : int
         Effective maximum number of non-improving non-medoid candidates
-        sampled per local search.
+        sampled per local search before concluding convergence.
+
+    total_neighbors_ : int
+        Total number of non-medoid candidate points, equal to
+        ``n_samples - n_clusters``.
 
     n_iter_ : int
         Number of candidate neighbors evaluated during the best local search.
@@ -121,6 +125,14 @@ class FastCLARANS(CLARANS):
     n_swaps_ : int
         Number of successful medoid swaps performed during the best local
         search.
+
+    total_n_iter_ : int
+        Total number of candidate neighbors evaluated across all ``num_local``
+        searches.
+
+    total_n_swaps_ : int
+        Total number of successful medoid swaps performed across all
+        ``num_local`` searches.
 
     n_features_in_ : int
         Number of features seen during :term:`fit`. Defined only when
@@ -223,10 +235,15 @@ class FastCLARANS(CLARANS):
         else:
             self.max_neighbors_ = int(self.max_neighbors)
 
+        self.total_neighbors_ = n_samples - self.n_clusters
+
         best_cost = np.inf
         best_medoids: np.ndarray | None = None
         best_n_iter = 0
         best_n_swaps = 0
+        best_loc_idx = 0
+        total_eval_count = 0
+        total_swap_count = 0
 
         deterministic_medoids = self._prepare_initial_medoids(X, random_state)
         self._setup_distance_engine(X)
@@ -240,9 +257,16 @@ class FastCLARANS(CLARANS):
         delta_arr_buf = np.zeros(self.n_clusters, dtype=buf_dtype)
 
         if self.verbose:
+            tot_nb = self.total_neighbors_
+            pct = (self.max_neighbors_ / tot_nb * 100) if tot_nb > 0 else 100.0
+            auto_str = (
+                f" (auto: {self.max_neighbors_}/{tot_nb} candidate points ~ {pct:.1f}%)"
+                if self.max_neighbors == "auto"
+                else f" ({self.max_neighbors_}/{tot_nb} candidate points ~ {pct:.1f}%)"
+            )
             print(
                 f"[FastCLARANS] Fitting with n_clusters={self.n_clusters}, "
-                f"num_local={self.num_local}, max_neighbors={self.max_neighbors_}"
+                f"num_local={self.num_local}, max_neighbors={self.max_neighbors_}{auto_str}"
             )
 
         start_fit_time = time.perf_counter()
@@ -259,12 +283,21 @@ class FastCLARANS(CLARANS):
                     )
                 )
                 loc_elapsed = time.perf_counter() - loc_start_time
+                total_eval_count += eval_count
+                total_swap_count += swap_count
 
                 if self.verbose:
+                    if n_samples == self.n_clusters:
+                        stop_reason = "exhausted candidates (all samples are medoids)"
+                        non_imp_count = 0
+                    else:
+                        stop_reason = "local optimum reached"
+                        non_imp_count = min(self.max_neighbors_, eval_count)
                     print(
                         f"[FastCLARANS] Local search {loc_idx + 1}/{self.num_local} done "
                         f"in {loc_elapsed:.3f}s (Cost: {current_cost:.5f}, "
-                        f"Swaps: {swap_count}, Evaluated: {eval_count})"
+                        f"Swaps: {swap_count}, Evaluated: {eval_count} "
+                        f"[{swap_count} accepted + {non_imp_count} non-improving, {stop_reason}])"
                     )
 
                 tol = -max(1e-16, 1e-12 * abs(current_cost))
@@ -277,6 +310,7 @@ class FastCLARANS(CLARANS):
                     best_medoids = current_medoids_indices.copy()
                     best_n_iter = eval_count
                     best_n_swaps = swap_count
+                    best_loc_idx = loc_idx
 
             if best_medoids is None or not np.isfinite(best_cost):
                 raise ValueError(
@@ -287,11 +321,16 @@ class FastCLARANS(CLARANS):
 
             self.n_iter_ = best_n_iter
             self.n_swaps_ = best_n_swaps
+            self.total_n_iter_ = total_eval_count
+            self.total_n_swaps_ = total_swap_count
 
             if self.verbose:
                 total_elapsed = time.perf_counter() - start_fit_time
                 print(
-                    f"[FastCLARANS] Best cost: {best_cost:.5f} achieved in {total_elapsed:.3f}s"
+                    f"[FastCLARANS] Best cost: {best_cost:.5f} "
+                    f"(from local search {best_loc_idx + 1}/{self.num_local}: "
+                    f"{best_n_swaps} swaps, {best_n_iter} evaluations) | "
+                    f"Total: {total_swap_count} swaps, {total_eval_count} evaluations in {total_elapsed:.3f}s"
                 )
 
             return self._finalize_fit(X, best_cost, best_medoids)

@@ -124,14 +124,34 @@ class TestCLARANS(unittest.TestCase):
         self.assertGreaterEqual(clarans.inertia_, 0)
 
     def test_n_iter_and_n_swaps_attributes(self):
-        """Test that n_iter_ and n_swaps_ are set correctly after fit."""
+        """Test that n_iter_, n_swaps_, total_n_iter_, total_n_swaps_, and total_neighbors_ are set correctly."""
+        # Multi-restart run
         clarans = CLARANS(n_clusters=3, num_local=2, max_neighbors=50, random_state=42)
         clarans.fit(self.X)
         self.assertTrue(hasattr(clarans, "n_iter_"))
         self.assertTrue(hasattr(clarans, "n_swaps_"))
+        self.assertTrue(hasattr(clarans, "total_n_iter_"))
+        self.assertTrue(hasattr(clarans, "total_n_swaps_"))
+        self.assertTrue(hasattr(clarans, "total_neighbors_"))
+
         self.assertGreaterEqual(clarans.n_iter_, 1)
         self.assertGreaterEqual(clarans.n_swaps_, 0)
         self.assertLessEqual(clarans.n_swaps_, clarans.n_iter_)
+
+        # Cumulative totals must be >= best run
+        self.assertGreaterEqual(clarans.total_n_iter_, clarans.n_iter_)
+        self.assertGreaterEqual(clarans.total_n_swaps_, clarans.n_swaps_)
+        self.assertLessEqual(clarans.total_n_swaps_, clarans.total_n_iter_)
+
+        # total_neighbors_ check: k * (n - k)
+        n_samples = self.X.shape[0]
+        self.assertEqual(clarans.total_neighbors_, 3 * (n_samples - 3))
+
+        # Single-restart run: total must equal best
+        c_single = CLARANS(n_clusters=2, num_local=1, max_neighbors=20, random_state=42)
+        c_single.fit(self.X)
+        self.assertEqual(c_single.total_n_iter_, c_single.n_iter_)
+        self.assertEqual(c_single.total_n_swaps_, c_single.n_swaps_)
 
     def test_medoid_indices_sorted(self):
         """Test that medoid_indices_ is always sorted."""
@@ -809,10 +829,13 @@ class TestCLARANSMetricParams(unittest.TestCase):
                 model.fit(self.X)
             output = f.getvalue()
             self.assertIn("[CLARANS] Fitting with", output)
+            self.assertIn("neighbor pairs", output)
             self.assertIn("[CLARANS] Local search 1/2:", output)
             self.assertIn("[CLARANS] Local search 1/2 done in", output)
+            self.assertIn("non-improving", output)
             self.assertIn("[CLARANS] Local search 2/2 done in", output)
             self.assertIn("[CLARANS] Best cost:", output)
+            self.assertIn("Total:", output)
 
     def test_verbose_level_2(self):
         """verbose=2 should print individual swap details when swaps occur."""
