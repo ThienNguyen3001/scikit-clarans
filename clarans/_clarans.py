@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 import inspect
+import time
 import warnings
 from typing import TYPE_CHECKING, Any, Sequence
 
@@ -149,6 +150,15 @@ class CLARANS(ClusterMixin, TransformerMixin, BaseEstimator):
           in O(n*k*d) at each candidate swap, following the original classic
           CLARANS algorithm (Ng & Han, 2002).
 
+    verbose : int, default=0
+        Verbosity mode. Controls the level of progress messages printed during
+        fitting:
+
+        - ``0``: Silent (default).
+        - ``1``: Prints progress for each local search iteration (start, completion,
+          cost, elapsed time, swaps performed, and candidates evaluated).
+        - ``>=2``: Additionally prints details on each successful medoid swap.
+
     Attributes
     ----------
     cluster_centers_ : {ndarray, sparse matrix} of shape (n_clusters, n_features) or None
@@ -223,6 +233,7 @@ class CLARANS(ClusterMixin, TransformerMixin, BaseEstimator):
         metric_params=None,
         random_state=None,
         cost_evaluation="delta",
+        verbose=0,
     ):
         self.n_clusters = n_clusters
         self.num_local = num_local
@@ -232,6 +243,7 @@ class CLARANS(ClusterMixin, TransformerMixin, BaseEstimator):
         self.metric_params = metric_params
         self.random_state = random_state
         self.cost_evaluation = cost_evaluation
+        self.verbose = verbose
 
     def _prepare_initial_medoids(self, X, random_state):
         """Pre-compute initial medoids if the initialization strategy is deterministic.
@@ -471,12 +483,32 @@ class CLARANS(ClusterMixin, TransformerMixin, BaseEstimator):
         )
         d_xc_buf = np.empty(n_samples, dtype=buf_dtype)
 
+        if self.verbose:
+            print(
+                f"[CLARANS] Fitting with n_clusters={self.n_clusters}, "
+                f"num_local={self.num_local}, max_neighbors={self.max_neighbors_}"
+            )
+
+        start_fit_time = time.perf_counter()
+
         for loc_idx in range(self.num_local):
+            if self.verbose:
+                print(f"[CLARANS] Local search {loc_idx + 1}/{self.num_local}:")
+            loc_start_time = time.perf_counter()
+
             current_cost, current_medoids_indices, eval_count, swap_count = (
                 self._single_local_search(
                     X, random_state, deterministic_medoids, d_xc_buf
                 )
             )
+            loc_elapsed = time.perf_counter() - loc_start_time
+
+            if self.verbose:
+                print(
+                    f"[CLARANS] Local search {loc_idx + 1}/{self.num_local} done "
+                    f"in {loc_elapsed:.3f}s (Cost: {current_cost:.5f}, "
+                    f"Swaps: {swap_count}, Evaluated: {eval_count})"
+                )
 
             tol = -max(1e-16, 1e-12 * abs(current_cost))
             if (
@@ -500,6 +532,12 @@ class CLARANS(ClusterMixin, TransformerMixin, BaseEstimator):
 
         self.n_iter_ = best_n_iter
         self.n_swaps_ = best_n_swaps
+
+        if self.verbose:
+            total_elapsed = time.perf_counter() - start_fit_time
+            print(
+                f"[CLARANS] Best cost: {best_cost:.5f} achieved in {total_elapsed:.3f}s"
+            )
 
         return self._finalize_fit(X, best_cost, best_medoids)
 
@@ -632,6 +670,11 @@ class CLARANS(ClusterMixin, TransformerMixin, BaseEstimator):
 
                     i = 0
                     swap_count += 1
+                    if self.verbose >= 2:
+                        print(
+                            f"  Swap {swap_count:4d} | Evaluated: {eval_count:6d} | "
+                            f"Cost: {current_cost:.5f} | Delta: {total_delta:.5f}"
+                        )
                 else:
                     i += 1
             else:
@@ -651,6 +694,7 @@ class CLARANS(ClusterMixin, TransformerMixin, BaseEstimator):
                 if neighbor_cost < current_cost + delta_tol:
                     old_medoid = current_medoids_indices[random_medoid_pos]
                     current_medoids_indices = neighbor_medoids_indices
+                    delta_cost = neighbor_cost - current_cost
                     current_cost = neighbor_cost
 
                     non_medoid_mask[old_medoid] = True
@@ -659,6 +703,11 @@ class CLARANS(ClusterMixin, TransformerMixin, BaseEstimator):
 
                     i = 0
                     swap_count += 1
+                    if self.verbose >= 2:
+                        print(
+                            f"  Swap {swap_count:4d} | Evaluated: {eval_count:6d} | "
+                            f"Cost: {current_cost:.5f} | Delta: {delta_cost:.5f}"
+                        )
                 else:
                     i += 1
 
@@ -883,6 +932,15 @@ class CLARANS(ClusterMixin, TransformerMixin, BaseEstimator):
             raise ValueError(
                 f"The 'cost_evaluation' parameter of {self.__class__.__name__} must be a str among "
                 f"{{'brute_force', 'delta'}}. Got {self.cost_evaluation!r} instead."
+            )
+
+        if (
+            not isinstance(self.verbose, (int, np.integer, bool, np.bool_))
+            or self.verbose < 0
+        ):
+            raise ValueError(
+                f"The 'verbose' parameter of {self.__class__.__name__} must be an integer >= 0 or a bool. "
+                f"Got {self.verbose!r} instead."
             )
 
         if self.metric_params is not None and not isinstance(self.metric_params, dict):

@@ -143,6 +143,10 @@ Both estimators share core hyperparameters to balance execution speed and cluste
      - CLARANS only
      - ``'delta'``
      - Strategy to evaluate candidate swaps (``'delta'`` for :math:`O(n)` evaluations using distance caching; ``'brute_force'`` for recalculating total cost in :math:`O(n \cdot k)`).
+   * - ``verbose``
+     - Both
+     - ``0``
+     - Verbosity level (``0`` for silent, ``1`` for per-search progress summary, ``>=2`` for per-swap details).
 
 Practical Tuning Tips
 ^^^^^^^^^^^^^^^^^^^^^^

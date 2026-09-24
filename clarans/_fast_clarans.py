@@ -8,6 +8,7 @@ benefiting from the O(k) speedup per swap evaluation.
 
 from __future__ import annotations
 
+import time
 from typing import TYPE_CHECKING, Any
 
 import numpy as np
@@ -85,6 +86,15 @@ class FastCLARANS(CLARANS):
     random_state : int, RandomState instance or None, default=None
         Controls random number generation for reproducibility.
 
+    verbose : int, default=0
+        Verbosity mode. Controls the level of progress messages printed during
+        fitting:
+
+        - ``0``: Silent (default).
+        - ``1``: Prints progress for each local search iteration (start, completion,
+          cost, elapsed time, swaps performed, and candidates evaluated).
+        - ``>=2``: Additionally prints details on each successful medoid swap.
+
     Attributes
     ----------
     cluster_centers_ : {ndarray, sparse matrix} of shape (n_clusters, n_features) or None
@@ -149,6 +159,7 @@ class FastCLARANS(CLARANS):
         metric: str | Any = "euclidean",
         metric_params: dict[str, Any] | None = None,
         random_state: int | np.random.RandomState | None = None,
+        verbose: int = 0,
     ) -> None:
         super().__init__(
             n_clusters=n_clusters,
@@ -159,6 +170,7 @@ class FastCLARANS(CLARANS):
             metric_params=metric_params,
             random_state=random_state,
             cost_evaluation="delta",
+            verbose=verbose,
         )
 
     def fit(self, X: ArrayLike | "spmatrix", y: Any = None) -> "FastCLARANS":
@@ -227,12 +239,32 @@ class FastCLARANS(CLARANS):
         d_xc_buf = np.empty(n_samples, dtype=buf_dtype)
         delta_arr_buf = np.zeros(self.n_clusters, dtype=buf_dtype)
 
+        if self.verbose:
+            print(
+                f"[FastCLARANS] Fitting with n_clusters={self.n_clusters}, "
+                f"num_local={self.num_local}, max_neighbors={self.max_neighbors_}"
+            )
+
+        start_fit_time = time.perf_counter()
+
         for loc_idx in range(self.num_local):
+            if self.verbose:
+                print(f"[FastCLARANS] Local search {loc_idx + 1}/{self.num_local}:")
+            loc_start_time = time.perf_counter()
+
             current_cost, current_medoids_indices, eval_count, swap_count = (
                 self._single_local_search(
                     X, random_state, deterministic_medoids, d_xc_buf, delta_arr_buf
                 )
             )
+            loc_elapsed = time.perf_counter() - loc_start_time
+
+            if self.verbose:
+                print(
+                    f"[FastCLARANS] Local search {loc_idx + 1}/{self.num_local} done "
+                    f"in {loc_elapsed:.3f}s (Cost: {current_cost:.5f}, "
+                    f"Swaps: {swap_count}, Evaluated: {eval_count})"
+                )
 
             tol = -max(1e-16, 1e-12 * abs(current_cost))
             if (
@@ -257,6 +289,12 @@ class FastCLARANS(CLARANS):
 
         self.n_iter_ = best_n_iter
         self.n_swaps_ = best_n_swaps
+
+        if self.verbose:
+            total_elapsed = time.perf_counter() - start_fit_time
+            print(
+                f"[FastCLARANS] Best cost: {best_cost:.5f} achieved in {total_elapsed:.3f}s"
+            )
 
         return self._finalize_fit(X, best_cost, best_medoids)
 
@@ -404,6 +442,11 @@ class FastCLARANS(CLARANS):
 
                 i = 0
                 swap_count += 1
+                if self.verbose >= 2:
+                    print(
+                        f"  Swap {swap_count:4d} | Evaluated: {eval_count:6d} | "
+                        f"Cost: {current_cost:.5f} | Delta: {min_delta:.5f}"
+                    )
             else:
                 i += 1
 

@@ -332,6 +332,66 @@ class TestFastCLARANSMetricParams(unittest.TestCase):
         cloned = clone(model)
         self.assertEqual(cloned.metric_params, {"p": 4})
 
+    def test_verbose_silent(self):
+        """verbose=0 and verbose=False should produce no output to stdout."""
+        import io
+        from contextlib import redirect_stdout
+
+        for v in (0, False):
+            f = io.StringIO()
+            with redirect_stdout(f):
+                model = FastCLARANS(n_clusters=2, num_local=1, max_neighbors=10, verbose=v, random_state=42)
+                model.fit(self.X)
+            self.assertEqual(f.getvalue(), "")
+
+    def test_verbose_level_1(self):
+        """verbose=1 and verbose=True should print local search summaries and best cost."""
+        import io
+        from contextlib import redirect_stdout
+
+        for v in (1, True):
+            f = io.StringIO()
+            with redirect_stdout(f):
+                model = FastCLARANS(n_clusters=2, num_local=2, max_neighbors=10, verbose=v, random_state=42)
+                model.fit(self.X)
+            output = f.getvalue()
+            self.assertIn("[FastCLARANS] Fitting with", output)
+            self.assertIn("[FastCLARANS] Local search 1/2:", output)
+            self.assertIn("[FastCLARANS] Local search 1/2 done in", output)
+            self.assertIn("[FastCLARANS] Local search 2/2 done in", output)
+            self.assertIn("[FastCLARANS] Best cost:", output)
+
+    def test_verbose_level_2(self):
+        """verbose=2 should print individual swap details when swaps occur."""
+        import io
+        from contextlib import redirect_stdout
+
+        f = io.StringIO()
+        with redirect_stdout(f):
+            model = FastCLARANS(n_clusters=2, num_local=1, max_neighbors=50, init="random", verbose=2, random_state=0)
+            model.fit(self.X)
+        output = f.getvalue()
+        self.assertIn("[FastCLARANS] Fitting with", output)
+        self.assertIn("[FastCLARANS] Local search 1/1 done in", output)
+        if model.n_swaps_ > 0:
+            self.assertIn("Swap", output)
+            self.assertIn("Delta:", output)
+
+    def test_verbose_invalid(self):
+        """Invalid verbose values should raise ValueError."""
+        for invalid_val in [-1, -5, "1", 1.5, [1]]:
+            with self.assertRaises(ValueError) as ctx:
+                FastCLARANS(n_clusters=2, verbose=invalid_val, random_state=42).fit(self.X)
+            self.assertIn("verbose", str(ctx.exception).lower())
+
+    def test_clone_preserves_verbose(self):
+        """clone should preserve verbose correctly."""
+        from sklearn.base import clone
+
+        model = FastCLARANS(verbose=2)
+        cloned = clone(model)
+        self.assertEqual(cloned.verbose, 2)
+
 
 if __name__ == "__main__":
     unittest.main()
