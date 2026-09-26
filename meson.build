@@ -15,7 +15,7 @@ cc = meson.get_compiler('c')
 
 # NumPy C API include directory
 incdir_numpy = run_command(py,
-  ['-c', 'import numpy; print(numpy.get_include())'],
+  ['-c', 'import os, numpy; p = numpy.get_include(); rel = os.path.relpath(p); print(p if rel.startswith("..") else rel)'],
   check: true
 ).stdout().strip()
 
