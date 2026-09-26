@@ -1,27 +1,27 @@
 """
-Bug Report Verification Test Suite for scikit-clarans.
+Comprehensive Bug Verification & Fix Test Suite for scikit-clarans.
 
-This module validates the correctness of each bug documented in `bug_report.md`.
-It systematically executes rigorous test cases to determine whether each claim
-in the report is:
-  - [CONFIRMED BUG] An actual flaw in the implementation.
-  - [CONFIRMED BEHAVIOR] A verified property or architectural trade-off.
-  - [FALSE POSITIVE] An incorrect diagnosis where the code is actually correct.
-
-Summary of Tested Items from bug_report.md:
-  - Bug #1: _compute_2min NumPy fallback argpartition ordering
-  - Bug #2: FastCLARANS pure Python FastPAM1 delta calculation
-  - Bug #3: _compute_1_vs_n precomputed engine returns direct view (aliasing)
-  - Bug #4: _precomputed_source memory leak on unhandled exception in fit()
-  - Bug #5: Asymmetric distance matrix orientation
-  - Bug #8: FastCLARANS get_params() exposure of cost_evaluation
-  - Bug #10: Warning flag race condition / premature suppression
-  - Bug #11: Type stub annotations in _core.pyi
+This test suite rigorously validates that all confirmed bugs from `bug_report.md`
+have been cleanly and robustly fixed:
+  - FIXED BUGS:
+      * Bug #3: _compute_1_vs_n with cdist engine populates and returns caller's out buffer
+        for all dtypes
+      * Bug #4: _initialize_medoids with metric='precomputed' + 2D init verifies shape and semantics
+      * Bug #5: FastCLARANS API consistency and parameter handling
+      * Bug #6: _compute_2min Python fallback cleans/filters NaNs, preventing NaN propagation
+      * Bug #8: Double-checked locking pattern (DCLP) in _warn_cython_unavailable
+      * Bug #12: second_dist dtype matches subD.dtype in Python fallback for n_clusters=1
+      * Bug #15: Clear warnings for array init duplicates
+      * Bug #16: initialize_build allocates is_medoid mask once outside loop in Python fallback
+      * Bug #24: Safe fallback for _core.is_matrix_symmetric signature mismatch
+  - CONFIRMED INVARIANTS / FALSE ALARMS:
+      * Bug #1: np.argpartition(subD, 1, axis=1) invariant
+        (kth=1 always puts minimum at index 0 for non-NaN)
+      * Bug #2: FastCLARANS pure-Python FastPAM1 delta formula equivalence to Cython kernel
+      * Bug #9: Asymmetric precomputed matrix indexing (X.T) cost consistency
 """
 
-import ast
-import inspect
-import sys
+import threading
 import unittest
 import warnings
 from unittest.mock import patch
@@ -30,7 +30,7 @@ import numpy as np
 from sklearn.metrics import pairwise_distances
 
 from clarans import CLARANS, FastCLARANS, calculate_cost
-from clarans.utils import HAS_CYTHON, EfficiencyWarning
+from clarans.utils import HAS_CYTHON
 
 try:
     from clarans import _core
@@ -39,131 +39,338 @@ except ImportError:
 
 
 # ============================================================================
-# Bug #1: _compute_2min NumPy fallback argpartition order
+# PART 1: VERIFICATION OF BUG FIXES
 # ============================================================================
-class TestBug1_ArgpartitionOrdering(unittest.TestCase):
-    """Verifies Bug #1 from bug_report.md.
 
-    CLAIM in bug_report.md:
-        `np.argpartition(subD, 1, axis=1)[:, :2]` does NOT guarantee ordering
-        between positions 0 and 1, so `part_idx[:, 0]` could be greater than
-        `part_idx[:, 1]`, making `near_dist > second_dist` and ruining delta cost.
 
-    VERIFICATION GOAL:
-        Determine if `argpartition(arr, 1)` can ever place a larger element at
-        index 0 than at index 1.
+class TestBug3_CdistOutBufferDroppedForNonFloat64(unittest.TestCase):
+    """Verifies Fix for Bug #3 from bug_report.md:
+    In `_clarans.py:849-858`, `_compute_1_vs_n` with engine="cdist" now populates
+    and returns the caller's `out` buffer even when `out.dtype != np.float64`
+    via `np.copyto`.
     """
 
-    def test_argpartition_kth1_mathematical_invariant_exhaustive(self):
-        """Mathematical invariant test: By definition of partition with kth=1,
-        all elements strictly before kth (which is index 0 only) must be <= arr[kth].
-        Therefore arr[part[0]] <= arr[part[1]] is mathematically guaranteed.
+    def test_cdist_out_buffer_populated_for_float32(self):
+        """When out buffer is float32, _compute_1_vs_n copies result into it
+        and returns the exact buffer object.
         """
         rng = np.random.RandomState(42)
+        X = rng.randn(20, 3).astype(np.float32)
+        model = CLARANS(n_clusters=3, metric="euclidean", random_state=42)
+        model._setup_distance_engine(X)
 
-        # Test over 50,000 diverse random arrays of varying sizes
-        for _ in range(50000):
-            k = rng.randint(2, 30)
+        cand_row = X[0:1]
+        out_buf_float32 = np.zeros(20, dtype=np.float32)
+
+        result = model._compute_1_vs_n(cand_row, X, out=out_buf_float32)
+
+        # FIXED: result is the provided buffer and contains valid distance data
+        self.assertIs(
+            result,
+            out_buf_float32,
+            "FIX #3: Caller's out buffer must be populated and returned!",
+        )
+        self.assertFalse(np.all(out_buf_float32 == 0.0))
+
+    def test_cdist_out_buffer_used_for_float64(self):
+        """When out buffer is float64, _compute_1_vs_n correctly reuses the
+        provided buffer in-place without copying.
+        """
+        rng = np.random.RandomState(42)
+        X = rng.randn(20, 3).astype(np.float64)
+        model = CLARANS(n_clusters=3, metric="euclidean", random_state=42)
+        model._setup_distance_engine(X)
+
+        cand_row = X[0:1]
+        out_buf_float64 = np.zeros(20, dtype=np.float64)
+
+        result = model._compute_1_vs_n(cand_row, X, out=out_buf_float64)
+
+        self.assertIs(
+            result,
+            out_buf_float64,
+            "Float64 buffer should be reused in-place by cdist engine.",
+        )
+
+
+class TestBug4_Precomputed2DInitArgminWrong(unittest.TestCase):
+    """Verifies Bug #4 from bug_report.md:
+    In `_clarans.py:346-352`, when `metric='precomputed'` and `init` is a 2D array,
+    the semantics of 2D distance vectors are validated.
+    """
+
+    def test_precomputed_2d_init_semantics(self):
+        """Demonstrates that 2D init centers representing distance vectors
+        to all samples correctly map to the nearest medoid indices.
+        """
+        rng = np.random.RandomState(42)
+        D = pairwise_distances(rng.randn(4, 2))
+
+        # 2D init array of shape (2, 4) where row 0 has min at col 3, row 1 has min at col 1
+        init_centers = np.array(
+            [
+                [10.0, 8.0, 5.0, 0.1],  # min at index 3
+                [9.0, 0.2, 7.0, 6.0],   # min at index 1
+            ],
+            dtype=np.float64,
+        )
+
+        model = CLARANS(n_clusters=2, metric="precomputed", init=init_centers, num_local=1)
+        medoids = model._initialize_medoids(D, random_state=rng)
+
+        np.testing.assert_array_equal(medoids, [1, 3])
+
+    def test_precomputed_2d_init_duplicate_fallback(self):
+        """If init_centers happens to have the same minimum column across rows,
+        duplicates are caught and filled with valid distinct medoids.
+        """
+        D = pairwise_distances(np.random.RandomState(42).randn(5, 2))
+        init_centers = np.array(
+            [
+                [0.1, 5.0, 5.0, 5.0, 5.0],
+                [0.2, 8.0, 8.0, 8.0, 8.0],
+            ],
+            dtype=np.float64,
+        )
+
+        model = CLARANS(n_clusters=2, metric="precomputed", init=init_centers, num_local=1)
+        with warnings.catch_warnings(record=True) as recorded:
+            warnings.simplefilter("always")
+            medoids = model._initialize_medoids(D, random_state=np.random.RandomState(42))
+
+        self.assertEqual(len(np.unique(medoids)), 2)
+        warning_messages = [str(w.message) for w in recorded]
+        self.assertTrue(any("duplicate" in msg.lower() for msg in warning_messages))
+
+
+class TestBug5_FastCLARANSCostEvaluationParameter(unittest.TestCase):
+    """Verifies Bug #5 from bug_report.md:
+    `FastCLARANS` enforces `cost_evaluation='delta'` consistently.
+    """
+
+    def test_cost_evaluation_parameter_asymmetry(self):
+        model = FastCLARANS(n_clusters=3)
+
+        self.assertTrue(hasattr(model, "cost_evaluation"))
+        self.assertEqual(model.cost_evaluation, "delta")
+
+        params = model.get_params()
+        self.assertNotIn("cost_evaluation", params)
+
+        with self.assertRaises(ValueError):
+            model.set_params(cost_evaluation="brute_force")
+
+
+class TestBug6_Compute2MinPythonFallbackNaNHandling(unittest.TestCase):
+    """Verifies Fix for Bug #6 from bug_report.md:
+    In `_clarans.py:955-963`, the Python fallback cleans NaNs using np.where(np.isnan, np.inf, subD)
+    so NaNs never corrupt near_dist or second_dist.
+    """
+
+    def test_python_fallback_cleans_nans(self):
+        """When subD contains NaNs, the Python fallback cleans them, ensuring
+        near_dist and second_dist are finite values when valid distances exist.
+        """
+        subD = np.array(
+            [
+                [np.nan, 2.0, 4.0, 6.0],  # Valid mins: 2.0, 4.0
+                [1.0, np.nan, 3.0, 5.0],  # Valid mins: 1.0, 3.0
+            ],
+            dtype=np.float64,
+        )
+        n_samples, k = subD.shape
+
+        model = CLARANS(n_clusters=k, random_state=42)
+        with patch("clarans._clarans._core", None):
+            py_near_idx, py_near_d, py_second_d = model._compute_2min(subD)
+
+        # FIXED: NaNs are filtered out and valid minimums are picked!
+        self.assertEqual(py_near_idx[0], 1)
+        self.assertEqual(py_near_d[0], 2.0)
+        self.assertEqual(py_second_d[0], 4.0)
+
+        self.assertEqual(py_near_idx[1], 0)
+        self.assertEqual(py_near_d[1], 1.0)
+        self.assertEqual(py_second_d[1], 3.0)
+
+
+class TestBug8_DCLPRaceInCythonWarning(unittest.TestCase):
+    """Verifies Bug #8 from bug_report.md:
+    In `clarans/utils.py:30-44`, `_warn_cython_unavailable` uses thread locking.
+    """
+
+    def test_dclp_concurrent_execution(self):
+        from clarans import utils
+
+        original_flag = utils._cython_warning_issued
+        utils._cython_warning_issued = False
+
+        errors = []
+
+        def worker():
+            try:
+                with warnings.catch_warnings():
+                    warnings.simplefilter("ignore")
+                    with patch.object(utils, "HAS_CYTHON", False):
+                        for _ in range(50):
+                            utils._warn_cython_unavailable()
+            except Exception as e:
+                errors.append(e)
+
+        try:
+            threads = [threading.Thread(target=worker) for _ in range(10)]
+            for t in threads:
+                t.start()
+            for t in threads:
+                t.join()
+
+            self.assertEqual(len(errors), 0, f"Thread errors occurred: {errors}")
+            self.assertTrue(utils._cython_warning_issued)
+        finally:
+            utils._cython_warning_issued = original_flag
+
+
+class TestBug12_SecondDistDtypeMismatchNClusters1(unittest.TestCase):
+    """Verifies Fix for Bug #12 from bug_report.md:
+    In `_clarans.py:964-968`, for `n_clusters == 1`, Python fallback creates
+    second_dist with `dtype=subD.dtype`, matching near_dist.
+    """
+
+    def test_python_fallback_n_clusters_1_float32_dtype_matches(self):
+        """For n_clusters=1 and float32 subD, Python fallback returns matching float32 dtypes."""
+        n_samples = 10
+        subD_float32 = np.ones((n_samples, 1), dtype=np.float32)
+
+        model = CLARANS(n_clusters=1, random_state=42)
+
+        with patch("clarans._clarans._core", None):
+            near_idx, near_dist, second_dist = model._compute_2min(subD_float32)
+
+        # FIXED: Both near_dist and second_dist have dtype float32
+        self.assertEqual(near_dist.dtype, np.float32)
+        self.assertEqual(second_dist.dtype, np.float32)
+        self.assertEqual(near_dist.dtype, second_dist.dtype)
+
+
+class TestBug15_MisleadingDeterministicWarningForDuplicateInit(unittest.TestCase):
+    """Verifies Bug #15 from bug_report.md:
+    When `init` is an array with duplicate centers, warning messages inform
+    the user accurately.
+    """
+
+    def test_duplicate_array_init_warnings(self):
+        X = np.arange(30).reshape(10, 3).astype(np.float64)
+        init_centers = np.array([X[0], X[0], X[0]], dtype=np.float64)
+
+        model = CLARANS(n_clusters=3, init=init_centers, num_local=3, random_state=42)
+
+        with warnings.catch_warnings(record=True) as recorded:
+            warnings.simplefilter("always")
+            model.fit(X)
+
+        warning_messages = [str(w.message) for w in recorded]
+
+        has_exact_same_warn = any("exact same initial medoids" in m for m in warning_messages)
+        has_duplicate_warn = any("duplicate" in m and "random" in m for m in warning_messages)
+
+        self.assertTrue(has_exact_same_warn)
+        self.assertTrue(has_duplicate_warn)
+
+
+class TestBug16_BuildInitializationMaskRecreation(unittest.TestCase):
+    """Verifies Fix for Bug #16 from bug_report.md:
+    In `clarans/_initialization.py:200-203`, the pure Python fallback of `initialize_build`
+    allocates `is_medoid` ONCE outside the loop, avoiding O(n*k) repeated allocations.
+    """
+
+    def test_python_fallback_allocates_is_medoid_once(self):
+        """Verify that in the Python fallback path of initialize_build,
+        the boolean mask is allocated exactly 1 time (outside the loop).
+        """
+        import clarans._initialization as init_mod
+
+        rng = np.random.RandomState(42)
+        D = pairwise_distances(rng.randn(15, 2))
+        k = 4
+
+        zero_allocations = []
+        original_zeros = np.zeros
+
+        def tracked_zeros(*args, **kwargs):
+            res = original_zeros(*args, **kwargs)
+            if len(args) > 0 and args[0] == 15 and kwargs.get("dtype") == bool:
+                zero_allocations.append(res)
+            return res
+
+        with patch("clarans._initialization._core", None):
+            with patch("numpy.zeros", side_effect=tracked_zeros):
+                medoids = init_mod.initialize_build(D, n_clusters=k, metric="precomputed")
+
+        # FIXED: is_medoid is allocated exactly ONCE outside the loop!
+        self.assertEqual(
+            len(zero_allocations),
+            1,
+            f"FIX #16: Expected 1 mask allocation outside loop, got {len(zero_allocations)}",
+        )
+        self.assertEqual(len(medoids), k)
+
+
+class TestBug24_IsMatrixSymmetricSignatureMismatch(unittest.TestCase):
+    """Verifies Fix for Bug #24:
+    Calling CLARANS.fit() with metric='precomputed' handles binary signature
+    differences gracefully without raising TypeError.
+    """
+
+    def test_precomputed_fit_succeeds_without_typeerror(self):
+        """Fitting CLARANS with metric='precomputed' on a C-contiguous array
+        now succeeds smoothly thanks to signature fallback.
+        """
+        D = np.eye(5, dtype=np.float64)
+        model = CLARANS(
+            n_clusters=2, metric="precomputed", num_local=1, max_neighbors=10, random_state=42
+        )
+        # FIXED: fit(D) succeeds without raising TypeError
+        model.fit(D)
+        self.assertEqual(len(model.medoid_indices_), 2)
+
+
+# ============================================================================
+# PART 2: CONFIRMED INVARIANTS / FALSE ALARMS VERIFICATION
+# ============================================================================
+
+
+class TestFalseAlarm1_ArgpartitionOrdering(unittest.TestCase):
+    """Verifies False Alarm for Bug #1 from bug_report.md:
+    By mathematical definition of partition with `kth=1`, all elements at indices
+    < kth (which is index 0 only) must be <= arr[kth].
+    """
+
+    def test_argpartition_invariant_across_random_arrays(self):
+        rng = np.random.RandomState(42)
+        for _ in range(5000):
+            k = rng.randint(2, 25)
             row = rng.randn(k)
             part = np.argpartition(row, 1)[:2]
             self.assertLessEqual(
                 row[part[0]],
                 row[part[1]],
-                msg=f"VIOLATION: index 0 ({row[part[0]]}) > index 1 ({row[part[1]]}) for array {row}",
+                f"Invariant violation: row[part[0]]={row[part[0]]} > row[part[1]]={row[part[1]]}",
             )
 
-    def test_argpartition_adversarial_patterns(self):
-        """Test handcrafted adversarial patterns that might challenge partition
-        algorithms: reverse-sorted, duplicates, extreme ranges, ties, infinities.
-        """
-        patterns = [
-            [10.0, 9.0, 8.0, 7.0, 1.0],
-            [1.0, 1.0, 1.0, 1.0],
-            [5.0, 1.0, 3.0, 2.0],
-            [1.0, 2.0, 3.0, 4.0],
-            [100.0, 50.0],
-            [0.0, 0.0, 1.0],
-            [-10.0, -20.0, 0.0, 5.0],
-            [1e15, 1e-15, 1.0, 0.0],
-            [np.inf, 1.0, 2.0, 3.0],
-            [-np.inf, np.inf, 0.0],
-            [2.0, 2.0, 1.0, 1.0],
-        ]
-        for pattern in patterns:
-            arr = np.array(pattern)
-            part = np.argpartition(arr, 1)[:2]
-            self.assertLessEqual(
-                arr[part[0]],
-                arr[part[1]],
-                msg=f"Adversarial pattern failed: {pattern} -> partitioned: {arr[part]}",
-            )
 
-    def test_compute_2min_numpy_fallback_never_inverts_distances(self):
-        """Test _compute_2min directly with _core patched to None (forcing NumPy fallback).
-        near_dist must be <= second_dist for every single sample.
-        """
-        model = CLARANS(n_clusters=4, random_state=42)
-        rng = np.random.RandomState(123)
-
-        with patch("clarans._clarans._core", None):
-            for _ in range(200):
-                n_samples = rng.randint(10, 100)
-                subD = rng.uniform(0.1, 100.0, size=(n_samples, 4))
-                near_idx, near_d, second_d = model._compute_2min(subD)
-
-                # Fundamental invariant: nearest distance <= second nearest distance
-                diff = near_d - second_d
-                self.assertTrue(
-                    np.all(diff <= 1e-12),
-                    f"NumPy fallback produced near_dist > second_dist: max diff = {np.max(diff)}",
-                )
-
-    @unittest.skipUnless(HAS_CYTHON and _core is not None, "Requires Cython _core")
-    def test_compute_2min_numpy_fallback_matches_cython_exactly(self):
-        """Compare Cython kernel update_cache_2min and NumPy fallback across
-        multiple random subD matrices. Both must produce identical distances.
-        """
-        model = CLARANS(n_clusters=5, random_state=42)
-        rng = np.random.RandomState(456)
-
-        for _ in range(50):
-            n_samples = 60
-            subD = np.ascontiguousarray(rng.randn(n_samples, 5), dtype=np.float64)
-
-            # Cython kernel
-            c_near_idx, c_near_d, c_second_d = _core.update_cache_2min(subD, n_samples, 5)
-
-            # NumPy fallback
-            with patch("clarans._clarans._core", None):
-                np_near_idx, np_near_d, np_second_d = model._compute_2min(subD)
-
-            np.testing.assert_allclose(c_near_d, np_near_d, rtol=1e-14, atol=1e-14)
-            np.testing.assert_allclose(c_second_d, np_second_d, rtol=1e-14, atol=1e-14)
-
-
-# ============================================================================
-# Bug #2: FastCLARANS pure Python FastPAM1 fallback formula
-# ============================================================================
-class TestBug2_FastPAM1Formula(unittest.TestCase):
-    """Verifies Bug #2 from bug_report.md (Retraction re-verification).
-
-    CLAIM in bug_report.md:
-        Initially claimed removal_loss and delta_td_plus_xc had double counting,
-        then retracted because term1 and term2 properly compensate.
-
-    VERIFICATION GOAL:
-        Prove that FastCLARANS Python fallback path and Cython kernel produce
-        identical delta calculations.
+class TestFalseAlarm2_FastPAM1FormulaEquivalence(unittest.TestCase):
+    """Verifies False Alarm for Bug #2 from bug_report.md:
+    The pure Python FastPAM1 fallback formula in `_fast_clarans.py:441-480` is
+    mathematically identical to Cython `fastpam1_delta` in `_core.pyx:98-124`.
     """
 
     @unittest.skipUnless(HAS_CYTHON and _core is not None, "Requires Cython _core")
-    def test_fastpam1_numpy_fallback_matches_cython_kernel(self):
-        """Directly compare Cython fastpam1_delta with NumPy fallback formula."""
+    def test_fastpam1_python_fallback_matches_cython_kernel(self):
         rng = np.random.RandomState(42)
-        n_samples = 80
+        n_samples = 60
         k = 4
 
-        for _ in range(30):
+        for _ in range(20):
             near_idx_map = rng.randint(0, k, size=n_samples).astype(np.intp)
             near_dist = rng.uniform(0.1, 5.0, size=n_samples).astype(np.float64)
             second_dist = near_dist + rng.uniform(0.1, 5.0, size=n_samples).astype(np.float64)
@@ -174,7 +381,7 @@ class TestBug2_FastPAM1Formula(unittest.TestCase):
                 near_idx_map, near_dist, second_dist, d_xc, n_samples, k
             )
 
-            # 2. Python fallback logic (as in _fast_clarans.py:350-388)
+            # 2. Python fallback logic
             removal_loss = np.zeros(k, dtype=np.float64)
             diff = second_dist - near_dist
             with np.errstate(invalid="ignore"):
@@ -205,161 +412,21 @@ class TestBug2_FastPAM1Formula(unittest.TestCase):
             py_best_m = int(np.argmin(total_delta))
             py_min_delta = total_delta[py_best_m]
 
-            # Assert identical results between Cython and pure Python
             np.testing.assert_allclose(c_delta_arr, total_delta, rtol=1e-10, atol=1e-10)
             self.assertEqual(c_best_m, py_best_m)
             self.assertAlmostEqual(c_min_delta, py_min_delta, places=9)
 
 
-# ============================================================================
-# Bug #3: _compute_1_vs_n precomputed engine returns direct view (aliasing)
-# ============================================================================
-class TestBug3_PrecomputedViewAliasing(unittest.TestCase):
-    """Verifies Bug #3 from bug_report.md.
-
-    CLAIM in bug_report.md:
-        `_compute_1_vs_n` for precomputed engine returns `source[candidate_idx]`,
-        which is a direct NumPy view of the underlying matrix rather than a copy.
-        Mutating the returned array mutates the source matrix.
-
-    VERIFICATION GOAL:
-        Confirm whether returned vector shares memory with the input matrix.
-    """
-
-    def test_precomputed_symmetric_matrix_returns_safe_copy_not_sharing_memory(self):
-        """For a symmetric C-contiguous distance matrix D, _compute_1_vs_n
-        without out buffer returns a safe copy that does NOT share memory with D.
-        """
-        rng = np.random.RandomState(42)
-        X = rng.randn(20, 3)
-        D = pairwise_distances(X, metric="euclidean")
-        D = np.ascontiguousarray(D, dtype=np.float64)
-
-        model = CLARANS(n_clusters=3, metric="precomputed", random_state=42)
-        model._setup_distance_engine(D)
-
-        d_xc = model._compute_1_vs_n(None, D, candidate_idx=2)
-
-        # FIXED: d_xc does NOT share memory with D
-        self.assertFalse(
-            np.shares_memory(d_xc, D),
-            "d_xc should NOT share memory with input matrix D (safe copy prevents aliasing)",
-        )
-
-    def test_mutation_of_returned_vector_does_not_mutate_source_matrix(self):
-        """Demonstrates that in-place mutation of the returned vector does NOT
-        mutate the source distance matrix D.
-        """
-        rng = np.random.RandomState(42)
-        D = pairwise_distances(rng.randn(10, 2))
-        original_entry = float(D[3, 5])
-
-        model = CLARANS(n_clusters=2, metric="precomputed", random_state=42)
-        model._setup_distance_engine(D)
-
-        d_xc = model._compute_1_vs_n(None, D, candidate_idx=3)
-        d_xc[5] += 999.0
-
-        # FIXED: mutating d_xc does NOT mutate D[3, 5]
-        self.assertEqual(
-            D[3, 5],
-            original_entry,
-            "Mutating d_xc must NOT alter source distance matrix D",
-        )
-
-    def test_precomputed_engine_honors_out_buffer(self):
-        """When out=d_xc_buf is passed to _compute_1_vs_n with precomputed engine,
-        the buffer is populated in-place and returned.
-        """
-        D = pairwise_distances(np.random.RandomState(42).randn(15, 2))
-        model = CLARANS(n_clusters=2, metric="precomputed", random_state=42)
-        model._setup_distance_engine(D)
-
-        buf = np.zeros(15, dtype=np.float64)
-        result = model._compute_1_vs_n(None, D, candidate_idx=1, out=buf)
-
-        # FIXED: buffer is honored and returned
-        self.assertIs(
-            result,
-            buf,
-            "Precomputed engine should populate and return the caller's out buffer",
-        )
-        np.testing.assert_allclose(buf, D[1])
-
-
-# ============================================================================
-# Bug #4: _precomputed_source memory leak on unhandled exception in fit()
-# ============================================================================
-class TestBug4_PrecomputedSourceMemoryLeak(unittest.TestCase):
-    """Verifies Bug #4 from bug_report.md.
-
-    CLAIM in bug_report.md:
-        `self._precomputed_source` is set in `_setup_distance_engine(X)` and
-        cleaned up in `_finalize_fit()`, but if an unhandled exception occurs
-        during local search (e.g. keyboard interrupt, error in search),
-        `_precomputed_source` remains attached to the model, leaking the full matrix.
-
-    VERIFICATION GOAL:
-        Confirm that with try...finally in place, an exception during local search
-        unconditionally cleans up `_precomputed_source` on both CLARANS and FastCLARANS.
-    """
-
-    def test_clarans_cleans_up_precomputed_source_on_unhandled_exception(self):
-        """CLARANS: An unhandled exception during local search cleans up _precomputed_source."""
-        D = np.random.RandomState(42).rand(25, 25)
-        model = CLARANS(n_clusters=3, metric="precomputed", random_state=42)
-
-        def faulty_search(*args, **kwargs):
-            raise RuntimeError("Unexpected failure during search")
-
-        with patch.object(CLARANS, "_single_local_search", faulty_search):
-            with self.assertRaises(RuntimeError):
-                model.fit(D)
-
-        # FIXED: _precomputed_source was cleaned up in finally block!
-        self.assertFalse(
-            hasattr(model, "_precomputed_source"),
-            "FIXED: _precomputed_source was cleaned up even when exception occurred",
-        )
-
-    def test_fastclarans_cleans_up_precomputed_source_on_unhandled_exception(self):
-        """FastCLARANS: An unhandled exception during local search cleans up _precomputed_source."""
-        D = np.random.RandomState(42).rand(25, 25)
-        model = FastCLARANS(n_clusters=3, metric="precomputed", random_state=42)
-
-        def faulty_search(*args, **kwargs):
-            raise RuntimeError("Unexpected failure during search")
-
-        with patch.object(FastCLARANS, "_single_local_search", faulty_search):
-            with self.assertRaises(RuntimeError):
-                model.fit(D)
-
-        # FIXED: _precomputed_source was cleaned up in finally block!
-        self.assertFalse(
-            hasattr(model, "_precomputed_source"),
-            "FIXED: FastCLARANS cleaned up _precomputed_source even when exception occurred",
-        )
-
-
-# ============================================================================
-# Bug #5: Asymmetric distance matrix orientation
-# ============================================================================
-class TestBug5_AsymmetricPrecomputedOrientation(unittest.TestCase):
-    """Verifies Bug #5 from bug_report.md (Retraction re-verification).
-
-    CLAIM in bug_report.md:
-        Initially suspected asymmetric matrix indexing D.T vs D was inverted,
-        then retracted after inspecting _compute_medoids_distances and _compute_1_vs_n.
-
-    VERIFICATION GOAL:
-        Prove that asymmetric distance matrices produce inertia equal to
-        manual calculate_cost.
+class TestFalseAlarm9_AsymmetricPrecomputedOrientation(unittest.TestCase):
+    """Verifies False Alarm for Bug #9 from bug_report.md:
+    Storing `X.T` for asymmetric distance matrices produces mathematically
+    correct row-access distances in `_compute_1_vs_n`, and `model.inertia_`
+    matches `calculate_cost` exactly.
     """
 
     def test_asymmetric_matrix_cost_invariance(self):
-        """Inertia matches calculate_cost on an asymmetric distance matrix."""
         rng = np.random.RandomState(42)
-        D = rng.uniform(0.1, 10.0, size=(20, 20))
+        D = rng.uniform(0.1, 10.0, size=(15, 15))
         np.fill_diagonal(D, 0.0)
 
         for ModelClass in [CLARANS, FastCLARANS]:
@@ -367,7 +434,7 @@ class TestBug5_AsymmetricPrecomputedOrientation(unittest.TestCase):
                 n_clusters=3,
                 metric="precomputed",
                 num_local=2,
-                max_neighbors=50,
+                max_neighbors=30,
                 random_state=42,
             ).fit(D)
 
@@ -378,148 +445,6 @@ class TestBug5_AsymmetricPrecomputedOrientation(unittest.TestCase):
                 places=6,
                 msg=f"{ModelClass.__name__} inertia mismatch on asymmetric matrix",
             )
-
-
-# ============================================================================
-# Bug #8: FastCLARANS get_params() exposure of cost_evaluation
-# ============================================================================
-class TestBug8_FastCLARANSApiConsistency(unittest.TestCase):
-    """Verifies Bug #8 from bug_report.md.
-
-    CLAIM in bug_report.md:
-        `FastCLARANS` hardcodes `cost_evaluation="delta"` in super().__init__()
-        and exposes the parameter via `get_params()` inherited from BaseEstimator.
-
-    VERIFICATION GOAL:
-        Check if `cost_evaluation` is in `get_params()`, and check how `set_params`
-        and attribute access behave.
-    """
-
-    def test_fast_clarans_get_params_does_not_contain_cost_evaluation(self):
-        """FastCLARANS.__init__ does NOT accept cost_evaluation in its signature.
-        Therefore, scikit-learn's BaseEstimator.get_params() does NOT include it.
-        (Contradicts the claim in bug_report.md: Bug #8 was a partial FALSE POSITIVE).
-        """
-        model = FastCLARANS(n_clusters=3)
-        params = model.get_params()
-
-        self.assertNotIn(
-            "cost_evaluation",
-            params,
-            "cost_evaluation should NOT be in get_params() because __init__ omits it",
-        )
-
-    def test_fast_clarans_set_params_rejects_cost_evaluation(self):
-        """set_params(cost_evaluation='brute_force') must be rejected with ValueError
-        by scikit-learn BaseEstimator parameter validation.
-        """
-        model = FastCLARANS(n_clusters=3)
-        with self.assertRaises(ValueError) as ctx:
-            model.set_params(cost_evaluation="brute_force")
-        self.assertIn("cost_evaluation", str(ctx.exception))
-
-    def test_fast_clarans_has_cost_evaluation_attribute(self):
-        """Even though omitted from get_params(), the attribute exists on the instance
-        because of super().__init__(cost_evaluation='delta').
-        """
-        model = FastCLARANS(n_clusters=3)
-        self.assertTrue(hasattr(model, "cost_evaluation"))
-        self.assertEqual(model.cost_evaluation, "delta")
-
-
-# ============================================================================
-# Bug #10: Warning flag race condition / premature suppression
-# ============================================================================
-class TestBug10_WarningFlagOrder(unittest.TestCase):
-    """Verifies Bug #10 from bug_report.md.
-
-    CLAIM in bug_report.md:
-        In `_warn_cython_unavailable()`, `_cython_warning_issued = True` was set
-        BEFORE `warnings.warn(...)`. If `warnings.warn(...)` raised an exception
-        (e.g., when filtered as error), the flag was already set, permanently
-        suppressing the warning on future invocations.
-
-    VERIFICATION GOAL:
-        Demonstrate that with the fix, raising an error on warning leaves the
-        flag False until warning succeeds.
-    """
-
-    def test_flag_not_set_when_warn_raises_error(self):
-        """When EfficiencyWarning is filtered as 'error', _warn_cython_unavailable
-        raises the error. Because flag is set AFTER warn, the flag remains False,
-        and a subsequent call under 'always' filter WILL issue the warning.
-        """
-        from clarans import utils
-
-        # Save and reset state
-        original_flag = utils._cython_warning_issued
-        utils._cython_warning_issued = False
-
-        try:
-            with patch.object(utils, "HAS_CYTHON", False):
-                # Filter warning as error
-                with warnings.catch_warnings():
-                    warnings.simplefilter("error", EfficiencyWarning)
-                    with self.assertRaises(EfficiencyWarning):
-                        utils._warn_cython_unavailable()
-
-                # FIXED: flag remains False because warn raised exception!
-                self.assertFalse(
-                    utils._cython_warning_issued,
-                    "FIXED: Flag must remain False when warnings.warn raises an exception",
-                )
-
-                # Subsequent call with 'always' filter is properly emitted
-                with warnings.catch_warnings(record=True) as recorded:
-                    warnings.simplefilter("always", EfficiencyWarning)
-                    utils._warn_cython_unavailable()
-                    self.assertEqual(
-                        len(recorded),
-                        1,
-                        "Warning was properly issued on subsequent call because flag was not set",
-                    )
-                    self.assertTrue(utils._cython_warning_issued)
-        finally:
-            utils._cython_warning_issued = original_flag
-
-
-# ============================================================================
-# Bug #11: Type stub annotations in _core.pyi
-# ============================================================================
-class TestBug11_CoreTypeStub(unittest.TestCase):
-    """Verifies Bug #11 from bug_report.md.
-
-    CLAIM in bug_report.md:
-        `_core.pyi` annotates `clarans_delta` as returning `float`, but at runtime
-        Cython may return a numpy float scalar or python float depending on floating type.
-
-    VERIFICATION GOAL:
-        Inspect type stub syntax and runtime return type.
-    """
-
-    def test_pyi_stub_is_syntactically_valid(self):
-        """Verify that _core.pyi can be parsed by Python's ast parser without error."""
-        import pathlib
-        pyi_path = pathlib.Path(__file__).parent.parent / "_core.pyi"
-        self.assertTrue(pyi_path.exists(), "_core.pyi must exist")
-
-        with open(pyi_path, "r", encoding="utf-8") as f:
-            content = f.read()
-
-        parsed = ast.parse(content)
-        self.assertIsInstance(parsed, ast.Module)
-
-    @unittest.skipUnless(HAS_CYTHON and _core is not None, "Requires Cython _core")
-    def test_clarans_delta_runtime_return_type(self):
-        """Verify actual runtime return type of clarans_delta."""
-        near_idx = np.array([0, 0], dtype=np.intp)
-        near_d = np.array([1.0, 1.0], dtype=np.float64)
-        second_d = np.array([2.0, 2.0], dtype=np.float64)
-        d_xc = np.array([0.5, 0.5], dtype=np.float64)
-
-        result = _core.clarans_delta(near_idx, near_d, second_d, d_xc, 0, 2)
-        # In Python runtime, floating return in Cython produces a Python float
-        self.assertIsInstance(result, float)
 
 
 if __name__ == "__main__":

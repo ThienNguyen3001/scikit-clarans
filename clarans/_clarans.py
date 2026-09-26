@@ -789,9 +789,15 @@ class CLARANS(ClusterMixin, TransformerMixin, BaseEstimator):
                     and X.flags.c_contiguous
                     and X.dtype in (np.float64, np.float32)
                 ):
-                    is_sym = _core.is_matrix_symmetric(X, n_s, 1e-5, 1e-8)
+                    try:
+                        is_sym = _core.is_matrix_symmetric(X, n_s, 1e-5, 1e-8)
+                    except TypeError:
+                        try:
+                            is_sym = _core.is_matrix_symmetric(X, n_s, 1e-5)
+                        except Exception:
+                            is_sym = bool(np.allclose(X, X.T, rtol=1e-5, atol=1e-8))
                 else:
-                    is_sym = bool(np.allclose(X, X.T))
+                    is_sym = bool(np.allclose(X, X.T, rtol=1e-5, atol=1e-8))
 
                 if is_sym:
                     self._precomputed_source = (
@@ -847,15 +853,20 @@ class CLARANS(ClusterMixin, TransformerMixin, BaseEstimator):
         engine = getattr(self, "_dist_engine", "pairwise")
         params = self.metric_params if self.metric_params is not None else {}
         if engine == "cdist":
-            if out is not None and out.dtype == np.float64:
-                cdist(
-                    cand_row,
-                    X,
-                    metric=self._scipy_metric,
-                    out=out.reshape(1, -1),
-                    **params,
-                )
-                return out
+            if out is not None:
+                if out.dtype == np.float64 and out.flags.c_contiguous:
+                    cdist(
+                        cand_row,
+                        X,
+                        metric=self._scipy_metric,
+                        out=out.reshape(1, -1),
+                        **params,
+                    )
+                    return out
+                else:
+                    res = cdist(cand_row, X, metric=self._scipy_metric, **params)[0]
+                    np.copyto(out, res)
+                    return out
             return cdist(cand_row, X, metric=self._scipy_metric, **params)[0]
         elif engine == "precomputed":
             if candidate_idx is not None:
@@ -952,18 +963,35 @@ class CLARANS(ClusterMixin, TransformerMixin, BaseEstimator):
             ):
                 return _core.update_cache_2min(subD, n_samples, self.n_clusters)
 
-            # argpartition(., 1) is O(n*k) vs full sort O(n*k*log k).
-            # For kth=1: position 0 holds the smallest, position 1 the 2nd smallest.
-            part_idx = np.argpartition(subD, 1, axis=1)[:, :2]
-            smallest_idx = part_idx[:, 0]
-            second_smallest_idx = part_idx[:, 1]
-
-            near_dist = subD[np.arange(n_samples), smallest_idx]
-            second_dist = subD[np.arange(n_samples), second_smallest_idx]
-            near_idx_map = smallest_idx
+            # Python fallback: filter NaNs if present (Bug 6)
+            if np.isnan(subD).any():
+                clean_subD = np.where(np.isnan(subD), np.inf, subD)
+                part_idx = np.argpartition(clean_subD, 1, axis=1)[:, :2]
+                smallest_idx = part_idx[:, 0]
+                second_smallest_idx = part_idx[:, 1]
+                row_arange = np.arange(n_samples)
+                swap_mask = (
+                    clean_subD[row_arange, smallest_idx]
+                    > clean_subD[row_arange, second_smallest_idx]
+                )
+                if np.any(swap_mask):
+                    smallest_idx[swap_mask], second_smallest_idx[swap_mask] = (
+                        second_smallest_idx[swap_mask],
+                        smallest_idx[swap_mask],
+                    )
+                near_dist = clean_subD[row_arange, smallest_idx]
+                second_dist = clean_subD[row_arange, second_smallest_idx]
+                near_idx_map = smallest_idx
+            else:
+                part_idx = np.argpartition(subD, 1, axis=1)[:, :2]
+                smallest_idx = part_idx[:, 0]
+                second_smallest_idx = part_idx[:, 1]
+                near_dist = subD[np.arange(n_samples), smallest_idx]
+                second_dist = subD[np.arange(n_samples), second_smallest_idx]
+                near_idx_map = smallest_idx
         else:
             near_dist = subD[:, 0]
-            second_dist = np.full(n_samples, np.inf)
+            second_dist = np.full(n_samples, np.inf, dtype=subD.dtype)
             near_idx_map = np.zeros(n_samples, dtype=int)
 
         return near_idx_map, near_dist, second_dist
@@ -1016,8 +1044,8 @@ class CLARANS(ClusterMixin, TransformerMixin, BaseEstimator):
             or self.verbose < 0
         ):
             raise ValueError(
-                f"The 'verbose' parameter of {self.__class__.__name__} must be an integer >= 0 or a bool. "
-                f"Got {self.verbose!r} instead."
+                f"The 'verbose' parameter of {self.__class__.__name__} "
+                f"must be an integer >= 0 or a bool. Got {self.verbose!r} instead."
             )
 
         if self.metric_params is not None and not isinstance(self.metric_params, dict):

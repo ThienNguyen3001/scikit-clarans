@@ -197,11 +197,10 @@ def initialize_build(X, n_clusters, metric="euclidean", metric_params=None):
             is_medoid[best_candidate] = True
             dist_to_nearest_c = np.minimum(dist_to_nearest_c, D[:, best_candidate])
     else:
-        for _ in range(1, n_clusters):
-            # Mask for medoids
-            is_medoid = np.zeros(n_samples, dtype=bool)
-            is_medoid[medoids] = True
+        is_medoid = np.zeros(n_samples, dtype=bool)
+        is_medoid[first_medoid] = True
 
+        for _ in range(1, n_clusters):
             # We only care about candidates
             candidate_indices = np.where(~is_medoid)[0]
 
