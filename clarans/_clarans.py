@@ -902,10 +902,11 @@ class CLARANS(ClusterMixin, TransformerMixin, BaseEstimator):
                         out is not None
                         and isinstance(out, np.ndarray)
                         and out.shape[0] == row_data.shape[0]
+                        and out.dtype != row_data.dtype
                     ):
                         np.copyto(out, row_data)
                         return out
-                    return row_data.copy()
+                    return row_data
                 col_data = (
                     source[candidate_idx]
                     if getattr(self, "_precomputed_is_sym", False)

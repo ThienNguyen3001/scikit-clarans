@@ -447,5 +447,44 @@ class TestFalseAlarm9_AsymmetricPrecomputedOrientation(unittest.TestCase):
             )
 
 
+class TestPrecomputedZeroCopyOptimization(unittest.TestCase):
+    """Verifies that precomputed distance engine uses zero-copy row slicing
+    when dtypes match, avoiding memory-bandwidth bottlenecks in hot loops.
+    """
+
+    def test_precomputed_returns_zero_copy_view_when_dtypes_match(self):
+        rng = np.random.RandomState(42)
+        D = rng.uniform(0.1, 10.0, size=(10, 10))
+        D = (D + D.T) / 2.0
+        np.fill_diagonal(D, 0.0)
+
+        model = CLARANS(n_clusters=2, metric="precomputed", random_state=42)
+        model._setup_distance_engine(D)
+
+        out_buf = np.empty(10, dtype=D.dtype)
+        res = model._compute_1_vs_n(None, D, out=out_buf, candidate_idx=3)
+
+        # Result should share memory with the precomputed matrix (zero copy)
+        self.assertTrue(np.shares_memory(res, D))
+        self.assertTrue(np.allclose(res, D[3]))
+
+    def test_precomputed_copies_when_out_buffer_dtype_differs(self):
+        rng = np.random.RandomState(42)
+        D = rng.uniform(0.1, 10.0, size=(10, 10)).astype(np.float64)
+        D = (D + D.T) / 2.0
+        np.fill_diagonal(D, 0.0)
+
+        model = CLARANS(n_clusters=2, metric="precomputed", random_state=42)
+        model._setup_distance_engine(D)
+
+        out_buf_float32 = np.empty(10, dtype=np.float32)
+        res = model._compute_1_vs_n(None, D, out=out_buf_float32, candidate_idx=3)
+
+        # When dtypes differ, out buffer must be populated and returned
+        self.assertIs(res, out_buf_float32)
+        self.assertEqual(res.dtype, np.float32)
+        self.assertTrue(np.allclose(res, D[3], atol=1e-5))
+
+
 if __name__ == "__main__":
     unittest.main()
