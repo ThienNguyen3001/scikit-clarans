@@ -121,7 +121,9 @@ class TestFastCLARANS(unittest.TestCase):
         self.assertGreaterEqual(model.inertia_, 0)
 
     def test_n_iter_and_n_swaps_attributes(self):
-        """Test that n_iter_, n_swaps_, total_n_iter_, total_n_swaps_, and total_neighbors_ are set correctly in FastCLARANS."""
+        """Test that n_iter_, n_swaps_, total_n_iter_, total_n_swaps_,
+        and total_neighbors_ are set correctly in FastCLARANS.
+        """
         # Multi-restart run
         model = FastCLARANS(n_clusters=3, num_local=2, max_neighbors=50, random_state=42)
         model.fit(self.X)
@@ -360,7 +362,9 @@ class TestFastCLARANSMetricParams(unittest.TestCase):
         for v in (0, False):
             f = io.StringIO()
             with redirect_stdout(f):
-                model = FastCLARANS(n_clusters=2, num_local=1, max_neighbors=10, verbose=v, random_state=42)
+                model = FastCLARANS(
+                    n_clusters=2, num_local=1, max_neighbors=10, verbose=v, random_state=42
+                )
                 model.fit(self.X)
             self.assertEqual(f.getvalue(), "")
 
@@ -372,7 +376,9 @@ class TestFastCLARANSMetricParams(unittest.TestCase):
         for v in (1, True):
             f = io.StringIO()
             with redirect_stdout(f):
-                model = FastCLARANS(n_clusters=2, num_local=2, max_neighbors=10, verbose=v, random_state=42)
+                model = FastCLARANS(
+                    n_clusters=2, num_local=2, max_neighbors=10, verbose=v, random_state=42
+                )
                 model.fit(self.X)
             output = f.getvalue()
             self.assertIn("[FastCLARANS]", output)
@@ -393,7 +399,14 @@ class TestFastCLARANSMetricParams(unittest.TestCase):
 
         f = io.StringIO()
         with redirect_stdout(f):
-            model = FastCLARANS(n_clusters=2, num_local=1, max_neighbors=50, init="random", verbose=2, random_state=0)
+            model = FastCLARANS(
+                n_clusters=2,
+                num_local=1,
+                max_neighbors=50,
+                init="random",
+                verbose=2,
+                random_state=0,
+            )
             model.fit(self.X)
         output = f.getvalue()
         self.assertIn("[FastCLARANS]", output)

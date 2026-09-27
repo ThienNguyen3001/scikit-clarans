@@ -8,14 +8,12 @@ benefiting from the O(k) speedup per swap evaluation.
 
 from __future__ import annotations
 
-import time
 from typing import TYPE_CHECKING, Any
 
 import numpy as np
 from numpy.typing import ArrayLike
 
 from ._clarans import CLARANS
-from .utils import _warn_cython_unavailable
 
 try:
     from . import _core
@@ -185,43 +183,8 @@ class FastCLARANS(CLARANS):
             verbose=verbose,
         )
 
-    def fit(self, X: ArrayLike | "spmatrix", y: Any = None) -> "FastCLARANS":
-        """
-        Fit the FastCLARANS model to X.
-
-        Parameters
-        ----------
-        X : array-like or sparse matrix of shape (n_samples, n_features)
-            Training instances to cluster. Accepts CSR/CSC sparse matrices.
-
-        y : Ignored, default=None
-            Not used, present for API consistency with scikit-learn
-            pipelines and ClusterMixin.
-
-        Returns
-        -------
-        self : FastCLARANS
-            The fitted estimator. Attributes set on the estimator include
-            ``medoid_indices_``, ``cluster_centers_``, ``labels_`` and
-            ``inertia_``.
-
-        Raises
-        ------
-        ValueError
-            If ``n_clusters >= n_samples`` or if an explicit ``init`` array
-            is provided with an incompatible shape or there are not enough
-            unique points to form the requested number of medoids.
-
-        Notes
-        -----
-        Unlike implementations that precompute the full distance matrix,
-        this version computes distances on-the-fly to save memory. This
-        is efficient for low-dimensional data with cheap distance metrics
-        (e.g., Euclidean distance).
-        """
-        _warn_cython_unavailable()
-        X, random_state, n_samples, n_features = self._validate_input_and_params(X)
-
+    def _init_search_budget(self, n_samples: int) -> None:
+        """Initialize max_neighbors_ and total_neighbors_ search budget for FastCLARANS."""
         if self.max_neighbors == "auto":
             # FastCLARANS samples 2.5% of non-medoid points per local search
             # (Schubert & Rousseeuw, 2021) instead of 1.25% * k * (n-k) edges.
@@ -237,114 +200,30 @@ class FastCLARANS(CLARANS):
 
         self.total_neighbors_ = n_samples - self.n_clusters
 
-        best_cost = np.inf
-        best_medoids: np.ndarray | None = None
-        best_n_iter = 0
-        best_n_swaps = 0
-        best_loc_idx = 0
-        total_eval_count = 0
-        total_swap_count = 0
+    def _allocate_search_buffers(
+        self, X: Any, n_samples: int
+    ) -> dict[str, np.ndarray]:
+        """Pre-allocate reusable scratch buffers for neighbor evaluations."""
+        bufs = super()._allocate_search_buffers(X, n_samples)
+        buf_dtype = bufs["d_xc_buf"].dtype
+        bufs["delta_arr_buf"] = np.zeros(self.n_clusters, dtype=buf_dtype)
+        return bufs
 
-        deterministic_medoids = self._prepare_initial_medoids(X, random_state)
-        self._setup_distance_engine(X)
-
-        buf_dtype = (
-            np.float32
-            if (self.metric == "precomputed" and getattr(X, "dtype", None) == np.float32)
-            else np.float64
+    def _call_single_local_search(
+        self,
+        X: np.ndarray | "spmatrix",
+        random_state: np.random.RandomState,
+        deterministic_medoids: np.ndarray | None,
+        buffers: dict[str, np.ndarray],
+    ) -> tuple[float, np.ndarray, int, int]:
+        """Dispatch to _single_local_search with FastPAM1 buffers."""
+        return self._single_local_search(
+            X,
+            random_state,
+            deterministic_medoids,
+            buffers["d_xc_buf"],
+            buffers["delta_arr_buf"],
         )
-        d_xc_buf = np.empty(n_samples, dtype=buf_dtype)
-        delta_arr_buf = np.zeros(self.n_clusters, dtype=buf_dtype)
-
-        if self.verbose:
-            _name = self.__class__.__name__
-            tot_nb = self.total_neighbors_
-            pct = (self.max_neighbors_ / tot_nb * 100) if tot_nb > 0 else 100.0
-            print(
-                f"[{_name}] n={n_samples}, k={self.n_clusters}, "
-                f"metric={self.metric}, num_local={self.num_local}, "
-                f"max_neighbors={self.max_neighbors_}/{tot_nb} ({pct:.1f}%)"
-            )
-            if self.verbose < 2:
-                print(f"{'':>4}#  {'Cost':>14}  {'Swaps':>5}  {'Evals':>5}  {'Time(s)':>8}")
-
-        start_fit_time = time.perf_counter()
-
-        try:
-            for loc_idx in range(self.num_local):
-                self._current_loc_idx = loc_idx + 1
-                loc_start_time = time.perf_counter()
-
-                current_cost, current_medoids_indices, eval_count, swap_count = (
-                    self._single_local_search(
-                        X, random_state, deterministic_medoids, d_xc_buf, delta_arr_buf
-                    )
-                )
-                loc_elapsed = time.perf_counter() - loc_start_time
-                total_eval_count += eval_count
-                total_swap_count += swap_count
-
-                tol = -max(1e-16, 1e-12 * abs(current_cost))
-                if (
-                    loc_idx == 0
-                    or not np.isfinite(best_cost)
-                    or (np.isfinite(current_cost) and current_cost < best_cost + tol)
-                ):
-                    best_cost = current_cost
-                    best_medoids = current_medoids_indices.copy()
-                    best_n_iter = eval_count
-                    best_n_swaps = swap_count
-                    best_loc_idx = loc_idx
-                    is_new_best = True
-                else:
-                    is_new_best = False
-
-                if self.verbose:
-                    stop = (
-                        "exhausted"
-                        if (eval_count - swap_count) < self.max_neighbors_
-                        else "converged"
-                    )
-                    star = "*" if is_new_best else " "
-                    if self.verbose >= 2:
-                        print(
-                            f"    {loc_idx + 1:>2}  {current_cost:>14.5f}{star} "
-                            f" swaps={swap_count}, evals={eval_count}, "
-                            f"{loc_elapsed:.3f}s ({stop})"
-                        )
-                    else:
-                        print(
-                            f"    {loc_idx + 1:>1}  {current_cost:>14.5f}{star} "
-                            f"{swap_count:>5}  {eval_count:>5}  "
-                            f"{loc_elapsed:>7.3f}s  {stop}"
-                        )
-
-            if best_medoids is None or not np.isfinite(best_cost):
-                raise ValueError(
-                    f"Clustering failed: all local searches resulted in non-finite cost "
-                    f"({best_cost}). Check your data for NaNs, infinities, zero vectors "
-                    "with cosine distance, or excessive outliers."
-                )
-
-            self.n_iter_ = best_n_iter
-            self.n_swaps_ = best_n_swaps
-            self.total_n_iter_ = total_eval_count
-            self.total_n_swaps_ = total_swap_count
-
-            if self.verbose:
-                total_elapsed = time.perf_counter() - start_fit_time
-                print(
-                    f"  Best: #{best_loc_idx + 1} | "
-                    f"Totals: {total_swap_count} swaps, "
-                    f"{total_eval_count} evals, {total_elapsed:.3f}s"
-                )
-
-            return self._finalize_fit(X, best_cost, best_medoids)
-        finally:
-            if hasattr(self, "_current_loc_idx"):
-                del self._current_loc_idx
-            if hasattr(self, "_precomputed_source"):
-                del self._precomputed_source
 
     def _single_local_search(
         self,
@@ -378,6 +257,31 @@ class FastCLARANS(CLARANS):
         non_medoid_mask[current_medoids_indices] = False
         available_candidates = np.flatnonzero(non_medoid_mask)
 
+        # Pre-evaluate Cython kernel availability and pre-configure delta buffer
+        can_use_cython = (
+            _core is not None
+            and self.n_clusters > 1
+            and isinstance(d_xc_buf, np.ndarray)
+            and d_xc_buf.flags.c_contiguous
+            and d_xc_buf.dtype in (np.float64, np.float32)
+            and isinstance(near_dist, np.ndarray)
+            and near_dist.flags.c_contiguous
+            and isinstance(second_dist, np.ndarray)
+            and second_dist.flags.c_contiguous
+            and near_dist.dtype == d_xc_buf.dtype
+            and isinstance(near_idx_map, np.ndarray)
+            and near_idx_map.flags.c_contiguous
+        )
+        delta_buf_arg = (
+            delta_arr_buf
+            if (
+                can_use_cython
+                and delta_arr_buf is not None
+                and delta_arr_buf.dtype == near_dist.dtype
+            )
+            else None
+        )
+
         i = 0
         swap_count = 0
         eval_count = 0
@@ -406,27 +310,7 @@ class FastCLARANS(CLARANS):
                 candidate_cost = float(np.sum(d_xc))
                 min_delta = candidate_cost - current_cost
                 min_delta_idx = 0
-            elif (
-                _core is not None
-                and isinstance(d_xc, np.ndarray)
-                and d_xc.flags.c_contiguous
-                and d_xc.dtype in (np.float64, np.float32)
-                and isinstance(near_dist, np.ndarray)
-                and near_dist.flags.c_contiguous
-                and isinstance(second_dist, np.ndarray)
-                and second_dist.flags.c_contiguous
-                and near_dist.dtype == d_xc.dtype
-                and isinstance(near_idx_map, np.ndarray)
-                and near_idx_map.flags.c_contiguous
-            ):
-                delta_buf_arg = (
-                    delta_arr_buf
-                    if (
-                        delta_arr_buf is not None
-                        and delta_arr_buf.dtype == near_dist.dtype
-                    )
-                    else None
-                )
+            elif can_use_cython:
                 best_m, min_delta_val, _ = _core.fastpam1_delta(
                     near_idx_map,
                     near_dist,

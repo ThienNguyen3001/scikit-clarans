@@ -425,6 +425,40 @@ class CLARANS(ClusterMixin, TransformerMixin, BaseEstimator):
             "allow_nan": self.metric == "nan_euclidean",
         }
 
+    def _init_search_budget(self, n_samples: int) -> None:
+        """Initialize max_neighbors_ and total_neighbors_ search budget."""
+        if self.max_neighbors == "auto":
+            self.max_neighbors_ = max(
+                250, int(0.0125 * self.n_clusters * (n_samples - self.n_clusters))
+            )
+        else:
+            self.max_neighbors_ = int(self.max_neighbors)
+
+        self.total_neighbors_ = self.n_clusters * (n_samples - self.n_clusters)
+
+    def _allocate_search_buffers(
+        self, X: Any, n_samples: int
+    ) -> dict[str, np.ndarray]:
+        """Pre-allocate reusable scratch buffers for neighbor evaluations."""
+        buf_dtype = (
+            np.float32
+            if (self.metric == "precomputed" and getattr(X, "dtype", None) == np.float32)
+            else np.float64
+        )
+        return {"d_xc_buf": np.empty(n_samples, dtype=buf_dtype)}
+
+    def _call_single_local_search(
+        self,
+        X: np.ndarray | "spmatrix",
+        random_state: np.random.RandomState,
+        deterministic_medoids: np.ndarray | None,
+        buffers: dict[str, np.ndarray],
+    ) -> tuple[float, np.ndarray, int, int]:
+        """Dispatch to _single_local_search with appropriate buffers."""
+        return self._single_local_search(
+            X, random_state, deterministic_medoids, buffers["d_xc_buf"]
+        )
+
     def fit(self, X: ArrayLike | "spmatrix", y: Any = None) -> "CLARANS":
         """
         Compute CLARANS clustering.
@@ -473,14 +507,7 @@ class CLARANS(ClusterMixin, TransformerMixin, BaseEstimator):
         _warn_cython_unavailable()
         X, random_state, n_samples, n_features = self._validate_input_and_params(X)
 
-        if self.max_neighbors == "auto":
-            self.max_neighbors_ = max(
-                250, int(0.0125 * self.n_clusters * (n_samples - self.n_clusters))
-            )
-        else:
-            self.max_neighbors_ = int(self.max_neighbors)
-
-        self.total_neighbors_ = self.n_clusters * (n_samples - self.n_clusters)
+        self._init_search_budget(n_samples)
 
         best_cost = np.inf
         best_medoids = None
@@ -492,13 +519,7 @@ class CLARANS(ClusterMixin, TransformerMixin, BaseEstimator):
 
         deterministic_medoids = self._prepare_initial_medoids(X, random_state)
         self._setup_distance_engine(X)
-
-        buf_dtype = (
-            np.float32
-            if (self.metric == "precomputed" and getattr(X, "dtype", None) == np.float32)
-            else np.float64
-        )
-        d_xc_buf = np.empty(n_samples, dtype=buf_dtype)
+        buffers = self._allocate_search_buffers(X, n_samples)
 
         if self.verbose:
             _name = self.__class__.__name__
@@ -520,8 +541,8 @@ class CLARANS(ClusterMixin, TransformerMixin, BaseEstimator):
                 loc_start_time = time.perf_counter()
 
                 current_cost, current_medoids_indices, eval_count, swap_count = (
-                    self._single_local_search(
-                        X, random_state, deterministic_medoids, d_xc_buf
+                    self._call_single_local_search(
+                        X, random_state, deterministic_medoids, buffers
                     )
                 )
                 loc_elapsed = time.perf_counter() - loc_start_time
@@ -565,8 +586,8 @@ class CLARANS(ClusterMixin, TransformerMixin, BaseEstimator):
 
             if best_medoids is None or not np.isfinite(best_cost):
                 raise ValueError(
-                    "Clustering failed: all local search iterations produced non-finite "
-                    "costs (inf or NaN). Check input data or distance metric."
+                    f"Clustering failed: all local search iterations produced non-finite "
+                    f"costs ({best_cost}). Check input data or distance metric."
                 )
 
             self.n_iter_ = best_n_iter
@@ -629,6 +650,22 @@ class CLARANS(ClusterMixin, TransformerMixin, BaseEstimator):
         non_medoid_mask[current_medoids_indices] = False
         available_candidates = np.flatnonzero(non_medoid_mask)
 
+        # Pre-evaluate Cython kernel availability once before the search loop
+        can_use_cython = (
+            _core is not None
+            and self.n_clusters > 1
+            and isinstance(d_xc_buf, np.ndarray)
+            and d_xc_buf.flags.c_contiguous
+            and d_xc_buf.dtype in (np.float64, np.float32)
+            and isinstance(near_dist, np.ndarray)
+            and near_dist.flags.c_contiguous
+            and isinstance(second_dist, np.ndarray)
+            and second_dist.flags.c_contiguous
+            and near_dist.dtype == d_xc_buf.dtype
+            and isinstance(near_idx_map, np.ndarray)
+            and near_idx_map.flags.c_contiguous
+        )
+
         i = 0
         swap_count = 0
         eval_count = 0
@@ -662,19 +699,10 @@ class CLARANS(ClusterMixin, TransformerMixin, BaseEstimator):
                 if self.n_clusters == 1:
                     candidate_cost = float(np.sum(d_xc))
                     total_delta = candidate_cost - current_cost
-                elif (
-                    _core is not None
-                    and isinstance(d_xc, np.ndarray)
-                    and d_xc.flags.c_contiguous
-                    and d_xc.dtype in (np.float64, np.float32)
-                    and isinstance(near_dist, np.ndarray)
-                    and near_dist.flags.c_contiguous
-                    and isinstance(second_dist, np.ndarray)
-                    and second_dist.flags.c_contiguous
-                    and near_dist.dtype == d_xc.dtype
-                    and isinstance(near_idx_map, np.ndarray)
-                    and near_idx_map.flags.c_contiguous
-                ):
+                elif can_use_cython:
+                    assert near_idx_map is not None
+                    assert near_dist is not None
+                    assert second_dist is not None
                     total_delta = float(
                         _core.clarans_delta(
                             near_idx_map,
@@ -789,9 +817,12 @@ class CLARANS(ClusterMixin, TransformerMixin, BaseEstimator):
                     and X.flags.c_contiguous
                     and X.dtype in (np.float64, np.float32)
                 ):
-                    is_sym = _core.is_matrix_symmetric(X, n_s, 1e-5, 1e-8)
+                    try:
+                        is_sym = _core.is_matrix_symmetric(X, n_s, 1e-5, 1e-8)
+                    except Exception:
+                        is_sym = bool(np.allclose(X, X.T, rtol=1e-5, atol=1e-8))
                 else:
-                    is_sym = bool(np.allclose(X, X.T))
+                    is_sym = bool(np.allclose(X, X.T, rtol=1e-5, atol=1e-8))
 
                 if is_sym:
                     self._precomputed_source = (
@@ -847,15 +878,20 @@ class CLARANS(ClusterMixin, TransformerMixin, BaseEstimator):
         engine = getattr(self, "_dist_engine", "pairwise")
         params = self.metric_params if self.metric_params is not None else {}
         if engine == "cdist":
-            if out is not None and out.dtype == np.float64:
-                cdist(
-                    cand_row,
-                    X,
-                    metric=self._scipy_metric,
-                    out=out.reshape(1, -1),
-                    **params,
-                )
-                return out
+            if out is not None:
+                if out.dtype == np.float64 and out.flags.c_contiguous:
+                    cdist(
+                        cand_row,
+                        X,
+                        metric=self._scipy_metric,
+                        out=out.reshape(1, -1),
+                        **params,
+                    )
+                    return out
+                else:
+                    res = cdist(cand_row, X, metric=self._scipy_metric, **params)[0]
+                    np.copyto(out, res)
+                    return out
             return cdist(cand_row, X, metric=self._scipy_metric, **params)[0]
         elif engine == "precomputed":
             if candidate_idx is not None:
@@ -866,10 +902,11 @@ class CLARANS(ClusterMixin, TransformerMixin, BaseEstimator):
                         out is not None
                         and isinstance(out, np.ndarray)
                         and out.shape[0] == row_data.shape[0]
+                        and out.dtype != row_data.dtype
                     ):
                         np.copyto(out, row_data)
                         return out
-                    return row_data.copy()
+                    return row_data
                 col_data = (
                     source[candidate_idx]
                     if getattr(self, "_precomputed_is_sym", False)
@@ -952,18 +989,35 @@ class CLARANS(ClusterMixin, TransformerMixin, BaseEstimator):
             ):
                 return _core.update_cache_2min(subD, n_samples, self.n_clusters)
 
-            # argpartition(., 1) is O(n*k) vs full sort O(n*k*log k).
-            # For kth=1: position 0 holds the smallest, position 1 the 2nd smallest.
-            part_idx = np.argpartition(subD, 1, axis=1)[:, :2]
-            smallest_idx = part_idx[:, 0]
-            second_smallest_idx = part_idx[:, 1]
-
-            near_dist = subD[np.arange(n_samples), smallest_idx]
-            second_dist = subD[np.arange(n_samples), second_smallest_idx]
-            near_idx_map = smallest_idx
+            # Python fallback: filter NaNs if present to avoid propagation
+            if np.isnan(subD).any():
+                clean_subD = np.where(np.isnan(subD), np.inf, subD)
+                part_idx = np.argpartition(clean_subD, 1, axis=1)[:, :2]
+                smallest_idx = part_idx[:, 0]
+                second_smallest_idx = part_idx[:, 1]
+                row_arange = np.arange(n_samples)
+                swap_mask = (
+                    clean_subD[row_arange, smallest_idx]
+                    > clean_subD[row_arange, second_smallest_idx]
+                )
+                if np.any(swap_mask):
+                    smallest_idx[swap_mask], second_smallest_idx[swap_mask] = (
+                        second_smallest_idx[swap_mask],
+                        smallest_idx[swap_mask],
+                    )
+                near_dist = clean_subD[row_arange, smallest_idx]
+                second_dist = clean_subD[row_arange, second_smallest_idx]
+                near_idx_map = smallest_idx
+            else:
+                part_idx = np.argpartition(subD, 1, axis=1)[:, :2]
+                smallest_idx = part_idx[:, 0]
+                second_smallest_idx = part_idx[:, 1]
+                near_dist = subD[np.arange(n_samples), smallest_idx]
+                second_dist = subD[np.arange(n_samples), second_smallest_idx]
+                near_idx_map = smallest_idx
         else:
             near_dist = subD[:, 0]
-            second_dist = np.full(n_samples, np.inf)
+            second_dist = np.full(n_samples, np.inf, dtype=subD.dtype)
             near_idx_map = np.zeros(n_samples, dtype=int)
 
         return near_idx_map, near_dist, second_dist
@@ -976,6 +1030,53 @@ class CLARANS(ClusterMixin, TransformerMixin, BaseEstimator):
         if not subD.flags.c_contiguous:
             subD = np.ascontiguousarray(subD)
         return self._compute_2min(subD)
+
+    def _validate_data_compat(
+        self,
+        X: Any,
+        reset: bool = False,
+        ensure_min_samples: int = 1,
+    ) -> Any:
+        """Validate input data across different scikit-learn versions."""
+        allow_nan = (self.metric == "nan_euclidean")
+        finite_kw = _finite_kwarg(allow_nan)
+        try:
+            from sklearn.utils.validation import validate_data
+
+            return validate_data(
+                self,
+                X=X,
+                reset=reset,
+                ensure_min_samples=ensure_min_samples,
+                accept_sparse=["csr", "csc"],
+                **finite_kw,
+            )
+        except ImportError:
+            if hasattr(self, "_validate_data"):
+                return self._validate_data(
+                    X,
+                    reset=reset,
+                    ensure_min_samples=ensure_min_samples,
+                    accept_sparse=["csr", "csc"],
+                    **finite_kw,
+                )
+            X_arr = check_array(
+                X,
+                ensure_min_samples=ensure_min_samples,
+                accept_sparse=["csr", "csc"],
+                **finite_kw,
+            )
+            if reset:
+                self.n_features_in_ = X_arr.shape[1]
+            elif (
+                hasattr(self, "n_features_in_")
+                and X_arr.shape[1] != self.n_features_in_
+            ):
+                raise ValueError(
+                    f"X has {X_arr.shape[1]} features, but {self.__class__.__name__} is expecting "
+                    f"{self.n_features_in_} features as input"
+                )
+            return X_arr
 
     def _validate_input_and_params(self, X):
         """Validate estimator parameters and input data array."""
@@ -1016,8 +1117,8 @@ class CLARANS(ClusterMixin, TransformerMixin, BaseEstimator):
             or self.verbose < 0
         ):
             raise ValueError(
-                f"The 'verbose' parameter of {self.__class__.__name__} must be an integer >= 0 or a bool. "
-                f"Got {self.verbose!r} instead."
+                f"The 'verbose' parameter of {self.__class__.__name__} "
+                f"must be an integer >= 0 or a bool. Got {self.verbose!r} instead."
             )
 
         if self.metric_params is not None and not isinstance(self.metric_params, dict):
@@ -1041,27 +1142,7 @@ class CLARANS(ClusterMixin, TransformerMixin, BaseEstimator):
                     f"{options_repr} or a callable. Got {self.metric!r} instead."
                 )
 
-        allow_nan = (self.metric == "nan_euclidean")
-        finite_kw = _finite_kwarg(allow_nan)
-        try:
-            from sklearn.utils.validation import validate_data
-
-            X = validate_data(
-                self, X=X, ensure_min_samples=2, accept_sparse=["csr", "csc"],
-                **finite_kw
-            )
-        except ImportError:
-            if hasattr(self, "_validate_data"):
-                X = self._validate_data(
-                    X, ensure_min_samples=2, accept_sparse=["csr", "csc"],
-                    **finite_kw
-                )
-            else:
-                X = check_array(
-                    X, ensure_min_samples=2, accept_sparse=["csr", "csc"],
-                    **finite_kw
-                )
-                self.n_features_in_ = X.shape[1]
+        X = self._validate_data_compat(X, reset=True, ensure_min_samples=2)
 
         random_state = check_random_state(self.random_state)
         n_samples, n_features = X.shape
@@ -1161,34 +1242,7 @@ class CLARANS(ClusterMixin, TransformerMixin, BaseEstimator):
                 dist_to_medoids = dist_to_medoids.toarray()
             return np.argmin(dist_to_medoids, axis=1)
 
-        allow_nan = (self.metric == "nan_euclidean")
-        finite_kw = _finite_kwarg(allow_nan)
-        try:
-            from sklearn.utils.validation import validate_data
-
-            X = validate_data(
-                self, X=X, reset=False, accept_sparse=["csr", "csc"],
-                **finite_kw
-            )
-        except ImportError:
-            if hasattr(self, "_validate_data"):
-                X = self._validate_data(
-                    X, reset=False, accept_sparse=["csr", "csc"],
-                    **finite_kw
-                )
-            else:
-                X = check_array(
-                    X, accept_sparse=["csr", "csc"],
-                    **finite_kw
-                )
-                if (
-                    hasattr(self, "n_features_in_")
-                    and X.shape[1] != self.n_features_in_
-                ):
-                    raise ValueError(
-                        f"X has {X.shape[1]} features, but CLARANS is expecting "
-                        f"{self.n_features_in_} features as input"
-                    )
+        X = self._validate_data_compat(X, reset=False, ensure_min_samples=1)
 
         params = self.metric_params if self.metric_params is not None else {}
         if not issparse(X):
@@ -1240,25 +1294,7 @@ class CLARANS(ClusterMixin, TransformerMixin, BaseEstimator):
                 else np.asarray(dist_to_medoids)
             )
 
-        allow_nan = (self.metric == "nan_euclidean")
-        finite_kw = _finite_kwarg(allow_nan)
-        try:
-            from sklearn.utils.validation import validate_data
-            X = validate_data(
-                self, X=X, reset=False, accept_sparse=["csr", "csc"],
-                **finite_kw
-            )
-        except ImportError:
-            if hasattr(self, "_validate_data"):
-                X = self._validate_data(
-                    X, reset=False, accept_sparse=["csr", "csc"],
-                    **finite_kw
-                )
-            else:
-                X = check_array(
-                    X, accept_sparse=["csr", "csc"],
-                    **finite_kw
-                )
+        X = self._validate_data_compat(X, reset=False, ensure_min_samples=1)
 
         params = self.metric_params if self.metric_params is not None else {}
         if not issparse(X):
