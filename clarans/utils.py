@@ -62,19 +62,24 @@ _SCIPY_METRIC_MAP = {
 
 
 def check_medoids(
-    medoids: Sequence[int] | np.ndarray,
+    medoid_indices: Sequence[int] | np.ndarray | None = None,
     n_samples: int | None = None,
+    *,
+    medoids: Sequence[int] | np.ndarray | None = None,
 ) -> np.ndarray:
     """Validate and convert medoid indices to a 1D NumPy array of integers.
 
     Parameters
     ----------
-    medoids : array-like of shape (n_clusters,)
+    medoid_indices : array-like of shape (n_clusters,)
         Indices representing medoid observations.
 
     n_samples : int, optional
         Total number of samples in the dataset. If provided, ensures that all
         medoid indices satisfy 0 <= idx < n_samples.
+
+    medoids : array-like of shape (n_clusters,), optional
+        Alias for `medoid_indices` for backwards compatibility.
 
     Returns
     -------
@@ -84,15 +89,19 @@ def check_medoids(
     Raises
     ------
     ValueError
-        If `medoids` is empty, contains duplicate indices, has invalid dimensions,
+        If `medoid_indices` is empty, contains duplicate indices, has invalid dimensions,
         contains negative indices, or has indices outside the valid range [0, n_samples - 1].
     TypeError
-        If `medoids` contains non-integer elements.
+        If `medoid_indices` contains non-integer elements.
     """
+    raw_medoids = medoid_indices if medoid_indices is not None else medoids
+    if raw_medoids is None:
+        raise ValueError("medoid_indices cannot be empty.")
+
     try:
-        medoids_arr = np.asarray(medoids)
+        medoids_arr = np.asarray(raw_medoids)
     except Exception as exc:
-        raise ValueError(f"Could not convert medoids to numpy array: {exc}") from exc
+        raise ValueError(f"Could not convert medoid_indices to numpy array: {exc}") from exc
 
     if medoids_arr.ndim != 1:
         raise ValueError(f"medoid_indices must be 1-dimensional, got shape {medoids_arr.shape}")
@@ -103,7 +112,7 @@ def check_medoids(
     if not np.issubdtype(medoids_arr.dtype, np.integer):
         raise TypeError(f"medoid_indices must contain integers, got dtype {medoids_arr.dtype}")
 
-    medoids_arr = medoids_arr.astype(np.intp)
+    medoids_arr = medoids_arr.astype(np.intp, copy=False)
 
     if len(np.unique(medoids_arr)) != len(medoids_arr):
         raise ValueError("medoid_indices must not contain duplicate elements.")
