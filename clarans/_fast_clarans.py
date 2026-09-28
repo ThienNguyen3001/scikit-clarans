@@ -14,11 +14,7 @@ import numpy as np
 from numpy.typing import ArrayLike
 
 from ._clarans import CLARANS
-
-try:
-    from . import _core
-except ImportError:
-    _core = None  # type: ignore[assignment]
+from .utils import _core
 
 if TYPE_CHECKING:
     from scipy.sparse import spmatrix

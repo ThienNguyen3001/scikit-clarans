@@ -26,6 +26,7 @@ from ._initialization import (
 )
 from .utils import (
     _SCIPY_METRIC_MAP,
+    _core,
     _is_valid_int,
     _map_scipy_metric,
     _to_dense,
@@ -71,11 +72,6 @@ _ALL_VALID_METRICS = frozenset(
     )
     - _EXCLUDED_METRICS
 )
-
-try:
-    from . import _core
-except ImportError:
-    _core = None  # type: ignore[assignment]
 
 if TYPE_CHECKING:
     from scipy.sparse import spmatrix
@@ -318,7 +314,6 @@ class CLARANS(ClusterMixin, TransformerMixin, BaseEstimator):
             Indices of the initial medoids.
         """
         n_samples, n_features = X.shape
-        all_indices = np.arange(n_samples)
 
         if isinstance(self.init, str):
             if self.init == "random":
@@ -378,7 +373,7 @@ class CLARANS(ClusterMixin, TransformerMixin, BaseEstimator):
 
                 params = self.metric_params if self.metric_params is not None else {}
                 if not issparse(X) and not issparse(init_centers):
-                    scipy_metric = _SCIPY_METRIC_MAP.get(self.metric, self.metric)
+                    scipy_metric = _map_scipy_metric(self.metric)
                     try:
                         D = cdist(init_centers, X, metric=scipy_metric, **params)
                         current_medoids_indices = np.argmin(D, axis=1)
@@ -403,6 +398,7 @@ class CLARANS(ClusterMixin, TransformerMixin, BaseEstimator):
                     stacklevel=2,
                 )
                 remaining = self.n_clusters - len(current_medoids_indices)
+                all_indices = np.arange(n_samples)
                 available = np.setdiff1d(
                     all_indices, current_medoids_indices, assume_unique=True
                 )
@@ -889,7 +885,7 @@ class CLARANS(ClusterMixin, TransformerMixin, BaseEstimator):
 
         # 1. Try SciPy cdist for dense NumPy array
         if isinstance(X, np.ndarray) and not issparse(X) and isinstance(self.metric, str):
-            mapped_metric = _SCIPY_METRIC_MAP.get(self.metric, self.metric)
+            mapped_metric = _map_scipy_metric(self.metric)
             try:
                 cdist(X[:1], X[:1], metric=mapped_metric, **params)
                 self._dist_engine = "cdist"
@@ -1189,6 +1185,23 @@ class CLARANS(ClusterMixin, TransformerMixin, BaseEstimator):
 
         return self
 
+    def _validate_precomputed_input(self, X: Any) -> np.ndarray:
+        """Validate precomputed distance matrix for predict/transform
+        and extract medoid distances.
+        """
+        X_arr = check_array(X, accept_sparse=["csr", "csc"])
+        n_train_samples = len(self.labels_)
+        if X_arr.shape[1] == n_train_samples:
+            dist_to_medoids = X_arr[:, self.medoid_indices_]
+        elif X_arr.shape[1] == self.n_clusters:
+            dist_to_medoids = X_arr
+        else:
+            raise ValueError(
+                f"Precomputed X has {X_arr.shape[1]} columns; expected either "
+                f"{n_train_samples} (samples) or {self.n_clusters} (clusters)."
+            )
+        return _to_dense(dist_to_medoids)
+
     def predict(self, X: ArrayLike | "spmatrix") -> np.ndarray:
         """
         Predict the closest cluster each sample in X belongs to.
@@ -1217,18 +1230,8 @@ class CLARANS(ClusterMixin, TransformerMixin, BaseEstimator):
         check_is_fitted(self)
 
         if self.metric == "precomputed":
-            X = check_array(X, accept_sparse=["csr", "csc"])
-            n_train_samples = len(self.labels_)
-            if X.shape[1] == n_train_samples:
-                dist_to_medoids = X[:, self.medoid_indices_]
-            elif X.shape[1] == self.n_clusters:
-                dist_to_medoids = X
-            else:
-                raise ValueError(
-                    f"Precomputed X has {X.shape[1]} columns; expected either "
-                    f"{n_train_samples} (samples) or {self.n_clusters} (clusters)."
-                )
-            return np.argmin(_to_dense(dist_to_medoids), axis=1)
+            dist_to_medoids = self._validate_precomputed_input(X)
+            return np.argmin(dist_to_medoids, axis=1)
 
         X = self._validate_data_compat(X, reset=False, ensure_min_samples=1)
 
@@ -1265,18 +1268,7 @@ class CLARANS(ClusterMixin, TransformerMixin, BaseEstimator):
         check_is_fitted(self)
 
         if self.metric == "precomputed":
-            X = check_array(X, accept_sparse=["csr", "csc"])
-            n_train_samples = len(self.labels_)
-            if X.shape[1] == n_train_samples:
-                dist_to_medoids = X[:, self.medoid_indices_]
-            elif X.shape[1] == self.n_clusters:
-                dist_to_medoids = X
-            else:
-                raise ValueError(
-                    f"Precomputed X has {X.shape[1]} columns; expected either "
-                    f"{n_train_samples} (samples) or {self.n_clusters} (clusters)."
-                )
-            return _to_dense(dist_to_medoids)
+            return self._validate_precomputed_input(X)
 
         X = self._validate_data_compat(X, reset=False, ensure_min_samples=1)
 

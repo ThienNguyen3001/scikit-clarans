@@ -15,7 +15,7 @@ from sklearn.utils import check_random_state
 
 from typing import Any
 
-from .utils import _map_scipy_metric, _to_dense
+from .utils import _core, _map_scipy_metric, _to_dense
 
 
 def _check_init_args(X: Any, n_clusters: int) -> int:
@@ -48,12 +48,6 @@ def _compute_pairwise_distances(X, Y=None, metric="euclidean", metric_params=Non
             pass
 
     return pairwise_distances(X, Y, metric=scipy_metric, **params)
-
-
-try:
-    from . import _core
-except ImportError:
-    _core = None  # type: ignore[assignment]
 
 
 def initialize_heuristic(X, n_clusters, metric="euclidean", metric_params=None):
@@ -162,7 +156,7 @@ def initialize_build(X, n_clusters, metric="euclidean", metric_params=None):
     else:
         D = _compute_pairwise_distances(X, metric=metric, metric_params=metric_params)
 
-    dist_sums = D.sum(axis=0)
+    dist_sums = np.asarray(D.sum(axis=0)).ravel()
     first_medoid = int(np.argmin(dist_sums))
     medoids.append(first_medoid)
 
