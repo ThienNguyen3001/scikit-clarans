@@ -13,7 +13,7 @@ Conforming to scikit-learn Cython production standards:
 
 import numpy as np
 cimport numpy as cnp
-from libc.math cimport sqrt, INFINITY, isnan, isinf
+from libc.math cimport sqrt, INFINITY, isnan, isinf, fabs
 
 # Initialize NumPy C API
 cnp.import_array()
@@ -333,13 +333,8 @@ def is_matrix_symmetric(
                 if isinf(val_ij) or isinf(val_ji):
                     symmetric = 0
                     break
-                diff = val_ij - val_ji
-                if isnan(diff):
-                    symmetric = 0
-                    break
-                if diff < 0:
-                    diff = -diff
-                threshold = atol + rtol * (val_ji if val_ji >= 0 else -val_ji)
+                diff = fabs(val_ij - val_ji)
+                threshold = atol + rtol * fabs(val_ji)
                 if diff > threshold:
                     symmetric = 0
                     break

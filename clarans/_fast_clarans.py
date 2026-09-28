@@ -24,6 +24,54 @@ if TYPE_CHECKING:
     from scipy.sparse import spmatrix
 
 
+def _fallback_fastpam1_delta(
+    near_idx_map: np.ndarray,
+    near_dist: np.ndarray,
+    second_dist: np.ndarray,
+    d_xc: np.ndarray,
+    n_clusters: int,
+) -> tuple[int, float]:
+    """Pure-Python fallback for FastPAM1 delta calculations when Cython is unavailable."""
+    removal_loss = np.zeros(n_clusters)
+    diff = second_dist - near_dist
+    with np.errstate(invalid="ignore"):
+        removal_loss += np.bincount(
+            near_idx_map, weights=diff, minlength=n_clusters
+        )
+
+    mask_better_than_nearest = d_xc < near_dist
+    delta_td_plus_xc: float = float(
+        np.sum(
+            d_xc[mask_better_than_nearest]
+            - near_dist[mask_better_than_nearest]
+        )
+    )
+
+    total_delta = removal_loss + delta_td_plus_xc
+    mask_better_than_second = d_xc < second_dist
+
+    term1 = (
+        near_dist[mask_better_than_nearest]
+        - second_dist[mask_better_than_nearest]
+    )
+    idx1 = near_idx_map[mask_better_than_nearest]
+    with np.errstate(invalid="ignore"):
+        total_delta += np.bincount(
+            idx1, weights=term1, minlength=n_clusters
+        )
+
+    mask_case2 = (~mask_better_than_nearest) & mask_better_than_second
+    term2 = d_xc[mask_case2] - second_dist[mask_case2]
+    idx2 = near_idx_map[mask_case2]
+    with np.errstate(invalid="ignore"):
+        total_delta += np.bincount(
+            idx2, weights=term2, minlength=n_clusters
+        )
+
+    min_delta_idx = int(np.argmin(total_delta))
+    return min_delta_idx, float(total_delta[min_delta_idx])
+
+
 class FastCLARANS(CLARANS):
     """
     FastCLARANS: Fast variant of the CLARANS clustering algorithm.
@@ -215,15 +263,26 @@ class FastCLARANS(CLARANS):
         random_state: np.random.RandomState,
         deterministic_medoids: np.ndarray | None,
         buffers: dict[str, np.ndarray],
+        loc_idx: int = 1,
     ) -> tuple[float, np.ndarray, int, int]:
         """Dispatch to _single_local_search with FastPAM1 buffers."""
-        return self._single_local_search(
-            X,
-            random_state,
-            deterministic_medoids,
-            buffers["d_xc_buf"],
-            buffers["delta_arr_buf"],
-        )
+        try:
+            return self._single_local_search(
+                X,
+                random_state,
+                deterministic_medoids,
+                buffers["d_xc_buf"],
+                buffers["delta_arr_buf"],
+                loc_idx=loc_idx,
+            )
+        except TypeError:
+            return self._single_local_search(
+                X,
+                random_state,
+                deterministic_medoids,
+                buffers["d_xc_buf"],
+                buffers["delta_arr_buf"],
+            )
 
     def _single_local_search(
         self,
@@ -232,6 +291,7 @@ class FastCLARANS(CLARANS):
         deterministic_medoids: np.ndarray | None,
         d_xc_buf: np.ndarray | None = None,
         delta_arr_buf: np.ndarray | None = None,
+        loc_idx: int = 1,
     ) -> tuple[float, np.ndarray, int, int]:
         """Perform a single local search from initial medoids to a local optimum."""
         n_samples = X.shape[0]
@@ -248,7 +308,7 @@ class FastCLARANS(CLARANS):
         current_cost: float = float(np.sum(near_dist))
 
         if self.verbose >= 2:
-            r_idx = getattr(self, "_current_loc_idx", 1)
+            r_idx = loc_idx
             print(
                 f"  Restart {r_idx}/{self.num_local} (init cost: {current_cost:.5f}):"
             )
@@ -258,19 +318,8 @@ class FastCLARANS(CLARANS):
         available_candidates = np.flatnonzero(non_medoid_mask)
 
         # Pre-evaluate Cython kernel availability and pre-configure delta buffer
-        can_use_cython = (
-            _core is not None
-            and self.n_clusters > 1
-            and isinstance(d_xc_buf, np.ndarray)
-            and d_xc_buf.flags.c_contiguous
-            and d_xc_buf.dtype in (np.float64, np.float32)
-            and isinstance(near_dist, np.ndarray)
-            and near_dist.flags.c_contiguous
-            and isinstance(second_dist, np.ndarray)
-            and second_dist.flags.c_contiguous
-            and near_dist.dtype == d_xc_buf.dtype
-            and isinstance(near_idx_map, np.ndarray)
-            and near_idx_map.flags.c_contiguous
+        can_use_cython = self._can_use_cython(
+            d_xc_buf, near_idx_map, near_dist, second_dist
         )
         delta_buf_arg = (
             delta_arr_buf
@@ -323,47 +372,11 @@ class FastCLARANS(CLARANS):
                 min_delta_idx = int(best_m)
                 min_delta = float(min_delta_val)
             else:
-                removal_loss = np.zeros(self.n_clusters)
-                diff = second_dist - near_dist
-                with np.errstate(invalid="ignore"):
-                    removal_loss += np.bincount(
-                        near_idx_map, weights=diff, minlength=self.n_clusters
-                    )
-
-                mask_better_than_nearest = d_xc < near_dist
-                delta_td_plus_xc: float = float(
-                    np.sum(
-                        d_xc[mask_better_than_nearest]
-                        - near_dist[mask_better_than_nearest]
-                    )
+                min_delta_idx, min_delta = _fallback_fastpam1_delta(
+                    near_idx_map, near_dist, second_dist, d_xc, self.n_clusters
                 )
 
-                total_delta = removal_loss + delta_td_plus_xc
-
-                mask_better_than_second = d_xc < second_dist
-
-                term1 = (
-                    near_dist[mask_better_than_nearest]
-                    - second_dist[mask_better_than_nearest]
-                )
-                idx1 = near_idx_map[mask_better_than_nearest]
-                with np.errstate(invalid="ignore"):
-                    total_delta += np.bincount(
-                        idx1, weights=term1, minlength=self.n_clusters
-                    )
-
-                mask_case2 = (~mask_better_than_nearest) & mask_better_than_second
-                term2 = d_xc[mask_case2] - second_dist[mask_case2]
-                idx2 = near_idx_map[mask_case2]
-                with np.errstate(invalid="ignore"):
-                    total_delta += np.bincount(
-                        idx2, weights=term2, minlength=self.n_clusters
-                    )
-
-                min_delta_idx = int(np.argmin(total_delta))
-                min_delta = total_delta[min_delta_idx]
-
-            delta_tol = -max(1e-16, 1e-12 * abs(current_cost))
+            delta_tol = self._delta_tolerance(current_cost)
             if min_delta < delta_tol:
                 old_medoid = current_medoids_indices[min_delta_idx]
                 current_medoids_indices[min_delta_idx] = candidate_idx

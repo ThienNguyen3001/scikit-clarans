@@ -2,7 +2,7 @@ from __future__ import annotations
 
 import threading
 import warnings
-from typing import TYPE_CHECKING, Callable, Sequence
+from typing import TYPE_CHECKING, Any, Callable, Sequence
 import numpy as np
 from scipy.spatial.distance import cdist
 from scipy.sparse import issparse
@@ -59,6 +59,23 @@ _SCIPY_METRIC_MAP = {
     "sokalmichener": "matching",
     "p": "minkowski",
 }
+
+
+def _to_dense(arr: Any) -> np.ndarray:
+    """Convert an array or sparse matrix to a dense NumPy array."""
+    return arr.toarray() if hasattr(arr, "toarray") else np.asarray(arr)
+
+
+def _is_valid_int(val: Any, min_val: int = 1, allow_bool: bool = False) -> bool:
+    """Check if value is a valid integer >= min_val and optionally allow booleans."""
+    if not allow_bool and isinstance(val, (bool, np.bool_)):
+        return False
+    return bool(isinstance(val, (int, np.integer, bool, np.bool_)) and val >= min_val)
+
+
+def _map_scipy_metric(metric: str | Callable) -> str | Callable:
+    """Map metric name to SciPy cdist compatible metric identifier."""
+    return _SCIPY_METRIC_MAP.get(metric, metric) if isinstance(metric, str) else metric
 
 
 def check_medoids(
@@ -163,18 +180,14 @@ def calculate_cost(
     medoid_indices = check_medoids(medoid_indices, n_samples=X.shape[0])
 
     if metric == "precomputed":
-        dist_sub = X[:, medoid_indices]
-        if hasattr(dist_sub, "toarray"):
-            dist_sub = dist_sub.toarray()
+        dist_sub = _to_dense(X[:, medoid_indices])
         return float(np.sum(np.min(dist_sub, axis=1)))
 
     medoids = X[medoid_indices]
     params = metric_params if metric_params is not None else {}
 
     if not issparse(X):
-        scipy_metric = (
-            _SCIPY_METRIC_MAP.get(metric, metric) if isinstance(metric, str) else metric
-        )
+        scipy_metric = _map_scipy_metric(metric)
         try:
             D = cdist(X, medoids, metric=scipy_metric, **params)
             return float(np.sum(np.min(D, axis=1)))

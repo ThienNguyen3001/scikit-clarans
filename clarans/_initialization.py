@@ -13,36 +13,40 @@ from scipy.sparse import issparse
 from sklearn.metrics import DistanceMetric, pairwise_distances
 from sklearn.utils import check_random_state
 
-from .utils import _SCIPY_METRIC_MAP
+from typing import Any
+
+from .utils import _map_scipy_metric, _to_dense
+
+
+def _check_init_args(X: Any, n_clusters: int) -> int:
+    """Validate dataset shape and cluster count for initialization."""
+    n_samples = X.shape[0]
+    if n_clusters >= n_samples:
+        raise ValueError(
+            f"n_clusters must be less than n_samples ({n_samples}); got {n_clusters}"
+        )
+    return n_samples
 
 
 def _compute_pairwise_distances(X, Y=None, metric="euclidean", metric_params=None):
     """Compute pairwise distances using cdist for dense arrays when possible,
     falling back to scikit-learn's DistanceMetric and pairwise_distances."""
-    scipy_metric = _SCIPY_METRIC_MAP.get(metric, metric) if isinstance(metric, str) else metric
+    scipy_metric = _map_scipy_metric(metric)
     params = metric_params if metric_params is not None else {}
+    Y_eff = X if Y is None else Y
 
-    if not issparse(X) and (Y is None or not issparse(Y)):
+    if not issparse(X) and not issparse(Y_eff):
         try:
-            if Y is None:
-                return cdist(X, X, metric=scipy_metric, **params)
-            return cdist(X, Y, metric=scipy_metric, **params)
+            return cdist(X, Y_eff, metric=scipy_metric, **params)
         except Exception:
             pass
-    else:
-        # DistanceMetric directly supports sparse matrices for metrics like
-        # chebyshev, canberra, cityblock, etc.
-        if isinstance(scipy_metric, str):
-            try:
-                dm = DistanceMetric.get_metric(scipy_metric, **params)
-                if Y is None:
-                    return dm.pairwise(X)
-                return dm.pairwise(X, Y)
-            except Exception:
-                pass
+    elif isinstance(scipy_metric, str):
+        try:
+            dm = DistanceMetric.get_metric(scipy_metric, **params)
+            return dm.pairwise(X) if Y is None else dm.pairwise(X, Y_eff)
+        except Exception:
+            pass
 
-    if Y is None:
-        return pairwise_distances(X, metric=scipy_metric, **params)
     return pairwise_distances(X, Y, metric=scipy_metric, **params)
 
 
@@ -87,21 +91,14 @@ def initialize_heuristic(X, n_clusters, metric="euclidean", metric_params=None):
     Adapted from the scikit-learn-extra KMedoids implementation:
     https://scikit-learn-extra.readthedocs.io/en/stable/generated/sklearn_extra.cluster.KMedoids.html
     """
-    n_samples = X.shape[0]
-    if n_clusters >= n_samples:
-        raise ValueError(
-            f"n_clusters must be less than n_samples ({n_samples}); got {n_clusters}"
-        )
+    _check_init_args(X, n_clusters)
 
     if metric == "precomputed":
         D = X
     else:
         D = _compute_pairwise_distances(X, metric=metric, metric_params=metric_params)
 
-    if hasattr(D, "toarray"):
-        dist_sums = np.asarray(D.sum(axis=0)).ravel()
-    else:
-        dist_sums = np.sum(D, axis=0)
+    dist_sums = np.asarray(D.sum(axis=0)).ravel()
     current_medoids_indices = np.argpartition(dist_sums, n_clusters - 1)[:n_clusters]
     current_medoids_indices.sort()  # Ensure deterministic ordering across platforms
     return current_medoids_indices
@@ -144,11 +141,7 @@ def initialize_build(X, n_clusters, metric="euclidean", metric_params=None):
     Adapted from the scikit-learn-extra KMedoids implementation:
     https://scikit-learn-extra.readthedocs.io/en/stable/generated/sklearn_extra.cluster.KMedoids.html
     """
-    n_samples = X.shape[0]
-    if n_clusters >= n_samples:
-        raise ValueError(
-            f"n_clusters must be less than n_samples ({n_samples}); got {n_clusters}"
-        )
+    n_samples = _check_init_args(X, n_clusters)
 
     medoids = []
 
@@ -173,8 +166,6 @@ def initialize_build(X, n_clusters, metric="euclidean", metric_params=None):
     first_medoid = int(np.argmin(dist_sums))
     medoids.append(first_medoid)
 
-    dist_to_nearest = D[:, first_medoid]
-
     use_cython_build = (
         _core is not None
         and isinstance(D, np.ndarray)
@@ -182,38 +173,31 @@ def initialize_build(X, n_clusters, metric="euclidean", metric_params=None):
         and D.dtype in (np.float64, np.float32)
     )
 
-    if use_cython_build:
-        dist_to_nearest_c = np.ascontiguousarray(dist_to_nearest, dtype=D.dtype)
-        is_medoid = np.zeros(n_samples, dtype=bool)
-        is_medoid[first_medoid] = True
+    is_medoid = np.zeros(n_samples, dtype=bool)
+    is_medoid[first_medoid] = True
+    dist_to_nearest = (
+        np.ascontiguousarray(D[:, first_medoid], dtype=D.dtype)
+        if use_cython_build
+        else D[:, first_medoid]
+    )
 
-        for _ in range(1, n_clusters):
-            candidate_indices = np.ascontiguousarray(np.where(~is_medoid)[0], dtype=np.intp)
+    for _ in range(1, n_clusters):
+        candidate_indices = np.where(~is_medoid)[0]
+        if use_cython_build:
+            cand_c = np.ascontiguousarray(candidate_indices, dtype=np.intp)
             best_idx_in_cand, _ = _core.pam_build_step(
-                D, candidate_indices, dist_to_nearest_c, n_samples, len(candidate_indices)
+                D, cand_c, dist_to_nearest, n_samples, len(cand_c)
             )
             best_candidate = int(candidate_indices[best_idx_in_cand])
-            medoids.append(best_candidate)
-            is_medoid[best_candidate] = True
-            dist_to_nearest_c = np.minimum(dist_to_nearest_c, D[:, best_candidate])
-    else:
-        is_medoid = np.zeros(n_samples, dtype=bool)
-        is_medoid[first_medoid] = True
-
-        for _ in range(1, n_clusters):
-            # We only care about candidates
-            candidate_indices = np.where(~is_medoid)[0]
-
+        else:
             D_candidates = D[:, candidate_indices]
             diffs = dist_to_nearest[:, np.newaxis] - D_candidates
             gains = np.sum(np.maximum(diffs, 0), axis=0)
+            best_candidate = int(candidate_indices[np.argmax(gains)])
 
-            best_candidate_idx_in_candidates = np.argmax(gains)
-            best_candidate = int(candidate_indices[best_candidate_idx_in_candidates])
-
-            medoids.append(best_candidate)
-
-            dist_to_nearest = np.minimum(dist_to_nearest, D[:, best_candidate])
+        medoids.append(best_candidate)
+        is_medoid[best_candidate] = True
+        dist_to_nearest = np.minimum(dist_to_nearest, D[:, best_candidate])
 
     return np.array(medoids, dtype=int)
 
@@ -261,11 +245,7 @@ def initialize_k_medoids_plus_plus(
     https://scikit-learn-extra.readthedocs.io/en/stable/generated/sklearn_extra.cluster.KMedoids.html
     """
     random_state = check_random_state(random_state)
-    n_samples = X.shape[0]
-    if n_clusters >= n_samples:
-        raise ValueError(
-            f"n_clusters must be less than n_samples ({n_samples}); got {n_clusters}"
-        )
+    n_samples = _check_init_args(X, n_clusters)
     medoid_indices = np.empty(n_clusters, dtype=int)
 
     if n_local_trials is None:
@@ -275,12 +255,7 @@ def initialize_k_medoids_plus_plus(
     medoid_indices[0] = first_medoid
 
     if metric == "precomputed":
-        col_m = X[:, first_medoid]
-        closest = (
-            col_m.toarray().ravel()
-            if hasattr(col_m, "toarray")
-            else np.asarray(col_m).ravel()
-        )
+        closest = _to_dense(X[:, first_medoid]).ravel()
     else:
         first_row = X[first_medoid : first_medoid + 1]
         closest = _compute_pairwise_distances(
@@ -308,12 +283,7 @@ def initialize_k_medoids_plus_plus(
         np.clip(candidate_ids, 0, n_samples - 1, out=candidate_ids)
 
         if metric == "precomputed":
-            cols = X[:, candidate_ids]
-            cols_dense = (
-                cols.toarray()
-                if hasattr(cols, "toarray")
-                else np.asarray(cols)
-            )
+            cols_dense = _to_dense(X[:, candidate_ids])
             dists_candidates = np.ascontiguousarray((cols_dense.T)**2)
         else:
             candidates_X = X[candidate_ids]
@@ -370,12 +340,7 @@ def initialize_k_medoids_plus_plus(
             remaining = np.setdiff1d(np.arange(n_samples), medoid_indices[:c])
             best_candidate = int(random_state.choice(remaining))
             if metric == "precomputed":
-                col_cand = X[:, best_candidate]
-                row_dist = (
-                    col_cand.toarray().ravel()
-                    if hasattr(col_cand, "toarray")
-                    else np.asarray(col_cand).ravel()
-                )
+                row_dist = _to_dense(X[:, best_candidate]).ravel()
             else:
                 cand_row = X[best_candidate : best_candidate + 1]
                 row_dist = _compute_pairwise_distances(
