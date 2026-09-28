@@ -274,26 +274,19 @@ class CLARANS(ClusterMixin, TransformerMixin, BaseEstimator):
         )
         if is_deterministic:
             if self.num_local > 1:
-                if isinstance(self.init, str):
-                    warnings.warn(
-                        f"The '{self.init}' initialization is deterministic, so all "
-                        f"{self.num_local} local searches start from the exact same initial "
-                        f"medoids. While randomized neighbor sampling still explores "
-                        f"different search paths, consider 'k-medoids++' for diverse "
-                        f"starting points or num_local=1 to save computation.",
-                        UserWarning,
-                        stacklevel=2,
-                    )
-                else:
-                    warnings.warn(
-                        f"An explicit init array was provided, so all {self.num_local} "
-                        f"local searches start from the exact same initial medoids. "
-                        f"While randomized neighbor sampling still explores different "
-                        f"search paths, consider 'k-medoids++' for diverse starting points "
-                        f"or num_local=1 to save computation.",
-                        UserWarning,
-                        stacklevel=2,
-                    )
+                subject = (
+                    f"The '{self.init}' initialization is deterministic"
+                    if isinstance(self.init, str)
+                    else "An explicit init array was provided"
+                )
+                warnings.warn(
+                    f"{subject}, so all {self.num_local} local searches start from the "
+                    f"exact same initial medoids. While randomized neighbor sampling still "
+                    f"explores different search paths, consider 'random' or 'k-medoids++' for "
+                    f"diverse starting points or num_local=1 to save computation.",
+                    UserWarning,
+                    stacklevel=2,
+                )
             return self._initialize_medoids(X, random_state)
         return None
 
@@ -317,101 +310,107 @@ class CLARANS(ClusterMixin, TransformerMixin, BaseEstimator):
 
         if isinstance(self.init, str):
             if self.init == "random":
-                current_medoids_indices = random_state.choice(
-                    n_samples, self.n_clusters, replace=False
-                )
+                return random_state.choice(n_samples, self.n_clusters, replace=False)
             elif self.init == "k-medoids++":
-                current_medoids_indices = initialize_k_medoids_plus_plus(
+                return initialize_k_medoids_plus_plus(
                     X, self.n_clusters, random_state, self.metric, metric_params=self.metric_params
                 )
             elif self.init == "heuristic":
-                current_medoids_indices = initialize_heuristic(
+                return initialize_heuristic(
                     X, self.n_clusters, self.metric, metric_params=self.metric_params
                 )
             elif self.init == "build":
-                current_medoids_indices = initialize_build(
+                return initialize_build(
                     X, self.n_clusters, self.metric, metric_params=self.metric_params
                 )
             else:
                 raise ValueError(f"Unknown init method: {self.init!r}")
+
+        return self._initialize_from_array(X, random_state, n_samples, n_features)
+
+    def _initialize_from_array(
+        self,
+        X: np.ndarray | "spmatrix",
+        random_state: np.random.RandomState,
+        n_samples: int,
+        n_features: int,
+    ) -> np.ndarray:
+        """Map user-provided initial medoids or centers array to dataset observation indices."""
+        try:
+            init_arr = np.asarray(self.init)
+        except Exception as err:
+            raise ValueError(f"Could not convert init to array: {err}") from err
+
+        if self.metric == "precomputed":
+            if (
+                init_arr.ndim == 1
+                and len(init_arr) == self.n_clusters
+                and np.issubdtype(init_arr.dtype, np.integer)
+            ):
+                current_medoids_indices = check_medoids(init_arr, n_samples=n_samples)
+                return np.array(current_medoids_indices, dtype=int)
+
+            init_centers = check_array(self.init)
+            if init_centers.shape != (self.n_clusters, n_features):
+                raise ValueError(
+                    f"init array must be of shape ({self.n_clusters}, {n_features})"
+                )
+            current_medoids_indices = np.argmin(init_centers, axis=1)
         else:
             try:
-                init_arr = np.asarray(self.init)
-            except Exception as err:
-                raise ValueError(f"Could not convert init to array: {err}") from err
-
-            if self.metric == "precomputed":
-                if (
-                    init_arr.ndim == 1
-                    and len(init_arr) == self.n_clusters
-                    and np.issubdtype(init_arr.dtype, np.integer)
-                ):
-                    current_medoids_indices = check_medoids(init_arr, n_samples=n_samples)
-                    return np.array(current_medoids_indices, dtype=int)
-
                 init_centers = check_array(self.init)
-                if init_centers.shape != (self.n_clusters, n_features):
+            except ValueError as err:
+                if "Expected 2D array, got 1D array instead" in str(err):
                     raise ValueError(
-                        f"init array must be of shape ({self.n_clusters}, {n_features})"
-                    )
-                current_medoids_indices = np.argmin(init_centers, axis=1)
-            else:
-                try:
-                    init_centers = check_array(self.init)
-                except ValueError as err:
-                    if "Expected 2D array, got 1D array instead" in str(err):
-                        raise ValueError(
-                            f"init array must be 2D of shape ({self.n_clusters}, {n_features}). "
-                            "If you want to specify medoid indices, use metric='precomputed' "
-                            "or pass X[indices] as initial centers."
-                        ) from err
-                    raise
-                if init_centers.shape != (self.n_clusters, n_features):
-                    raise ValueError(
-                        f"init array must be of shape ({self.n_clusters}, {n_features})"
-                    )
+                        f"init array must be 2D of shape ({self.n_clusters}, {n_features}). "
+                        "If you want to specify medoid indices, use metric='precomputed' "
+                        "or pass X[indices] as initial centers."
+                    ) from err
+                raise
+            if init_centers.shape != (self.n_clusters, n_features):
+                raise ValueError(
+                    f"init array must be of shape ({self.n_clusters}, {n_features})"
+                )
 
-                params = self.metric_params if self.metric_params is not None else {}
-                if not issparse(X) and not issparse(init_centers):
-                    scipy_metric = _map_scipy_metric(self.metric)
-                    try:
-                        D = cdist(init_centers, X, metric=scipy_metric, **params)
-                        current_medoids_indices = np.argmin(D, axis=1)
-                    except Exception:
-                        current_medoids_indices, _ = pairwise_distances_argmin_min(
-                            init_centers, X, metric=self.metric, metric_kwargs=params
-                        )
-                else:
+            params = self.metric_params if self.metric_params is not None else {}
+            if not issparse(X) and not issparse(init_centers):
+                scipy_metric = _map_scipy_metric(self.metric)
+                try:
+                    D = cdist(init_centers, X, metric=scipy_metric, **params)
+                    current_medoids_indices = np.argmin(D, axis=1)
+                except Exception:
                     current_medoids_indices, _ = pairwise_distances_argmin_min(
                         init_centers, X, metric=self.metric, metric_kwargs=params
                     )
-
-            current_medoids_indices = np.array(current_medoids_indices, dtype=int)
-
-            current_medoids_indices = np.unique(current_medoids_indices)
-
-            if len(current_medoids_indices) < self.n_clusters:
-                warnings.warn(
-                    "Provided init centers map to duplicate points in X. "
-                    "Filling duplicates with random points.",
-                    UserWarning,
-                    stacklevel=2,
-                )
-                remaining = self.n_clusters - len(current_medoids_indices)
-                all_indices = np.arange(n_samples)
-                available = np.setdiff1d(
-                    all_indices, current_medoids_indices, assume_unique=True
+            else:
+                current_medoids_indices, _ = pairwise_distances_argmin_min(
+                    init_centers, X, metric=self.metric, metric_kwargs=params
                 )
 
-                if len(available) < remaining:
-                    raise ValueError(
-                        "Not enough unique points to fill up to n_clusters."
-                    )
+        current_medoids_indices = np.unique(np.array(current_medoids_indices, dtype=int))
 
-                fillers = random_state.choice(available, remaining, replace=False)
-                current_medoids_indices = np.concatenate(
-                    [current_medoids_indices, fillers]
+        if len(current_medoids_indices) < self.n_clusters:
+            warnings.warn(
+                "Provided init centers map to duplicate points in X. "
+                "Filling duplicates with random points.",
+                UserWarning,
+                stacklevel=2,
+            )
+            remaining = self.n_clusters - len(current_medoids_indices)
+            all_indices = np.arange(n_samples)
+            available = np.setdiff1d(
+                all_indices, current_medoids_indices, assume_unique=True
+            )
+
+            if len(available) < remaining:
+                raise ValueError(
+                    "Not enough unique points to fill up to n_clusters."
                 )
+
+            fillers = random_state.choice(available, remaining, replace=False)
+            current_medoids_indices = np.concatenate(
+                [current_medoids_indices, fillers]
+            )
 
         return np.array(current_medoids_indices, dtype=int)
 
@@ -1082,8 +1081,8 @@ class CLARANS(ClusterMixin, TransformerMixin, BaseEstimator):
             )
         return X_arr
 
-    def _validate_input_and_params(self, X):
-        """Validate estimator parameters and input data array."""
+    def _validate_params(self) -> None:
+        """Validate estimator hyperparameters according to scikit-learn standards."""
         if not _is_valid_int(self.n_clusters, min_val=1):
             raise ValueError(f"n_clusters must be >= 1; got {self.n_clusters}")
         if not _is_valid_int(self.num_local, min_val=1):
@@ -1092,7 +1091,9 @@ class CLARANS(ClusterMixin, TransformerMixin, BaseEstimator):
             pass
         elif _is_valid_int(self.max_neighbors, min_val=1):
             pass
-        elif _is_valid_int(self.max_neighbors) and self.max_neighbors < 1:
+        elif isinstance(self.max_neighbors, (int, np.integer)) and not isinstance(
+            self.max_neighbors, (bool, np.bool_)
+        ):
             raise ValueError(
                 f"max_neighbors must be >= 1; got {self.max_neighbors}"
             )
@@ -1132,6 +1133,10 @@ class CLARANS(ClusterMixin, TransformerMixin, BaseEstimator):
                     f"The 'metric' parameter of {self.__class__.__name__} must be a str among "
                     f"{options_repr} or a callable. Got {self.metric!r} instead."
                 )
+
+    def _validate_input_and_params(self, X):
+        """Validate estimator parameters and input data array."""
+        self._validate_params()
 
         X = self._validate_data_compat(X, reset=True, ensure_min_samples=2)
 
