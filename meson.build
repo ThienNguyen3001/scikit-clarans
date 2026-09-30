@@ -1,7 +1,7 @@
 project(
   'scikit-clarans',
   'c', 'cython',
-  version: '0.3.1',
+  version: '0.3.2',
   license: 'MIT',
   meson_version: '>= 1.1.0',
   default_options: [
