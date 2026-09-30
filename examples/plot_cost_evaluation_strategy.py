@@ -1,7 +1,7 @@
 r"""
-===========================================================
+=================================================================
 Comparing Cost Evaluation Strategies: Delta vs. Brute-Force
-===========================================================
+=================================================================
 
 This example benchmarks the two swap evaluation strategies in CLARANS:
 ``cost_evaluation='delta'`` (default) and ``cost_evaluation='brute_force'``.
@@ -89,10 +89,16 @@ ax1.grid(True, linestyle="--", alpha=0.5, axis="y")
 
 for bar in bars1:
     y = bar.get_height()
-    ax1.text(bar.get_x() + bar.get_width() / 2, y, f"{y:.2f}s", ha="center", va="bottom", fontsize=9)
+    ax1.text(
+        bar.get_x() + bar.get_width() / 2, y, f"{y:.2f}s",
+        ha="center", va="bottom", fontsize=9,
+    )
 for bar in bars2:
     y = bar.get_height()
-    ax1.text(bar.get_x() + bar.get_width() / 2, y, f"{y:.2f}s", ha="center", va="bottom", fontsize=9)
+    ax1.text(
+        bar.get_x() + bar.get_width() / 2, y, f"{y:.2f}s",
+        ha="center", va="bottom", fontsize=9,
+    )
 
 # Panel 2: Speedup factor
 bars_speedup = ax2.bar(x, speedups, width=0.45, color="#55a868")
@@ -106,7 +112,10 @@ ax2.grid(True, linestyle="--", alpha=0.5, axis="y")
 
 for bar in bars_speedup:
     y = bar.get_height()
-    ax2.text(bar.get_x() + bar.get_width() / 2, y + 0.05, f"{y:.2f}x", ha="center", va="bottom", fontweight="bold")
+    ax2.text(
+        bar.get_x() + bar.get_width() / 2, y + 0.05, f"{y:.2f}x",
+        ha="center", va="bottom", fontweight="bold",
+    )
 
 plt.suptitle(f"CLARANS Cost Evaluation Strategies on N={n_samples}", fontsize=13)
 plt.tight_layout()

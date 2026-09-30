@@ -1,7 +1,7 @@
 r"""
-==============================================================
+==================================================================
 Monitoring Search Progress and Restart Convergence Trajectories
-==============================================================
+==================================================================
 
 This example demonstrates search progress monitoring and restart convergence
 using the ``verbose`` parameter and fitted estimator attributes.
@@ -85,9 +85,14 @@ ax1.legend()
 
 # Panel 2: Cumulative evaluations and swaps
 ax2 = fig.add_subplot(1, 3, 2)
-ax2.plot(restarts, total_evals, marker="s", color="#55a868", linewidth=2, label="Evals (n_iter_)")
+ax2.plot(
+    restarts, total_evals, marker="s", color="#55a868", linewidth=2, label="Evals (n_iter_)",
+)
 ax2_twin = ax2.twinx()
-ax2_twin.plot(restarts, total_swaps, marker="^", color="#8172b3", linewidth=2, linestyle="--", label="Swaps (n_swaps_)")
+ax2_twin.plot(
+    restarts, total_swaps, marker="^", color="#8172b3", linewidth=2, linestyle="--",
+    label="Swaps (n_swaps_)",
+)
 ax2.set_xlabel("Number of restarts (num_local)")
 ax2.set_ylabel("Total candidate evaluations", color="#55a868")
 ax2_twin.set_ylabel("Total accepted swaps", color="#8172b3")
