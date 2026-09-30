@@ -159,6 +159,66 @@ Number of restarts (``num_local``):
 Neighbor sampling (``max_neighbors``):
   The default ``max_neighbors='auto'`` scales with the dataset size according to formulas from the original papers (:math:`\max(250, 1.25\% \times k(n-k))` in CLARANS and :math:`\max(1, \lfloor 250/k \rfloor, 2.5\% \times (n-k))` in FastCLARANS). An explicit integer value (such as ``max_neighbors=200``) is mainly useful when you need a fixed ceiling on search steps for very large inputs.
 
+Monitoring search progress
+--------------------------
+
+Both ``CLARANS`` and ``FastCLARANS`` provide console logging through the ``verbose`` parameter to monitor local searches during ``fit``.
+
+Summary table (verbose=1)
+^^^^^^^^^^^^^^^^^^^^^^^^^
+
+Setting ``verbose=1`` (or ``verbose=True``) prints a configuration header, a summary table with one row per local search, and a final line marking the best restart:
+
+.. code-block:: text
+
+    [CLARANS] n=1000, k=4, metric=euclidean, num_local=3, max_neighbors=250/3984 (6.3%)
+        #            Cost  Swaps  Evals   Time(s)
+        1       150.12345*     4     80     0.012s  converged
+        2       148.54321*     5    110     0.015s  converged
+        3       152.00000      2     65     0.009s  converged
+      Best: #2 | Totals: 11 swaps, 255 evals, 0.038s
+
+The header reports the dataset size (:math:`n`), number of clusters (:math:`k`), distance metric, total restarts (``num_local``), and the sampled neighbor budget (``max_neighbors``) relative to the total neighborhood size.
+
+Table columns:
+
+* ``#``: 1-based index of the restart.
+* ``Cost``: Final clustering inertia (sum of distances) for that restart. An asterisk (``*``) flags an iteration that set a new lowest cost across all completed restarts.
+* ``Swaps``: Number of accepted medoid swaps.
+* ``Evals``: Total candidate evaluations tested during the restart.
+* ``Time(s)``: Wall-clock duration of the restart.
+* Stopping status:
+
+  * ``converged``: The search evaluated ``max_neighbors`` consecutive non-improving candidates without finding a cost reduction.
+  * ``exhausted``: The search tested every available non-medoid sample before reaching ``max_neighbors``.
+
+The summary footer displays the restart index that achieved the lowest cost, followed by cumulative totals for accepted swaps, evaluations, and overall execution time.
+
+Step-by-step traces (verbose=2)
+^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+
+Setting ``verbose=2`` prints each accepted swap in real time:
+
+.. code-block:: text
+
+    [CLARANS] n=1000, k=4, metric=euclidean, num_local=2, max_neighbors=250/3984 (6.3%)
+      Restart 1/2 (init cost: 234.56789):
+          swap   1 | eval     8 | cost      210.12345 | diff    -24.44444
+          swap   2 | eval    25 | cost      180.50000 | diff    -29.62345
+         1       180.50000*  swaps=2, evals=275, 0.021s (converged)
+      Restart 2/2 (init cost: 245.11111):
+          swap   1 | eval    12 | cost      195.43210 | diff    -49.67901
+         2       195.43210   swaps=1, evals=262, 0.019s (converged)
+      Best: #1 | Totals: 3 swaps, 537 evals, 0.041s
+
+In addition to the restart summary, this level records:
+
+* ``init cost``: Starting inertia computed right after medoid initialization.
+* ``swap``: Sequence number of the accepted swap within the current restart.
+* ``eval``: Running count of neighbor evaluations examined when the improving swap was found.
+* ``cost``: New total distance cost after making the swap.
+* ``diff``: Cost change (:math:`\Delta < 0`) produced by the swap.
+
 Search mechanics
 ----------------
 
