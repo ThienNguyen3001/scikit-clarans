@@ -230,10 +230,8 @@ class FastCLARANS(CLARANS):
     def _init_search_budget(self, n_samples: int) -> None:
         """Initialize max_neighbors_ and total_neighbors_ search budget for FastCLARANS."""
         if self.max_neighbors == "auto":
-            # FastCLARANS samples 2.5% of non-medoid points per local search
-            # (Schubert & Rousseeuw, 2021) instead of 1.25% * k * (n-k) edges.
-            # A proportional floor of max(1, 250 // k) guarantees at least 250 edge
-            # evaluations (matching Ng & Han 2002) without candidate blowup.
+            # Sample 2.5% of non-medoid points (Schubert & Rousseeuw, 2021)
+            # with a floor of 250 // k to evaluate at least 250 edges per restart.
             self.max_neighbors_ = max(
                 1,
                 int(250 / self.n_clusters),
@@ -313,7 +311,7 @@ class FastCLARANS(CLARANS):
         non_medoid_mask[current_medoids_indices] = False
         available_candidates = np.flatnonzero(non_medoid_mask)
 
-        # Pre-evaluate Cython kernel availability and pre-configure delta buffer
+        # Check whether Cython kernel can be used for this batch
         can_use_cython = self._can_use_cython(
             d_xc_buf, near_idx_map, near_dist, second_dist
         )
@@ -377,12 +375,12 @@ class FastCLARANS(CLARANS):
                 old_medoid = current_medoids_indices[min_delta_idx]
                 current_medoids_indices[min_delta_idx] = candidate_idx
 
-                # Incremental distance matrix update in O(1) distance calls
+                # Update distance matrix column for the swapped medoid
                 medoids_dist[:, min_delta_idx] = d_xc
                 near_idx_map, near_dist, second_dist = self._compute_2min(medoids_dist)
                 current_cost = float(np.sum(near_dist))
 
-                # Update persistent mask on accepted swap
+                # Update non-medoid pool
                 non_medoid_mask[old_medoid] = True
                 non_medoid_mask[candidate_idx] = False
                 available_candidates = np.flatnonzero(non_medoid_mask)

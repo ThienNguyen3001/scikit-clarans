@@ -1,15 +1,6 @@
 # cython: language_level=3, boundscheck=False, wraparound=False, cdivision=True, initializedcheck=False, nonecheck=False
-"""
-CLARANS & FastCLARANS High-Performance C/Cython Kernels.
-All core hotspots optimized with zero-allocation, single-pass algorithms.
+"""Cython kernels for CLARANS and FastCLARANS delta and distance calculations."""
 
-Conforming to scikit-learn Cython production standards:
-- Fused types (floating: float, double)
-- 64-bit safe indexing (Py_ssize_t, intp_t)
-- Hardware sqrt intrinsics (libc.math.sqrt)
-- OpenMP / multi-threading friendly (with nogil:)
-- Direct typed memoryviews on all buffer arguments
-"""
 
 import numpy as np
 cimport numpy as cnp
@@ -25,9 +16,7 @@ ctypedef fused floating:
     float
 
 
-# ===========================================================================
-# 1. CLARANS: Delta cost for a single medoid swap (Point 1)
-# ===========================================================================
+# CLARANS single-swap delta calculation
 def clarans_delta(
     const intp_t[::1] near_idx_map,
     const floating[::1] near_dist,
@@ -36,10 +25,7 @@ def clarans_delta(
     intp_t random_medoid_pos,
     Py_ssize_t n_samples,
 ):
-    """
-    Compute CLARANS delta cost for swapping a single medoid in a single O(n) pass.
-    Replaces multiple NumPy boolean masks and array allocations.
-    """
+    """Compute CLARANS delta cost for a candidate medoid swap."""
     cdef:
         floating total_delta = 0.0
         Py_ssize_t j
@@ -59,9 +45,7 @@ def clarans_delta(
     return total_delta
 
 
-# ===========================================================================
-# 2. FastCLARANS: FastPAM1 delta cost for all k clusters (Point 2)
-# ===========================================================================
+# FastCLARANS FastPAM1 delta calculation
 def fastpam1_delta(
     const intp_t[::1] near_idx_map,
     const floating[::1] near_dist,
@@ -71,11 +55,7 @@ def fastpam1_delta(
     Py_ssize_t n_clusters,
     floating[::1] delta_buf = None,
 ):
-    """
-    Compute FastPAM1 delta cost for all k clusters in a single O(n) pass.
-    Replaces 3 np.bincount calls and 3 boolean masks with a single pass.
-    If delta_buf is provided, reuses it with zero Python allocations.
-    """
+    """Compute FastPAM1 delta cost for all clusters in one pass."""
     cdef:
         cnp.ndarray[floating, ndim=1] total_delta_np = None
         floating[::1] delta_arr
@@ -125,18 +105,13 @@ def fastpam1_delta(
     return best_m, best_val, total_delta_np if total_delta_np is not None else np.asarray(delta_arr)
 
 
-# ===========================================================================
-# 3. Cache: 2-nearest medoid linear scan (Point 3)
-# ===========================================================================
+# Nearest and second-nearest medoid distances
 def update_cache_2min(
     const floating[:, ::1] subD,
     Py_ssize_t n_samples,
     Py_ssize_t n_clusters,
 ):
-    """
-    Find nearest and second-nearest medoid indices and distances in O(n*k).
-    Replaces np.argsort(subD, axis=1) which is O(n*k*log(k)) and allocates (n, k) index array.
-    """
+    """Find nearest and second-nearest medoid indices and distances."""
     cdef:
         cnp.ndarray[intp_t, ndim=1] near_idx_map_np = np.empty(n_samples, dtype=np.intp)
         cnp.ndarray[floating, ndim=1] near_dist_np = np.empty(
@@ -204,9 +179,7 @@ def update_cache_2min(
     return near_idx_map_np, near_dist_np, second_dist_np
 
 
-# ===========================================================================
-# 4. PAM BUILD greedy step (Point 4)
-# ===========================================================================
+# PAM BUILD greedy selection
 def pam_build_step(
     const floating[:, ::1] D,
     const intp_t[::1] candidate_indices,
@@ -214,10 +187,7 @@ def pam_build_step(
     Py_ssize_t n_samples,
     Py_ssize_t n_candidates,
 ):
-    """
-    Compute gains for all candidates in PAM BUILD in a memory-efficient C loop.
-    Avoids allocating the large (n, n_candidates) diffs matrix in Python.
-    """
+    """Compute distance reduction gains for candidate medoids in PAM BUILD."""
     cdef:
         Py_ssize_t best_idx_in_cand = 0
         floating max_gain = -1.0
@@ -239,9 +209,7 @@ def pam_build_step(
     return best_idx_in_cand, max_gain
 
 
-# ===========================================================================
-# 5. k-medoids++ seeding local trials (Point 5)
-# ===========================================================================
+# k-medoids++ candidate trials
 def kmedoids_pp_trials(
     const floating[::1] closest_dist_sq,
     const floating[:, ::1] dists_candidates,
@@ -251,10 +219,7 @@ def kmedoids_pp_trials(
     Py_ssize_t n_local_trials,
     Py_ssize_t n_current_medoids,
 ):
-    """
-    Fuses minimum reduction and sum potential calculation for k-medoids++ trials.
-    Avoids allocating intermediate candidate distance squared arrays in Python.
-    """
+    """Evaluate candidate medoid potential across trials."""
     cdef:
         intp_t best_cand = -1
         floating best_pot = -1.0
@@ -299,22 +264,14 @@ def kmedoids_pp_trials(
     return best_cand, best_pot, best_dist_sq
 
 
-# ===========================================================================
-# 6. Precomputed matrix symmetry check
-# ===========================================================================
+# Distance matrix symmetry check
 def is_matrix_symmetric(
     const floating[:, ::1] D,
     Py_ssize_t n_samples,
     double rtol=1e-5,
     double atol=1e-8,
 ):
-    """
-    Check whether a 2D square matrix is symmetric within tolerance (D[i, j] == D[j, i]).
-    Follows NumPy's allclose standard: |D[i, j] - D[j, i]| <= atol + rtol * |D[j, i]|.
-    Also returns False immediately if any element is NaN.
-    Scans the upper triangle with immediate Early Exit on the first asymmetric element.
-    Executes in pure C with nogil, allocating 0 bytes of memory.
-    """
+    """Check whether a square distance matrix is symmetric within tolerance."""
     cdef:
         Py_ssize_t i, j
         floating val_ij, val_ji, diff, threshold

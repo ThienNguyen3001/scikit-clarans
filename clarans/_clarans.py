@@ -35,8 +35,8 @@ from .utils import (
     check_medoids,
 )
 
-# Detect whether check_array expects 'ensure_all_finite' (scikit-learn >= 1.6)
-# or 'force_all_finite' (< 1.6)
+# Handle scikit-learn parameter name differences (< 1.6 vs >= 1.6)
+
 _FINITE_PARAM = (
     "ensure_all_finite"
     if "ensure_all_finite" in inspect.signature(check_array).parameters
@@ -698,12 +698,11 @@ class CLARANS(ClusterMixin, TransformerMixin, BaseEstimator):
                 f"  Restart {r_idx}/{self.num_local} (init cost: {current_cost:.5f}):"
             )
 
-        # Maintain persistent non-medoid mask across iterations
+        # Track non-medoid candidates to avoid picking an existing medoid
         non_medoid_mask = np.ones(n_samples, dtype=bool)
         non_medoid_mask[current_medoids_indices] = False
         available_candidates = np.flatnonzero(non_medoid_mask)
 
-        # Pre-evaluate Cython kernel availability once before the search loop
         can_use_cython = self._can_use_cython(
             d_xc_buf, near_idx_map, near_dist, second_dist
         )
@@ -719,7 +718,7 @@ class CLARANS(ClusterMixin, TransformerMixin, BaseEstimator):
             if available_candidates.size == 0:
                 break
 
-            # Fast direct index draw matching random_state.choice 100% bit-exact
+            # Sample a non-medoid candidate at random
             random_non_medoid_candidate = int(
                 available_candidates[
                     random_state.randint(0, len(available_candidates))
@@ -781,13 +780,13 @@ class CLARANS(ClusterMixin, TransformerMixin, BaseEstimator):
                         random_non_medoid_candidate
                     )
 
-                    # Incremental update: update only the swapped column in O(1) distance calls
+                    # Update distance matrix column for the swapped medoid
                     assert medoids_dist is not None
                     medoids_dist[:, random_medoid_pos] = d_xc
                     near_idx_map, near_dist, second_dist = self._compute_2min(medoids_dist)
                     current_cost = float(np.sum(near_dist))
 
-                    # Update persistent mask on accepted swap
+                    # Update non-medoid pool
                     non_medoid_mask[old_medoid] = True
                     non_medoid_mask[random_non_medoid_candidate] = False
                     available_candidates = np.flatnonzero(non_medoid_mask)
@@ -882,7 +881,7 @@ class CLARANS(ClusterMixin, TransformerMixin, BaseEstimator):
 
         params = self.metric_params if self.metric_params is not None else {}
 
-        # 1. Try SciPy cdist for dense NumPy array
+        # Dense arrays: prefer SciPy cdist
         if isinstance(X, np.ndarray) and not issparse(X) and isinstance(self.metric, str):
             mapped_metric = _map_scipy_metric(self.metric)
             try:
@@ -894,7 +893,7 @@ class CLARANS(ClusterMixin, TransformerMixin, BaseEstimator):
             except Exception:
                 pass
 
-        # 2. Try Scikit-Learn DistanceMetric (supports CSR sparse matrix & callable functions)
+        # Sparse arrays or custom metrics: scikit-learn DistanceMetric
         try:
             self._dm_instance = DistanceMetric.get_metric(self.metric, **params)
             self._dm_instance.pairwise(X[:1], X[:1])
@@ -904,7 +903,7 @@ class CLARANS(ClusterMixin, TransformerMixin, BaseEstimator):
         except Exception:
             pass
 
-        # 3. Fallback
+        # Fallback to pairwise_distances
         self._dist_engine = "pairwise"
         self._scipy_metric = None
         self._dm_instance = None
@@ -1009,7 +1008,7 @@ class CLARANS(ClusterMixin, TransformerMixin, BaseEstimator):
         ):
             return _core.update_cache_2min(subD, n_samples, self.n_clusters)
 
-        # Python fallback: filter NaNs if present to avoid propagation
+        # Fallback path: replace NaNs with inf before partitioning
         clean_subD = np.where(np.isnan(subD), np.inf, subD) if np.isnan(subD).any() else subD
         part_idx = np.argpartition(clean_subD, 1, axis=1)[:, :2]
         smallest_idx = part_idx[:, 0]
