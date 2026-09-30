@@ -35,7 +35,7 @@ for i, nl in enumerate(num_locals):
 
 fig, axes = plt.subplots(1, 2, figsize=(11.5, 4.2))
 
-# Cost Heatmap: Blues
+# Cost heatmap
 im0 = axes[0].imshow(cost_grid, cmap="Blues", origin="lower", aspect="auto")
 axes[0].set_xticks(range(len(max_neighbors)))
 axes[0].set_xticklabels([str(m) for m in max_neighbors])
@@ -63,7 +63,7 @@ for i in range(len(num_locals)):
             fontsize=9,
         )
 
-# Runtime Heatmap: YlOrRd
+# Runtime heatmap
 im1 = axes[1].imshow(time_grid, cmap="YlOrRd", origin="lower", aspect="auto")
 axes[1].set_xticks(range(len(max_neighbors)))
 axes[1].set_xticklabels([str(m) for m in max_neighbors])

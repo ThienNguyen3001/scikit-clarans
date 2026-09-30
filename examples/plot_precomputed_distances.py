@@ -18,14 +18,14 @@ from clarans import CLARANS, FastCLARANS
 
 
 X, _ = make_blobs(n_samples=180, centers=3, n_features=4, random_state=42)
-# Generate Manhattan distance matrix
+# Precompute pairwise Manhattan distances
 D = pairwise_distances(X, metric="manhattan")
 
-# Fit CLARANS with precomputed distances
+# Fit CLARANS
 model_clarans = CLARANS(n_clusters=3, num_local=3, metric="precomputed", random_state=42)
 model_clarans.fit(D)
 
-# Fit FastCLARANS with precomputed distances
+# Fit FastCLARANS
 model_fast = FastCLARANS(n_clusters=3, num_local=3, metric="precomputed", random_state=42)
 model_fast.fit(D)
 
@@ -38,7 +38,7 @@ print(
     f"Cost: {model_fast.inertia_:.2f}"
 )
 
-# Plot pairwise distance heatmap sorted by cluster labels
+# Distance matrix sorted by cluster assignment
 sort_idx = model_clarans.labels_.argsort()
 D_sorted = D[sort_idx, :][:, sort_idx]
 

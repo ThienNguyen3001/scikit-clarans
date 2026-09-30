@@ -14,14 +14,12 @@ import matplotlib.pyplot as plt
 from sklearn.datasets import make_blobs
 from clarans import CLARANS
 
-# 1. Generate synthetic dataset
 X, y_true = make_blobs(n_samples=600, centers=4, cluster_std=0.7, random_state=42)
 
-# 2. Fit CLARANS
 model = CLARANS(n_clusters=4, num_local=3, init="k-medoids++", random_state=42)
 model.fit(X)
 
-# 3. Plot clusters and selected medoids
+# Plot clusters and selected medoids
 plt.figure(figsize=(7, 5))
 colors = ["#2b5c8f", "#d95f02", "#7570b3", "#1b9e77"]
 

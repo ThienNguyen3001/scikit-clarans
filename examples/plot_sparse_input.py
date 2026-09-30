@@ -17,7 +17,7 @@ from sklearn.datasets import make_blobs
 from clarans import CLARANS
 
 
-# Generate data and make it sparse by zeroing out low values
+# Zero out low values to produce a sparse dataset
 X, _ = make_blobs(n_samples=500, centers=3, n_features=20, random_state=42)
 X[np.abs(X) < 1.5] = 0.0
 X_sparse = sparse.csr_matrix(X)
@@ -32,7 +32,7 @@ model.fit(X_sparse)
 print(f"Selected medoid indices: {model.medoid_indices_}")
 print(f"Inertia (Total Distance Cost): {model.inertia_:.2f}")
 
-# Visualize cluster sizes
+# Cluster sample counts
 plt.figure(figsize=(6, 4))
 counts = np.bincount(model.labels_)
 plt.bar(range(len(counts)), counts, color="#2b5c8f", width=0.5)

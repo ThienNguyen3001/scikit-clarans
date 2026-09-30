@@ -21,7 +21,7 @@ from clarans.utils import calculate_cost
 
 X, _ = make_blobs(n_samples=400, centers=3, n_features=2, random_state=42)
 
-# Precompute inverse covariance matrix for Mahalanobis metric
+# Inverse covariance matrix for Mahalanobis distance
 VI = np.linalg.pinv(np.cov(X.T))
 
 configs = [

@@ -20,7 +20,7 @@ X_train, _ = make_blobs(n_samples=400, centers=3, n_features=2, random_state=42)
 model = CLARANS(n_clusters=3, init="k-medoids++", random_state=42)
 model.fit(X_train)
 
-# Generate new unseen query points
+# Query points
 rng = np.random.RandomState(99)
 X_query = rng.uniform(
     low=[X_train[:, 0].min(), X_train[:, 1].min()],
@@ -32,7 +32,7 @@ query_preds = model.predict(X_query)
 fig, ax = plt.subplots(figsize=(7, 5))
 colors = ["#2b5c8f", "#d95f02", "#7570b3"]
 
-# Plot training data
+# Training data
 for k in range(3):
     mask = model.labels_ == k
     ax.scatter(
@@ -44,7 +44,7 @@ for k in range(3):
         label=f"Train Cluster {k}",
     )
 
-# Plot query samples with colored boundaries
+# Predicted query points
 for k in range(3):
     mask = query_preds == k
     ax.scatter(
@@ -58,7 +58,7 @@ for k in range(3):
         label=f"Predicted Query (Cluster {k})",
     )
 
-# Plot Medoids
+# Medoids
 ax.scatter(
     model.cluster_centers_[:, 0],
     model.cluster_centers_[:, 1],

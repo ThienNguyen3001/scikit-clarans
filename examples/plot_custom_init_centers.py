@@ -19,7 +19,7 @@ from clarans import CLARANS
 
 X, _ = make_blobs(n_samples=300, centers=3, n_features=2, random_state=42)
 
-# User defines 3 approximate initial seeds (e.g. from domain knowledge)
+# Initial seed coordinates
 user_seeds = np.array([[-5.0, -5.0], [0.0, 5.0], [5.0, -2.0]])
 
 model = CLARANS(n_clusters=3, init=user_seeds, num_local=1, random_state=42)
@@ -28,7 +28,7 @@ model.fit(X)
 plt.figure(figsize=(7, 5))
 plt.scatter(X[:, 0], X[:, 1], c=model.labels_, cmap="tab10", s=20, alpha=0.5)
 
-# Plot user-provided candidate coordinates
+# Seed coordinates
 plt.scatter(
     user_seeds[:, 0],
     user_seeds[:, 1],
@@ -40,7 +40,7 @@ plt.scatter(
     label="User Input Seeds",
 )
 
-# Plot final converged medoids
+# Final medoids
 plt.scatter(
     model.cluster_centers_[:, 0],
     model.cluster_centers_[:, 1],

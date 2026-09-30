@@ -48,7 +48,7 @@ with warnings.catch_warnings():
 print("Best Parameters:", grid_search.best_params_)
 print(f"Best Silhouette Score: {grid_search.best_score_:.4f}")
 
-# Plot scores for each candidate parameter set
+# Parameter set scores
 mean_scores = grid_search.cv_results_["mean_test_score"]
 labels = [
     f"k={p['n_clusters']}, p={p['metric_params']['p']}, {p['init']}"
