@@ -21,6 +21,8 @@ List of Gallery Examples (Sphinx-Gallery convention: `plot_*.py`)
 
 ### 2. Algorithms & Benchmarks
 - `plot_clarans_vs_fastclarans.py`: Side-by-side convergence speed and inertia benchmark.
+- `plot_cost_evaluation_strategy.py`: Delta caching vs. brute-force swap evaluation runtime and equivalence.
+- `plot_search_trajectory.py`: Monitoring search progress, restart convergence, and tracking metrics.
 - `plot_comparison_clustering.py`: Direct visual comparison between CLARANS, FastCLARANS, and K-Means.
 - `plot_outlier_robustness.py`: Robustness against extreme anomalies compared to K-Means.
 - `plot_runtime_scaling.py`: Empirical execution scaling vs. dataset size N.
