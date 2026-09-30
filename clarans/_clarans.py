@@ -182,22 +182,15 @@ class CLARANS(ClusterMixin, TransformerMixin, BaseEstimator):
         Effective maximum number of non-improving neighbors examined per
         local search before concluding convergence.
 
-    total_neighbors_ : int
+    n_neighbors_ : int
         Total number of neighbor transitions in the search graph G_{n, k},
         equal to ``n_clusters * (n_samples - n_clusters)``.
 
     n_iter_ : int
-        Number of candidate neighbors evaluated during the best local search.
-
-    n_swaps_ : int
-        Number of successful medoid swaps performed during the best local
-        search.
-
-    total_n_iter_ : int
         Total number of candidate neighbors evaluated across all ``num_local``
         searches.
 
-    total_n_swaps_ : int
+    n_swaps_ : int
         Total number of successful medoid swaps performed across all
         ``num_local`` searches.
 
@@ -435,7 +428,7 @@ class CLARANS(ClusterMixin, TransformerMixin, BaseEstimator):
         }
 
     def _init_search_budget(self, n_samples: int) -> None:
-        """Initialize max_neighbors_ and total_neighbors_ search budget."""
+        """Initialize max_neighbors_ and n_neighbors_ search budget."""
         if self.max_neighbors == "auto":
             self.max_neighbors_ = max(
                 250, int(0.0125 * self.n_clusters * (n_samples - self.n_clusters))
@@ -443,7 +436,7 @@ class CLARANS(ClusterMixin, TransformerMixin, BaseEstimator):
         else:
             self.max_neighbors_ = int(self.max_neighbors)
 
-        self.total_neighbors_ = self.n_clusters * (n_samples - self.n_clusters)
+        self.n_neighbors_ = self.n_clusters * (n_samples - self.n_clusters)
 
     def _allocate_search_buffers(
         self, X: Any, n_samples: int
@@ -561,8 +554,6 @@ class CLARANS(ClusterMixin, TransformerMixin, BaseEstimator):
 
         best_cost = np.inf
         best_medoids = None
-        best_n_iter = 0
-        best_n_swaps = 0
         best_loc_idx = 0
         total_eval_count = 0
         total_swap_count = 0
@@ -573,7 +564,7 @@ class CLARANS(ClusterMixin, TransformerMixin, BaseEstimator):
 
         if self.verbose:
             _name = self.__class__.__name__
-            tot_nb = self.total_neighbors_
+            tot_nb = self.n_neighbors_
             pct = (self.max_neighbors_ / tot_nb * 100) if tot_nb > 0 else 100.0
             print(
                 f"[{_name}] n={n_samples}, k={self.n_clusters}, "
@@ -610,8 +601,6 @@ class CLARANS(ClusterMixin, TransformerMixin, BaseEstimator):
                 ):
                     best_cost = current_cost
                     best_medoids = current_medoids_indices.copy()
-                    best_n_iter = eval_count
-                    best_n_swaps = swap_count
                     best_loc_idx = loc_idx
                     is_new_best = True
                 else:
@@ -643,10 +632,8 @@ class CLARANS(ClusterMixin, TransformerMixin, BaseEstimator):
                     f"costs ({best_cost}). Check input data or distance metric."
                 )
 
-            self.n_iter_ = best_n_iter
-            self.n_swaps_ = best_n_swaps
-            self.total_n_iter_ = total_eval_count
-            self.total_n_swaps_ = total_swap_count
+            self.n_iter_ = total_eval_count
+            self.n_swaps_ = total_swap_count
 
             if self.verbose:
                 total_elapsed = time.perf_counter() - start_fit_time

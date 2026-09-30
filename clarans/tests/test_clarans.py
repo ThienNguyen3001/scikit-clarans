@@ -124,36 +124,33 @@ class TestCLARANS(unittest.TestCase):
         self.assertGreaterEqual(clarans.inertia_, 0)
 
     def test_n_iter_and_n_swaps_attributes(self):
-        """Test that n_iter_, n_swaps_, total_n_iter_, total_n_swaps_,
-        and total_neighbors_ are set correctly.
+        """Test that n_iter_, n_swaps_, and n_neighbors_ are set correctly,
+        and deprecated total_n_iter_ / total_n_swaps_ / total_neighbors_ are removed.
         """
         # Multi-restart run
         clarans = CLARANS(n_clusters=3, num_local=2, max_neighbors=50, random_state=42)
         clarans.fit(self.X)
         self.assertTrue(hasattr(clarans, "n_iter_"))
         self.assertTrue(hasattr(clarans, "n_swaps_"))
-        self.assertTrue(hasattr(clarans, "total_n_iter_"))
-        self.assertTrue(hasattr(clarans, "total_n_swaps_"))
-        self.assertTrue(hasattr(clarans, "total_neighbors_"))
+        self.assertTrue(hasattr(clarans, "n_neighbors_"))
+        self.assertFalse(hasattr(clarans, "total_neighbors_"))
+        self.assertFalse(hasattr(clarans, "total_n_iter_"))
+        self.assertFalse(hasattr(clarans, "total_n_swaps_"))
 
         self.assertGreaterEqual(clarans.n_iter_, 1)
         self.assertGreaterEqual(clarans.n_swaps_, 0)
         self.assertLessEqual(clarans.n_swaps_, clarans.n_iter_)
 
-        # Cumulative totals must be >= best run
-        self.assertGreaterEqual(clarans.total_n_iter_, clarans.n_iter_)
-        self.assertGreaterEqual(clarans.total_n_swaps_, clarans.n_swaps_)
-        self.assertLessEqual(clarans.total_n_swaps_, clarans.total_n_iter_)
-
-        # total_neighbors_ check: k * (n - k)
+        # n_neighbors_ check: k * (n - k)
         n_samples = self.X.shape[0]
-        self.assertEqual(clarans.total_neighbors_, 3 * (n_samples - 3))
+        self.assertEqual(clarans.n_neighbors_, 3 * (n_samples - 3))
 
-        # Single-restart run: total must equal best
-        c_single = CLARANS(n_clusters=2, num_local=1, max_neighbors=20, random_state=42)
+        # Single-restart run
+        c_single = CLARANS(n_clusters=3, num_local=1, max_neighbors=50, random_state=42)
         c_single.fit(self.X)
-        self.assertEqual(c_single.total_n_iter_, c_single.n_iter_)
-        self.assertEqual(c_single.total_n_swaps_, c_single.n_swaps_)
+        self.assertGreaterEqual(c_single.n_iter_, 1)
+        self.assertLessEqual(c_single.n_swaps_, c_single.n_iter_)
+        self.assertGreaterEqual(clarans.n_iter_, c_single.n_iter_)
 
     def test_medoid_indices_sorted(self):
         """Test that medoid_indices_ is always sorted."""

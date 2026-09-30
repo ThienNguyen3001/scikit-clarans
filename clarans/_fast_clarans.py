@@ -157,22 +157,15 @@ class FastCLARANS(CLARANS):
         Effective maximum number of non-improving non-medoid candidates
         sampled per local search before concluding convergence.
 
-    total_neighbors_ : int
+    n_neighbors_ : int
         Total number of non-medoid candidate points, equal to
         ``n_samples - n_clusters``.
 
     n_iter_ : int
-        Number of candidate neighbors evaluated during the best local search.
-
-    n_swaps_ : int
-        Number of successful medoid swaps performed during the best local
-        search.
-
-    total_n_iter_ : int
         Total number of candidate neighbors evaluated across all ``num_local``
         searches.
 
-    total_n_swaps_ : int
+    n_swaps_ : int
         Total number of successful medoid swaps performed across all
         ``num_local`` searches.
 
@@ -228,7 +221,7 @@ class FastCLARANS(CLARANS):
         )
 
     def _init_search_budget(self, n_samples: int) -> None:
-        """Initialize max_neighbors_ and total_neighbors_ search budget for FastCLARANS."""
+        """Initialize max_neighbors_ and n_neighbors_ search budget for FastCLARANS."""
         if self.max_neighbors == "auto":
             # Sample 2.5% of non-medoid points (Schubert & Rousseeuw, 2021)
             # with a floor of 250 // k to evaluate at least 250 edges per restart.
@@ -240,7 +233,7 @@ class FastCLARANS(CLARANS):
         else:
             self.max_neighbors_ = int(self.max_neighbors)
 
-        self.total_neighbors_ = n_samples - self.n_clusters
+        self.n_neighbors_ = n_samples - self.n_clusters
 
     def _allocate_search_buffers(
         self, X: Any, n_samples: int
