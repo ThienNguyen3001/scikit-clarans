@@ -1,9 +1,7 @@
 Contributing
 ============
 
-Thank you for contributing to scikit-clarans! This page summarizes the
-contribution workflow. For full details, see the project's
-`CONTRIBUTING.md <https://github.com/ThienNguyen3001/scikit-clarans/blob/main/CONTRIBUTING.md>`_.
+Guidelines for reporting issues and contributing code changes. Full development setup instructions are in `CONTRIBUTING.md <https://github.com/ThienNguyen3001/scikit-clarans/blob/main/CONTRIBUTING.md>`_.
 
 How to contribute
 -----------------

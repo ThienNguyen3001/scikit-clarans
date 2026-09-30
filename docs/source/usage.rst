@@ -1,40 +1,29 @@
-User Guide
+User guide
 ==========
 
-This guide covers the essentials of clustering with **scikit-clarans**, explaining practical use cases, algorithm selection, parameter tuning, and the core search mechanics.
+``scikit-clarans`` provides estimators for $k$-medoids clustering. This guide covers algorithm selection, parameter tuning, and search mechanics.
 
-Why k-Medoids? (k-Medoids vs. k-Means)
---------------------------------------
+Why use k-medoids?
+------------------
 
-While **k-Means** is widely used, it has fundamental limitations in practical machine learning workflows:
+Standard $k$-means calculates cluster centers by averaging coordinates in Euclidean space, which creates synthetic centroids. In contrast, $k$-medoids restricts cluster centers to actual observations from the dataset:
 
-1. **Artificial Centroids vs. Real Data Points**:
-   k-Means averages points in Euclidean space to produce cluster "centroids" that do not exist in the original data. In contrast, **k-medoids** restricts cluster centers (medoids) to **actual data points from your dataset**. This provides immediate interpretability:
-   
-   * In customer analytics: The medoid is a real customer profile.
-   * In text clustering: The medoid is an actual representative document.
-   * In bioinformatics: The medoid is a real sequenced molecule or patient case.
+* Outlier resistance: Medoids minimize absolute pairwise distances (:math:`\sum d`) rather than squared Euclidean distances (:math:`\sum d^2`), keeping centers stable when the dataset contains extreme values.
+* Custom distance metrics: Supports metrics such as Manhattan distance, cosine dissimilarity, or precomputed distance matrices, whereas standard $k$-means requires Euclidean space.
+* Interpretability: Every medoid corresponds to a real record in the input data, such as a patient profile, an exemplary document, or a molecule.
 
-2. **Outlier Robustness**:
-   k-Means minimizes the sum of squared Euclidean distances (:math:`\sum \|x_i - \mu\|^2`). Squaring distances gives extreme outliers disproportionate leverage, dragging centroids away from true cluster bodies. k-Medoids minimizes the sum of absolute pairwise distances:
+.. math::
 
-   .. math::
-
-      \min_{M \subset X, |M|=k} \sum_{i=1}^n \min_{m \in M} d(x_i, m)
-
-   This gives k-medoids a substantially higher breakdown point against anomalies and noise.
-
-3. **Arbitrary Distance Metrics**:
-   k-Means is geometrically tied to Euclidean distance. k-Medoids works seamlessly with **any valid distance metric** (e.g., Cosine similarity for embeddings, Manhattan distance for grid layouts, or precomputed distance matrices).
+   \min_{M \subset X, |M|=k} \sum_{i=1}^n \min_{m \in M} d(x_i, m)
 
 .. note::
 
-   **A note on** ``inertia_``: In ``scikit-learn``'s ``KMeans``, ``inertia_`` represents the sum of *squared* Euclidean distances. In ``scikit-clarans``, ``inertia_`` represents the sum of *unsquared* distances from each sample to its assigned medoid according to the chosen metric.
+   In ``scikit-learn``'s ``KMeans``, ``inertia_`` represents the sum of squared Euclidean distances. In ``scikit-clarans``, ``inertia_`` represents the sum of unsquared distances from each sample to its assigned medoid according to the chosen metric.
 
-Quick Start
+Quick start
 -----------
 
-Here is a quick example demonstrating clustering with ``CLARANS``:
+Clustering with ``CLARANS``:
 
 .. code-block:: python
 
@@ -59,53 +48,50 @@ Here is a quick example demonstrating clustering with ``CLARANS``:
     print("Labels (first 10):", model.labels_[:10])
     print("Inertia (Total Distance Cost):", model.inertia_)
 
-Choosing an Estimator: CLARANS vs. FastCLARANS
-----------------------------------------------
+Choosing an estimator
+---------------------
 
-``scikit-clarans`` provides two main estimators:
+``scikit-clarans`` includes two estimators:
 
 .. list-table::
    :widths: 25 35 40
    :header-rows: 1
 
    * - Feature
-     - ``CLARANS``
-     - ``FastCLARANS`` (Recommended)
-   * - **Original Paper**
+     - CLARANS
+     - FastCLARANS
+   * - Reference
      - Ng & Han (2002)
      - Schubert & Rousseeuw (2021)
-   * - **Sampling Strategy**
-     - Samples random (medoid, non-medoid) pairs
-     - Samples non-medoids; tests all :math:`k` medoids at once
-   * - **Delta Cost Update**
+   * - Candidate sampling
+     - Random (medoid, non-medoid) pairs
+     - Non-medoid samples tested against all :math:`k` medoids
+   * - Swap evaluation
      - Single swap evaluation (:math:`O(n)` with ``cost_evaluation='delta'``, :math:`O(n \cdot k)` with ``cost_evaluation='brute_force'``)
      - FastPAM1 vectorized delta cost across all :math:`k` medoids
-   * - **Memory Footprint**
-     - :math:`O(n)` on-the-fly
-     - :math:`O(n)` on-the-fly
-   * - **Best For**
-     - Baseline / reproduction of Ng & Han (2002)
-     - Recommended choice for small-to-medium datasets and research experimentation
+   * - Working memory
+     - :math:`O(n)`
+     - :math:`O(n)`
+   * - Primary use
+     - Baseline and algorithm comparison
+     - General clustering workflows and benchmarks
 
 .. note::
-   **Dataset Size & Scalability Scope**
+   Both estimators compute distances dynamically with an :math:`O(n)` memory footprint rather than storing an :math:`O(n^2)` matrix. They run in a single process and typically handle tens of thousands of samples efficiently.
 
-   While ``FastCLARANS`` substantially outperforms classic ``CLARANS`` by testing all :math:`k` medoid swaps simultaneously using compiled **Cython C-extensions**, the library is designed with an :math:`O(n)` memory footprint for local in-memory processing. It scales effectively to tens of thousands of samples, but is not designed for distributed Big Data pipelines (:math:`N \gg 10^5`).
-
-Quick example with ``FastCLARANS``:
+FastCLARANS example:
 
 .. code-block:: python
 
     from clarans import FastCLARANS
 
-    # FastCLARANS evaluates k graph edges per candidate evaluation
     fast_model = FastCLARANS(n_clusters=4, num_local=3, random_state=42)
     fast_model.fit(X)
 
-Configuration & Hyperparameter Tuning
--------------------------------------
+Configuration and parameter tuning
+----------------------------------
 
-Both estimators share core hyperparameters to balance execution speed and clustering quality, with ``CLARANS`` providing an additional ``cost_evaluation`` parameter:
+Both estimators share core parameters, with ``CLARANS`` providing an additional ``cost_evaluation`` option:
 
 .. list-table::
    :widths: 18 15 15 52
@@ -129,12 +115,12 @@ Both estimators share core hyperparameters to balance execution speed and cluste
      - Maximum non-improving neighbors to check per search. Defaults to :math:`\max(250, 1.25\% \times k(n-k))` in CLARANS and :math:`\max(1, \lfloor 250/k \rfloor, 2.5\% \times (n-k))` in FastCLARANS.
    * - ``init``
      - Both
-     - ``k-medoids++``
-     - Initialization strategy (``k-medoids++``, ``random``, ``build``, ``heuristic``, or array-like).
+     - ``'k-medoids++'``
+     - Initialization strategy (``'k-medoids++'``, ``'random'``, ``'build'``, ``'heuristic'``, or array-like).
    * - ``metric``
      - Both
-     - ``euclidean``
-     - Distance metric to use (e.g., ``euclidean``, ``manhattan``, ``cosine``).
+     - ``'euclidean'``
+     - Distance metric to use (e.g., ``'euclidean'``, ``'manhattan'``, ``'cosine'``).
    * - ``metric_params``
      - Both
      - ``None``
@@ -142,58 +128,44 @@ Both estimators share core hyperparameters to balance execution speed and cluste
    * - ``cost_evaluation``
      - CLARANS only
      - ``'delta'``
-     - Strategy to evaluate candidate swaps (``'delta'`` for :math:`O(n)` evaluations using distance caching; ``'brute_force'`` for recalculating total cost in :math:`O(n \cdot k)`).
+     - Swap evaluation method (``'delta'`` for :math:`O(n)` evaluations using distance caching; ``'brute_force'`` for recalculating total cost in :math:`O(n \cdot k)`).
+   * - ``verbose``
+     - Both
+     - ``0``
+     - Verbosity level (``0`` for silent, ``1`` for per-search progress summary, ``>=2`` for per-swap details).
 
-Practical Tuning Tips
-^^^^^^^^^^^^^^^^^^^^^^
+Tuning guidelines
+^^^^^^^^^^^^^^^^^
 
-* **Cost Evaluation Strategy** (``cost_evaluation`` in CLARANS):
-  ``CLARANS`` supports an optional ``cost_evaluation`` parameter (default ``'delta'``). Note that ``FastCLARANS`` does not expose this parameter because its vectorized FastPAM1 delta calculation inherently tracks :math:`d_1` and :math:`d_2`:
+Cost evaluation in CLARANS:
+  ``CLARANS`` supports ``cost_evaluation='delta'`` (default) and ``cost_evaluation='brute_force'``. FastCLARANS does not expose this parameter because its FastPAM1 formulation always calculates deltas.
   
-  * ``cost_evaluation='delta'`` *(Recommended)*: Maintains an on-the-fly cache of nearest (:math:`d_1`) and second-nearest (:math:`d_2`) medoid distances for all samples. Each candidate swap is evaluated in :math:`O(n \cdot d)` operations without recomputing distances to unchanged medoids. This yields a 1.5x–2.5x speedup with identical mathematical clustering results while maintaining a lean :math:`O(n)` memory footprint.
-  * ``cost_evaluation='brute_force'``: Evaluates each candidate swap by recalculating the total clustering cost from scratch using ``calculate_cost`` in :math:`O(n \cdot k \cdot d)`. This reproduces the exact classic baseline behavior of Ng & Han (2002).
+  * ``cost_evaluation='delta'`` caches nearest (:math:`d_1`) and second-nearest (:math:`d_2`) medoid distances for all samples. Each candidate swap runs in :math:`O(n \cdot d)` operations without recomputing distances to unchanged medoids. This gives a 1.5x to 2.5x speedup with identical clustering results.
+  * ``cost_evaluation='brute_force'`` recalculates total clustering cost from scratch in :math:`O(n \cdot k \cdot d)`, reproducing the original formulation of Ng & Han (2002).
 
-* **Initialization Strategy** (``init``):
-  
-  * ``k-medoids++`` *(Default, Recommended)*: Probabilistic seeding proportional to squared distance. Fast and memory-friendly (:math:`O(n \cdot k)`).
-  * ``random``: Pure uniform sampling. Very fast, but typically requires increasing ``num_local`` to achieve comparable clustering quality.
-  * ``build``: Classic PAM greedy seeding. Excellent solution quality on small datasets, but computes the full pairwise distance matrix (:math:`O(n^2)` time and memory). Avoid on large datasets (:math:`n > 5000`).
-  * ``heuristic``: Selects the :math:`k` most central data points with the smallest total distance to all others (:math:`O(n^2)` time and memory). Avoid on large datasets (:math:`n > 5000`).
-  * ``array-like``: Pass custom coordinates of shape ``(n_clusters, n_features)`` or pre-defined medoid indices to inject prior domain knowledge.
+Initialization strategy (``init``):
+  * ``'k-medoids++'`` (default): Selects initial medoids probabilistically based on squared distances. Fast and requires :math:`O(n \cdot k)` memory.
+  * ``'random'``: Uniform random sampling. Very fast, though it may require increasing ``num_local`` to reach comparable solution quality.
+  * ``'build'``: Greedy initialization from classic PAM. Provides good starting points on small datasets, but computes the full pairwise distance matrix (:math:`O(n^2)` time and memory). Avoid for datasets larger than 5,000 samples.
+  * ``'heuristic'``: Selects the :math:`k` samples with the smallest sum of distances to all other points (:math:`O(n^2)` time and memory). Avoid for datasets larger than 5,000 samples.
+  * Array-like: User-provided array of initial medoid coordinates or indices.
 
-* **Number of Restarts** (``num_local``):
-  If cluster assignments fluctuate between runs or the objective value (``inertia_``) is inconsistent, increase ``num_local`` to 3–5 when using randomized initialization (``k-medoids++`` or ``random``).
+Number of restarts (``num_local``):
+  For randomized initialization (``'k-medoids++'`` or ``'random'``), increasing ``num_local`` to 3 to 5 helps find better local minima when solutions vary across runs.
   
   .. note::
-     **Deterministic initialization**: Strategies such as ``build``, ``heuristic``, or explicit centroid arrays are deterministic. Setting ``num_local > 1`` with these strategies will start all local searches from the exact same medoids. It is recommended to use ``num_local=1`` with deterministic initialization to conserve compute resources.
+     Deterministic initialization methods such as ``'build'``, ``'heuristic'``, or explicit coordinate arrays always produce the same starting points. With deterministic seeding, set ``num_local=1`` to avoid repeated identical searches.
 
-* **Candidate Exploration** (``max_neighbors``):
-  Leaving ``max_neighbors='auto'`` (the default) is strongly recommended for almost all use cases. It automatically adapts to the problem geometry based on empirical ratios from the original papers (:math:`\max(250, 1.25\% \times k(n-k))` in CLARANS and :math:`\max(1, \lfloor 250/k \rfloor, 2.5\% \times (n-k))` in FastCLARANS). Because each step in FastCLARANS evaluates all :math:`k` medoids at once, its proportional floor ensures equal search coverage without candidate explosion. You only need to explicitly specify an integer for ``max_neighbors`` (e.g., ``max_neighbors=200``) if you must enforce a hard upper bound on execution time on very large datasets.
+Neighbor sampling (``max_neighbors``):
+  The default ``max_neighbors='auto'`` scales with the dataset size according to formulas from the original papers (:math:`\max(250, 1.25\% \times k(n-k))` in CLARANS and :math:`\max(1, \lfloor 250/k \rfloor, 2.5\% \times (n-k))` in FastCLARANS). An explicit integer value (such as ``max_neighbors=200``) is mainly useful when you need a fixed ceiling on search steps for very large inputs.
 
+Search mechanics
+----------------
 
-How It Works (Under the Hood)
------------------------------
+The k-medoids search space can be viewed as an undirected graph :math:`G_{n,k} = (V, E)`:
 
-Understanding the search graph :math:`G_{n,k}` helps developers reason about convergence:
-
-1. **The Search Graph**:
-   The problem space is modeled as an undirected graph :math:`G_{n,k} = (V, E)`:
-
-   * Each vertex :math:`v \in V` represents a candidate set of :math:`k` medoids (:math:`|V| = \binom{n}{k}`).
-   * Two vertices are connected by an edge if their medoid sets differ by exactly one point (a single swap :math:`(m_j \leftrightarrow x_c)`).
-   * Each node has exactly :math:`k(n-k)` neighbors.
-
-2. **Why Exhaustive PAM is Slow**:
-   Standard PAM examines all :math:`k(n-k)` neighbors at each step to find the steepest descent, costing :math:`O(k(n-k)^2)` per iteration. This becomes intractable for large datasets.
-
-3. **How CLARANS Accelerates Search**:
-   Instead of checking all :math:`k(n-k)` neighbors, CLARANS draws random candidate neighbors. As soon as it finds a neighbor that reduces the clustering cost, it immediately transitions to that node (first-choice hill climbing). If ``max_neighbors`` consecutive random neighbors fail to improve the cost, the search terminates at a local optimum. The process repeats ``num_local`` times from new random starts.
-
-4. **How FastCLARANS Improves Exploration**:
-   FastCLARANS utilizes the FastPAM1 formulation: by tracking the nearest and second-nearest medoids for each sample, it computes the swap delta for **all** :math:`k` **medoids simultaneously** in a single :math:`O(n)` pass over the data. This evaluates :math:`k` graph edges in the time CLARANS evaluates one.
-
-Next Steps
-----------
-
-* Check out the runnable recipes in :doc:`examples` (including Colab notebooks).
-* Review the full parameter specifications in :doc:`api`.
+* Vertices: Each vertex :math:`v \in V` represents a set of :math:`k` medoids from :math:`n` samples. The total number of vertices is :math:`\binom{n}{k}`.
+* Edges: An edge connects two vertices if their medoid sets differ by exactly one point (one swap :math:`m_j \leftrightarrow x_c`). Each vertex has :math:`k(n-k)` neighbors.
+* Exhaustive search: Standard PAM checks all :math:`k(n-k)` neighbors at each step to find the steepest descent, which costs :math:`O(k(n-k)^2)` per iteration.
+* CLARANS search: CLARANS checks randomly sampled neighbors. As soon as a neighbor reduces total distance cost, it makes the swap immediately (first-choice hill climbing). If ``max_neighbors`` consecutive samples yield no improvement, the search stops at a local minimum.
+* FastCLARANS search: FastCLARANS samples candidate replacement points and evaluates the swap delta against all :math:`k` current medoids simultaneously using FastPAM1 equations. A single :math:`O(n)` pass over the data evaluates :math:`k` neighbors at once.

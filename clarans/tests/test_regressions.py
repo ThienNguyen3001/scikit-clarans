@@ -8,10 +8,12 @@ Sections:
 2. Audit Bug Fixes (Asymmetric k-medoids++, Array-like inits, NaN tolerance, Score API)
 3. Deep Audit Bug Fixes (Callable metric direction, IEEE-754 signed Inf, NaN recovery)
 4. Algorithmic Edge-Case Regressions (Brute force params, NaN freeze recovery, Asymmetric sum)
+5. Confirmed Bug Fixes & Invariants (Zero-copy views, out buffers, DCLP thread-safety)
 """
 
 import threading
 import unittest
+import warnings
 from unittest.mock import patch
 
 import numpy as np
@@ -29,7 +31,12 @@ from clarans._initialization import (
 )
 from clarans.utils import HAS_CYTHON
 
-if HAS_CYTHON:
+try:
+    from clarans import _core
+except ImportError:
+    _core = None  # type: ignore[assignment]
+
+if HAS_CYTHON and _core is not None:
     from clarans._core import (
         fastpam1_delta,
         is_matrix_symmetric,
@@ -644,6 +651,381 @@ class TestAlgorithmBugFixesAndEdgeCases(unittest.TestCase):
         with self.assertRaises(ValueError) as ctx:
             CLARANS(n_clusters=2, init=init_1d, random_state=42).fit(X)
         self.assertIn("init array must be 2D of shape (2, 2)", str(ctx.exception))
+
+
+# ============================================================================
+# Section 5: Confirmed Bug Fixes & Invariants
+# ============================================================================
+
+
+class TestBug3Fix_CdistOutBufferDroppedForNonFloat64(unittest.TestCase):
+    """Verifies that _compute_1_vs_n with cdist engine populates and returns
+    caller's out buffer for all dtypes.
+    """
+
+    def test_cdist_out_buffer_populated_for_float32(self):
+        rng = np.random.RandomState(42)
+        X = rng.randn(20, 3).astype(np.float32)
+        model = CLARANS(n_clusters=3, metric="euclidean", random_state=42)
+        model._setup_distance_engine(X)
+
+        cand_row = X[0:1]
+        out_buf_float32 = np.zeros(20, dtype=np.float32)
+
+        result = model._compute_1_vs_n(cand_row, X, out=out_buf_float32)
+
+        self.assertIs(
+            result,
+            out_buf_float32,
+            "Caller out buffer must be populated and returned",
+        )
+        self.assertFalse(np.all(out_buf_float32 == 0.0))
+
+    def test_cdist_out_buffer_used_for_float64(self):
+        rng = np.random.RandomState(42)
+        X = rng.randn(20, 3).astype(np.float64)
+        model = CLARANS(n_clusters=3, metric="euclidean", random_state=42)
+        model._setup_distance_engine(X)
+
+        cand_row = X[0:1]
+        out_buf_float64 = np.zeros(20, dtype=np.float64)
+
+        result = model._compute_1_vs_n(cand_row, X, out=out_buf_float64)
+
+        self.assertIs(
+            result,
+            out_buf_float64,
+            "Float64 buffer should be reused in-place by cdist engine.",
+        )
+
+
+class TestBug4Fix_Precomputed2DInitArgmin(unittest.TestCase):
+    """Verifies validation of 2D distance vector init arrays when metric='precomputed'."""
+
+    def test_precomputed_2d_init_semantics(self):
+        rng = np.random.RandomState(42)
+        D = pairwise_distances(rng.randn(4, 2))
+
+        init_centers = np.array(
+            [
+                [10.0, 8.0, 5.0, 0.1],
+                [9.0, 0.2, 7.0, 6.0],
+            ],
+            dtype=np.float64,
+        )
+
+        model = CLARANS(n_clusters=2, metric="precomputed", init=init_centers, num_local=1)
+        medoids = model._initialize_medoids(D, random_state=rng)
+
+        np.testing.assert_array_equal(medoids, [1, 3])
+
+    def test_precomputed_2d_init_duplicate_fallback(self):
+        D = pairwise_distances(np.random.RandomState(42).randn(5, 2))
+        init_centers = np.array(
+            [
+                [0.1, 5.0, 5.0, 5.0, 5.0],
+                [0.2, 8.0, 8.0, 8.0, 8.0],
+            ],
+            dtype=np.float64,
+        )
+
+        model = CLARANS(n_clusters=2, metric="precomputed", init=init_centers, num_local=1)
+        with warnings.catch_warnings(record=True) as recorded:
+            warnings.simplefilter("always")
+            medoids = model._initialize_medoids(D, random_state=np.random.RandomState(42))
+
+        self.assertEqual(len(np.unique(medoids)), 2)
+        warning_messages = [str(w.message) for w in recorded]
+        self.assertTrue(any("duplicate" in msg.lower() for msg in warning_messages))
+
+
+class TestBug5Fix_FastCLARANSCostEvaluationParameter(unittest.TestCase):
+    """Verifies that FastCLARANS enforces cost_evaluation='delta' consistently."""
+
+    def test_cost_evaluation_parameter_asymmetry(self):
+        model = FastCLARANS(n_clusters=3)
+
+        self.assertTrue(hasattr(model, "cost_evaluation"))
+        self.assertEqual(model.cost_evaluation, "delta")
+
+        params = model.get_params()
+        self.assertNotIn("cost_evaluation", params)
+
+        with self.assertRaises(ValueError):
+            model.set_params(cost_evaluation="brute_force")
+
+
+class TestBug6Fix_Compute2MinPythonFallbackNaNHandling(unittest.TestCase):
+    """Verifies that the Python fallback of _compute_2min filters NaNs."""
+
+    def test_python_fallback_cleans_nans(self):
+        subD = np.array(
+            [
+                [np.nan, 2.0, 4.0, 6.0],
+                [1.0, np.nan, 3.0, 5.0],
+            ],
+            dtype=np.float64,
+        )
+        n_samples, k = subD.shape
+
+        model = CLARANS(n_clusters=k, random_state=42)
+        with patch("clarans._clarans._core", None):
+            py_near_idx, py_near_d, py_second_d = model._compute_2min(subD)
+
+        self.assertEqual(py_near_idx[0], 1)
+        self.assertEqual(py_near_d[0], 2.0)
+        self.assertEqual(py_second_d[0], 4.0)
+
+        self.assertEqual(py_near_idx[1], 0)
+        self.assertEqual(py_near_d[1], 1.0)
+        self.assertEqual(py_second_d[1], 3.0)
+
+
+class TestBug8Fix_DCLPRaceInCythonWarning(unittest.TestCase):
+    """Verifies thread-safety of _warn_cython_unavailable."""
+
+    def test_dclp_concurrent_execution(self):
+        from clarans import utils
+
+        original_flag = utils._cython_warning_issued
+        utils._cython_warning_issued = False
+
+        errors = []
+
+        def worker():
+            try:
+                with warnings.catch_warnings():
+                    warnings.simplefilter("ignore")
+                    with patch.object(utils, "HAS_CYTHON", False):
+                        for _ in range(50):
+                            utils._warn_cython_unavailable()
+            except Exception as e:
+                errors.append(e)
+
+        try:
+            threads = [threading.Thread(target=worker) for _ in range(10)]
+            for t in threads:
+                t.start()
+            for t in threads:
+                t.join()
+
+            self.assertEqual(len(errors), 0, f"Thread errors occurred: {errors}")
+            self.assertTrue(utils._cython_warning_issued)
+        finally:
+            utils._cython_warning_issued = original_flag
+
+
+class TestBug12Fix_SecondDistDtypeMismatchNClusters1(unittest.TestCase):
+    """Verifies that second_dist dtype matches subD.dtype in Python fallback for n_clusters=1."""
+
+    def test_python_fallback_n_clusters_1_float32_dtype_matches(self):
+        n_samples = 10
+        subD_float32 = np.ones((n_samples, 1), dtype=np.float32)
+
+        model = CLARANS(n_clusters=1, random_state=42)
+
+        with patch("clarans._clarans._core", None):
+            near_idx, near_dist, second_dist = model._compute_2min(subD_float32)
+
+        self.assertEqual(near_dist.dtype, np.float32)
+        self.assertEqual(second_dist.dtype, np.float32)
+        self.assertEqual(near_dist.dtype, second_dist.dtype)
+
+
+class TestBug15Fix_DuplicateArrayInitWarning(unittest.TestCase):
+    """Verifies warnings when init array contains duplicate medoid centers."""
+
+    def test_duplicate_array_init_warnings(self):
+        X = np.arange(30).reshape(10, 3).astype(np.float64)
+        init_centers = np.array([X[0], X[0], X[0]], dtype=np.float64)
+
+        model = CLARANS(n_clusters=3, init=init_centers, num_local=3, random_state=42)
+
+        with warnings.catch_warnings(record=True) as recorded:
+            warnings.simplefilter("always")
+            model.fit(X)
+
+        warning_messages = [str(w.message) for w in recorded]
+
+        has_exact_same_warn = any("exact same initial medoids" in m for m in warning_messages)
+        has_duplicate_warn = any("duplicate" in m and "random" in m for m in warning_messages)
+
+        self.assertTrue(has_exact_same_warn)
+        self.assertTrue(has_duplicate_warn)
+
+
+class TestBug16Fix_BuildInitializationMaskRecreation(unittest.TestCase):
+    """Verifies that initialize_build allocates is_medoid mask once outside the loop."""
+
+    def test_python_fallback_allocates_is_medoid_once(self):
+        import clarans._initialization as init_mod
+
+        rng = np.random.RandomState(42)
+        D = pairwise_distances(rng.randn(15, 2))
+        k = 4
+
+        zero_allocations = []
+        original_zeros = np.zeros
+
+        def tracked_zeros(*args, **kwargs):
+            res = original_zeros(*args, **kwargs)
+            if len(args) > 0 and args[0] == 15 and kwargs.get("dtype") == bool:
+                zero_allocations.append(res)
+            return res
+
+        with patch("clarans._initialization._core", None):
+            with patch("numpy.zeros", side_effect=tracked_zeros):
+                medoids = init_mod.initialize_build(D, n_clusters=k, metric="precomputed")
+
+        self.assertEqual(
+            len(zero_allocations),
+            1,
+            f"Expected 1 mask allocation outside loop, got {len(zero_allocations)}",
+        )
+        self.assertEqual(len(medoids), k)
+
+
+class TestBug24Fix_IsMatrixSymmetricSignatureMismatch(unittest.TestCase):
+    """Verifies that precomputed fit handles binary signature differences gracefully."""
+
+    def test_precomputed_fit_succeeds_without_typeerror(self):
+        D = np.eye(5, dtype=np.float64)
+        model = CLARANS(
+            n_clusters=2, metric="precomputed", num_local=1, max_neighbors=10, random_state=42
+        )
+        model.fit(D)
+        self.assertEqual(len(model.medoid_indices_), 2)
+
+
+class TestInvariant_ArgpartitionOrdering(unittest.TestCase):
+    """Verifies that argpartition with kth=1 always places the minimum at index 0."""
+
+    def test_argpartition_invariant_across_random_arrays(self):
+        rng = np.random.RandomState(42)
+        for _ in range(5000):
+            k = rng.randint(2, 25)
+            row = rng.randn(k)
+            part = np.argpartition(row, 1)[:2]
+            self.assertLessEqual(
+                row[part[0]],
+                row[part[1]],
+                f"Invariant violation: row[part[0]]={row[part[0]]} > row[part[1]]={row[part[1]]}",
+            )
+
+
+class TestInvariant_FastPAM1FormulaEquivalence(unittest.TestCase):
+    """Verifies mathematical equivalence between Python fallback and Cython kernel."""
+
+    @unittest.skipUnless(HAS_CYTHON and _core is not None, "Requires Cython _core")
+    def test_fastpam1_python_fallback_matches_cython_kernel(self):
+        rng = np.random.RandomState(42)
+        n_samples = 60
+        k = 4
+
+        for _ in range(20):
+            near_idx_map = rng.randint(0, k, size=n_samples).astype(np.intp)
+            near_dist = rng.uniform(0.1, 5.0, size=n_samples).astype(np.float64)
+            second_dist = near_dist + rng.uniform(0.1, 5.0, size=n_samples).astype(np.float64)
+            d_xc = rng.uniform(0.0, 10.0, size=n_samples).astype(np.float64)
+
+            c_best_m, c_min_delta, c_delta_arr = _core.fastpam1_delta(
+                near_idx_map, near_dist, second_dist, d_xc, n_samples, k
+            )
+
+            removal_loss = np.zeros(k, dtype=np.float64)
+            diff = second_dist - near_dist
+            with np.errstate(invalid="ignore"):
+                removal_loss += np.bincount(near_idx_map, weights=diff, minlength=k)
+
+            mask_better_than_nearest = d_xc < near_dist
+            delta_td_plus_xc = float(
+                np.sum(d_xc[mask_better_than_nearest] - near_dist[mask_better_than_nearest])
+            )
+            total_delta = removal_loss + delta_td_plus_xc
+
+            mask_case1 = mask_better_than_nearest
+            if np.any(mask_case1):
+                term1 = near_dist[mask_case1] - second_dist[mask_case1]
+                with np.errstate(invalid="ignore"):
+                    total_delta += np.bincount(
+                        near_idx_map[mask_case1], weights=term1, minlength=k
+                    )
+
+            mask_case2 = (d_xc >= near_dist) & (d_xc < second_dist)
+            if np.any(mask_case2):
+                term2 = d_xc[mask_case2] - second_dist[mask_case2]
+                with np.errstate(invalid="ignore"):
+                    total_delta += np.bincount(
+                        near_idx_map[mask_case2], weights=term2, minlength=k
+                    )
+
+            py_best_m = int(np.argmin(total_delta))
+            py_min_delta = total_delta[py_best_m]
+
+            np.testing.assert_allclose(c_delta_arr, total_delta, rtol=1e-10, atol=1e-10)
+            self.assertEqual(c_best_m, py_best_m)
+            self.assertAlmostEqual(c_min_delta, py_min_delta, places=9)
+
+
+class TestInvariant_AsymmetricPrecomputedOrientation(unittest.TestCase):
+    """Verifies that asymmetric precomputed distance indexing matches calculate_cost."""
+
+    def test_asymmetric_matrix_cost_invariance(self):
+        rng = np.random.RandomState(42)
+        D = rng.uniform(0.1, 10.0, size=(15, 15))
+        np.fill_diagonal(D, 0.0)
+
+        for ModelClass in [CLARANS, FastCLARANS]:
+            model = ModelClass(
+                n_clusters=3,
+                metric="precomputed",
+                num_local=2,
+                max_neighbors=30,
+                random_state=42,
+            ).fit(D)
+
+            expected_cost = calculate_cost(D, model.medoid_indices_, metric="precomputed")
+            self.assertAlmostEqual(
+                model.inertia_,
+                expected_cost,
+                places=6,
+                msg=f"{ModelClass.__name__} inertia mismatch on asymmetric matrix",
+            )
+
+
+class TestInvariant_PrecomputedZeroCopyOptimization(unittest.TestCase):
+    """Verifies zero-copy row views for precomputed distance matrices."""
+
+    def test_precomputed_returns_zero_copy_view_when_dtypes_match(self):
+        rng = np.random.RandomState(42)
+        D = rng.uniform(0.1, 10.0, size=(10, 10))
+        D = (D + D.T) / 2.0
+        np.fill_diagonal(D, 0.0)
+
+        model = CLARANS(n_clusters=2, metric="precomputed", random_state=42)
+        model._setup_distance_engine(D)
+
+        out_buf = np.empty(10, dtype=D.dtype)
+        res = model._compute_1_vs_n(None, D, out=out_buf, candidate_idx=3)
+
+        self.assertTrue(np.shares_memory(res, D))
+        self.assertTrue(np.allclose(res, D[3]))
+
+    def test_precomputed_copies_when_out_buffer_dtype_differs(self):
+        rng = np.random.RandomState(42)
+        D = rng.uniform(0.1, 10.0, size=(10, 10)).astype(np.float64)
+        D = (D + D.T) / 2.0
+        np.fill_diagonal(D, 0.0)
+
+        model = CLARANS(n_clusters=2, metric="precomputed", random_state=42)
+        model._setup_distance_engine(D)
+
+        out_buf_float32 = np.empty(10, dtype=np.float32)
+        res = model._compute_1_vs_n(None, D, out=out_buf_float32, candidate_idx=3)
+
+        self.assertIs(res, out_buf_float32)
+        self.assertEqual(res.dtype, np.float32)
+        self.assertTrue(np.allclose(res, D[3], atol=1e-5))
 
 
 if __name__ == "__main__":

@@ -2,7 +2,7 @@ from __future__ import annotations
 
 import threading
 import warnings
-from typing import TYPE_CHECKING, Callable, Sequence
+from typing import TYPE_CHECKING, Any, Callable, Sequence
 import numpy as np
 from scipy.spatial.distance import cdist
 from scipy.sparse import issparse
@@ -33,7 +33,6 @@ def _warn_cython_unavailable() -> None:
     if not HAS_CYTHON and not _cython_warning_issued:
         with _cython_warning_lock:
             if not _cython_warning_issued:
-                _cython_warning_issued = True
                 warnings.warn(
                     "Compiled Cython extensions (_core) are not available; falling back to "
                     "pure Python/NumPy implementation. Performance will be significantly slower. "
@@ -42,6 +41,7 @@ def _warn_cython_unavailable() -> None:
                     EfficiencyWarning,
                     stacklevel=3,
                 )
+                _cython_warning_issued = True
 
 
 __all__ = [
@@ -61,20 +61,42 @@ _SCIPY_METRIC_MAP = {
 }
 
 
+def _to_dense(arr: Any) -> np.ndarray:
+    """Convert an array or sparse matrix to a dense NumPy array."""
+    return arr.toarray() if hasattr(arr, "toarray") else np.asarray(arr)
+
+
+def _is_valid_int(val: Any, min_val: int = 1, allow_bool: bool = False) -> bool:
+    """Check if value is a valid integer >= min_val and optionally allow booleans."""
+    if not allow_bool and isinstance(val, (bool, np.bool_)):
+        return False
+    return bool(isinstance(val, (int, np.integer, bool, np.bool_)) and val >= min_val)
+
+
+def _map_scipy_metric(metric: str | Callable) -> str | Callable:
+    """Map metric name to SciPy cdist compatible metric identifier."""
+    return _SCIPY_METRIC_MAP.get(metric, metric) if isinstance(metric, str) else metric
+
+
 def check_medoids(
-    medoids: Sequence[int] | np.ndarray,
+    medoid_indices: Sequence[int] | np.ndarray | None = None,
     n_samples: int | None = None,
+    *,
+    medoids: Sequence[int] | np.ndarray | None = None,
 ) -> np.ndarray:
     """Validate and convert medoid indices to a 1D NumPy array of integers.
 
     Parameters
     ----------
-    medoids : array-like of shape (n_clusters,)
+    medoid_indices : array-like of shape (n_clusters,)
         Indices representing medoid observations.
 
     n_samples : int, optional
         Total number of samples in the dataset. If provided, ensures that all
         medoid indices satisfy 0 <= idx < n_samples.
+
+    medoids : array-like of shape (n_clusters,), optional
+        Alias for `medoid_indices` for backwards compatibility.
 
     Returns
     -------
@@ -84,15 +106,19 @@ def check_medoids(
     Raises
     ------
     ValueError
-        If `medoids` is empty, contains duplicate indices, has invalid dimensions,
+        If `medoid_indices` is empty, contains duplicate indices, has invalid dimensions,
         contains negative indices, or has indices outside the valid range [0, n_samples - 1].
     TypeError
-        If `medoids` contains non-integer elements.
+        If `medoid_indices` contains non-integer elements.
     """
+    raw_medoids = medoid_indices if medoid_indices is not None else medoids
+    if raw_medoids is None:
+        raise ValueError("medoid_indices cannot be empty.")
+
     try:
-        medoids_arr = np.asarray(medoids)
+        medoids_arr = np.asarray(raw_medoids)
     except Exception as exc:
-        raise ValueError(f"Could not convert medoids to numpy array: {exc}") from exc
+        raise ValueError(f"Could not convert medoid_indices to numpy array: {exc}") from exc
 
     if medoids_arr.ndim != 1:
         raise ValueError(f"medoid_indices must be 1-dimensional, got shape {medoids_arr.shape}")
@@ -103,7 +129,7 @@ def check_medoids(
     if not np.issubdtype(medoids_arr.dtype, np.integer):
         raise TypeError(f"medoid_indices must contain integers, got dtype {medoids_arr.dtype}")
 
-    medoids_arr = medoids_arr.astype(np.intp)
+    medoids_arr = medoids_arr.astype(np.intp, copy=False)
 
     if len(np.unique(medoids_arr)) != len(medoids_arr):
         raise ValueError("medoid_indices must not contain duplicate elements.")
@@ -154,18 +180,14 @@ def calculate_cost(
     medoid_indices = check_medoids(medoid_indices, n_samples=X.shape[0])
 
     if metric == "precomputed":
-        dist_sub = X[:, medoid_indices]
-        if hasattr(dist_sub, "toarray"):
-            dist_sub = dist_sub.toarray()
+        dist_sub = _to_dense(X[:, medoid_indices])
         return float(np.sum(np.min(dist_sub, axis=1)))
 
     medoids = X[medoid_indices]
     params = metric_params if metric_params is not None else {}
 
     if not issparse(X):
-        scipy_metric = (
-            _SCIPY_METRIC_MAP.get(metric, metric) if isinstance(metric, str) else metric
-        )
+        scipy_metric = _map_scipy_metric(metric)
         try:
             D = cdist(X, medoids, metric=scipy_metric, **params)
             return float(np.sum(np.min(D, axis=1)))

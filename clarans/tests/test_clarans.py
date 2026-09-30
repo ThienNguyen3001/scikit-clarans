@@ -124,14 +124,33 @@ class TestCLARANS(unittest.TestCase):
         self.assertGreaterEqual(clarans.inertia_, 0)
 
     def test_n_iter_and_n_swaps_attributes(self):
-        """Test that n_iter_ and n_swaps_ are set correctly after fit."""
+        """Test that n_iter_, n_swaps_, and n_neighbors_ are set correctly,
+        and deprecated total_n_iter_ / total_n_swaps_ / total_neighbors_ are removed.
+        """
+        # Multi-restart run
         clarans = CLARANS(n_clusters=3, num_local=2, max_neighbors=50, random_state=42)
         clarans.fit(self.X)
         self.assertTrue(hasattr(clarans, "n_iter_"))
         self.assertTrue(hasattr(clarans, "n_swaps_"))
+        self.assertTrue(hasattr(clarans, "n_neighbors_"))
+        self.assertFalse(hasattr(clarans, "total_neighbors_"))
+        self.assertFalse(hasattr(clarans, "total_n_iter_"))
+        self.assertFalse(hasattr(clarans, "total_n_swaps_"))
+
         self.assertGreaterEqual(clarans.n_iter_, 1)
         self.assertGreaterEqual(clarans.n_swaps_, 0)
         self.assertLessEqual(clarans.n_swaps_, clarans.n_iter_)
+
+        # n_neighbors_ check: k * (n - k)
+        n_samples = self.X.shape[0]
+        self.assertEqual(clarans.n_neighbors_, 3 * (n_samples - 3))
+
+        # Single-restart run
+        c_single = CLARANS(n_clusters=3, num_local=1, max_neighbors=50, random_state=42)
+        c_single.fit(self.X)
+        self.assertGreaterEqual(c_single.n_iter_, 1)
+        self.assertLessEqual(c_single.n_swaps_, c_single.n_iter_)
+        self.assertGreaterEqual(clarans.n_iter_, c_single.n_iter_)
 
     def test_medoid_indices_sorted(self):
         """Test that medoid_indices_ is always sorted."""
@@ -784,6 +803,83 @@ class TestCLARANSMetricParams(unittest.TestCase):
         model = CLARANS(metric="minkowski", metric_params={"p": 4})
         cloned = clone(model)
         self.assertEqual(cloned.metric_params, {"p": 4})
+
+    def test_verbose_silent(self):
+        """verbose=0 and verbose=False should produce no output to stdout."""
+        import io
+        from contextlib import redirect_stdout
+
+        for v in (0, False):
+            f = io.StringIO()
+            with redirect_stdout(f):
+                model = CLARANS(
+                    n_clusters=2, num_local=1, max_neighbors=10, verbose=v, random_state=42
+                )
+                model.fit(self.X)
+            self.assertEqual(f.getvalue(), "")
+
+    def test_verbose_level_1(self):
+        """verbose=1 and verbose=True should print table header, rows, and best line."""
+        import io
+        from contextlib import redirect_stdout
+
+        for v in (1, True):
+            f = io.StringIO()
+            with redirect_stdout(f):
+                model = CLARANS(
+                    n_clusters=2, num_local=2, max_neighbors=10, verbose=v, random_state=42
+                )
+                model.fit(self.X)
+            output = f.getvalue()
+            self.assertIn("[CLARANS]", output)
+            self.assertIn("max_neighbors=", output)
+            self.assertIn("Cost", output)
+            self.assertIn("Swaps", output)
+            self.assertIn("Evals", output)
+            self.assertIn("converged", output)
+            self.assertIn("Best: #", output)
+            self.assertIn("Totals:", output)
+            # verbose=1 should NOT print per-swap details
+            self.assertNotIn("Restart", output)
+
+    def test_verbose_level_2(self):
+        """verbose=2 should print per-swap details with Restart labels."""
+        import io
+        from contextlib import redirect_stdout
+
+        f = io.StringIO()
+        with redirect_stdout(f):
+            model = CLARANS(
+                n_clusters=2,
+                num_local=1,
+                max_neighbors=50,
+                init="random",
+                verbose=2,
+                random_state=0,
+            )
+            model.fit(self.X)
+        output = f.getvalue()
+        self.assertIn("[CLARANS]", output)
+        self.assertIn("Restart 1/1 (init cost:", output)
+        self.assertIn("Best: #", output)
+        if model.n_swaps_ > 0:
+            self.assertIn("swap", output)
+            self.assertIn("| diff ", output)
+
+    def test_verbose_invalid(self):
+        """Invalid verbose values should raise ValueError."""
+        for invalid_val in [-1, -5, "1", 1.5, [1]]:
+            with self.assertRaises(ValueError) as ctx:
+                CLARANS(n_clusters=2, verbose=invalid_val, random_state=42).fit(self.X)
+            self.assertIn("verbose", str(ctx.exception).lower())
+
+    def test_clone_preserves_verbose(self):
+        """clone should preserve verbose correctly."""
+        from sklearn.base import clone
+
+        model = CLARANS(verbose=2)
+        cloned = clone(model)
+        self.assertEqual(cloned.verbose, 2)
 
 
 if __name__ == "__main__":

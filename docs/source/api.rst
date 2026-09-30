@@ -1,7 +1,7 @@
 API Reference
 =============
 
-Detailed documentation for estimators, initialization strategies, and utility functions in ``scikit-clarans``.
+Estimators, initialization strategies, and utility functions.
 
 Estimators
 ----------
@@ -9,7 +9,7 @@ Estimators
 CLARANS
 ^^^^^^^
 
-The classic randomized search k-medoids estimator (Ng & Han, 2002).
+Randomized search k-medoids estimator (Ng & Han, 2002).
 
 .. autoclass:: clarans.CLARANS
    :members:
@@ -19,7 +19,7 @@ The classic randomized search k-medoids estimator (Ng & Han, 2002).
 FastCLARANS
 ^^^^^^^^^^^
 
-The accelerated k-medoids estimator using FastPAM1 simultaneous delta updates (Schubert & Rousseeuw, 2021).
+FastPAM1 k-medoids estimator (Schubert & Rousseeuw, 2021).
 
 .. autoclass:: clarans.FastCLARANS
    :members:
@@ -32,7 +32,7 @@ Helper Modules
 Initialization
 ^^^^^^^^^^^^^^
 
-Internal strategies for seeding medoids (``k-medoids++``, ``build``, ``heuristic``, ``random``).
+Medoid initialization strategies: ``k-medoids++``, ``build``, ``heuristic``, and random sampling.
 
 .. automodule:: clarans._initialization
    :members:

@@ -1,45 +1,31 @@
 Installation
 ============
 
-Ready to get started? Installing ``scikit-clarans`` is straightforward.
+Requirements
+------------
 
-Prerequisites
--------------
+* Python 3.9 or higher
 
-Ensure you have the following installed:
-
-*   **Python** (>= 3.9)
-
-Installing from PyPI (Recommended)
-----------------------------------
-
-The easiest way to install is via pip:
+Install with pip
+----------------
 
 .. code-block:: bash
 
     pip install scikit-clarans
 
-Installing from Source
-----------------------
+Install from source
+-------------------
 
-Alternatively, you can install directly from the source code on GitHub.
+Clone the repository and install the package:
 
-1.  **Clone the repository:**
+.. code-block:: bash
 
-    .. code-block:: bash
+    git clone https://github.com/ThienNguyen3001/scikit-clarans.git
+    cd scikit-clarans
+    pip install .
 
-        git clone https://github.com/ThienNguyen3001/scikit-clarans.git
-        cd scikit-clarans
+For local development with test and lint dependencies:
 
-2.  **Install the package:**
+.. code-block:: bash
 
-    .. code-block:: bash
-
-        pip install .
-
-    .. note:: 
-        For developers who want to modify the source code, use editable mode:
-        
-        .. code-block:: bash
-
-            pip install -e ".[dev]"
+    pip install -e ".[dev]"
