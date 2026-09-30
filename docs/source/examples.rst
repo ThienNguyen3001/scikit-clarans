@@ -1,8 +1,7 @@
 Examples
 ========
 
-This page contains runnable examples demonstrating different ways to use
-`scikit-clarans` and integrations with popular Python tooling.
+Runnable examples demonstrating model usage, distance metrics, and scikit-learn pipeline integration.
 
 Quickstart
 ----------
@@ -88,12 +87,12 @@ Cluster non-vector or graph datasets using a precomputed pairwise distance matri
 .. literalinclude:: ../../examples/plot_precomputed_distances.py
    :language: python
 
-Interactive Demo & Additional Resources
----------------------------------------
+Interactive notebooks
+---------------------
 
-Additional runnable scripts are available in the `examples directory <https://github.com/ThienNguyen3001/scikit-clarans/tree/main/examples>`_.
+The `examples directory <https://github.com/ThienNguyen3001/scikit-clarans/tree/main/examples>`_ contains all runnable scripts.
 
-You can also run and modify interactive experiments directly in Google Colab:
+An interactive notebook is available on Google Colab:
 
 .. image:: https://colab.research.google.com/assets/colab-badge.svg
    :target: https://colab.research.google.com/drive/1JdgVaZcbS1uwY7kPQZM8DtX97R9ga31d?usp=sharing

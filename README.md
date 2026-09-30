@@ -1,6 +1,6 @@
 # scikit-clarans
 
-> A scikit-learn compatible implementation of **CLARANS** and **FastCLARANS** for scalable $k$-medoids clustering.
+> Scikit-learn compatible implementation of CLARANS and FastCLARANS for $k$-medoids clustering.
 
 [![License](https://img.shields.io/github/license/ThienNguyen3001/scikit-clarans)](LICENSE)
 [![DOI](https://zenodo.org/badge/DOI/10.5281/zenodo.18366801.svg)](https://doi.org/10.5281/zenodo.18366801)
@@ -13,46 +13,52 @@
 [![PyPI Downloads](https://static.pepy.tech/personalized-badge/scikit-clarans?period=total&units=INTERNATIONAL_SYSTEM&left_color=BLACK&right_color=GREEN&left_text=downloads)](https://pepy.tech/projects/scikit-clarans)
 
 > [!NOTE]
-> **Educational & Research Scope**: `scikit-clarans` is developed primarily for **learning, algorithmic study, and small-to-medium academic research**. It pairs a high-performance **Cython C-extension core** (with pure Python fallback) with an $O(n)$ memory footprint, substantially more scalable and accessible than classic $O(n^2)$ PAM.
+> This library is designed for coursework, algorithm study, and academic research. It uses Cython C-extensions with a pure Python fallback and maintains an $O(n)$ memory footprint instead of allocating an $O(n^2)$ pairwise distance matrix.
 
-**scikit-clarans** brings scalable $k$-medoids clustering to Python with a native scikit-learn API. Unlike $k$-means which computes artificial centroids (means), $k$-medoids picks **actual data points** as cluster centers.
+scikit-clarans implements $k$-medoids clustering in Python using the scikit-learn estimator interface. While $k$-means calculates artificial cluster centroids, $k$-medoids picks actual data points from the dataset as cluster centers.
 
-### Why k-Medoids over k-Means?
-* **Outlier Robust**: Minimizes absolute distance ($\sum d$) rather than squared Euclidean distance ($\sum d^2$), so extreme values won't skew cluster centers.
-* **Custom Distance Metrics**: Works with `cosine`, `manhattan`, `euclidean`, or any valid metric—unlike $k$-means which is strictly Euclidean.
-* **Directly Interpretable**: Medoids are real observations from your dataset (e.g., representative user profiles, real molecules, exemplary documents).
+### Why use k-medoids?
+* Outlier resistance: Medoids minimize absolute distances ($\sum d$) rather than squared Euclidean distances ($\sum d^2$), keeping centers stable when the dataset contains extreme values.
+* Custom distance metrics: Supports metrics such as Manhattan, cosine, or precomputed distances, whereas standard $k$-means requires Euclidean space.
+* Direct interpretability: Every cluster center corresponds to a real record in the input data.
 
-### CLARANS vs. FastCLARANS: Which one to use?
-* **`FastCLARANS` (Recommended for most workloads)**: Uses FastPAM1 delta calculations (Schubert & Rousseeuw, 2021) to evaluate all $k$ medoids at once. Explores $k$ graph edges in the time CLARANS explores one, yielding substantial speedups with $O(n)$ memory and native C-extension acceleration.
-* **`CLARANS`**: Randomized search (Ng & Han, 2002) with optional distance caching (`cost_evaluation='delta'`, default) for fast $O(n)$ swap evaluations, or classic brute-force cost recalculation (`cost_evaluation='brute_force'`).
+### Choosing between CLARANS and FastCLARANS
+* FastCLARANS: Evaluates swaps across all $k$ medoids in a single pass using FastPAM1 delta calculations (Schubert & Rousseeuw, 2021). It uses $O(n)$ memory and is faster for most workloads.
+* CLARANS: The classic randomized search algorithm from Ng & Han (2002). It supports delta cost evaluations with cached distances as well as brute-force recalculation.
 
 ---
 
 ## Features
 
-* **Scikit-Learn Native**: Inherits from `BaseEstimator` and `ClusterMixin`. Plug-and-play in scikit-learn `Pipeline`, `GridSearchCV`, and clustering evaluations.
-* **Cython & C-Accelerated**: Core delta cost updates and cache tracking are accelerated with compiled C-extensions (Cython), with seamless fallback to pure Python/NumPy if C extensions are unavailable.
-* **Cascading Distance Engine**: Automatically routes distance computations through the fastest available engine: SciPy `cdist` (C-kernel for dense arrays), Scikit-Learn `DistanceMetric` (for sparse CSR matrices & callables), or `pairwise_distances`.
-* **Memory Efficient**: Computes distances on-the-fly ($O(n)$ memory overhead) to easily scale to tens of thousands of samples without blowing up RAM ($O(n^2)$).
-* **Flexible Seeding**: Supports multiple initialization strategies (`k-medoids++`, `build`, `heuristic`, `random`, or custom array).
+* Scikit-learn compatibility: Extends `BaseEstimator` and `ClusterMixin` for use in `Pipeline`, `GridSearchCV`, and model evaluation workflows.
+* C acceleration: Core delta computations run in Cython with a pure Python and NumPy fallback.
+* Distance routing: Automatically routes distance calculations to SciPy `cdist` for dense arrays, scikit-learn `DistanceMetric` for sparse matrices, or `pairwise_distances`.
+* Low memory overhead: Computes distances as needed with $O(n)$ working memory instead of storing a full $O(n^2)$ matrix.
+* Initialization options: Supports `k-medoids++`, `build`, `heuristic`, uniform random sampling, or user-supplied medoid indices.
 
 ## Installation
 
-Install simply via pip:
+Install from PyPI:
 ```bash
 pip install scikit-clarans
 ```
-Or install from source:
+
+Install from source:
 ```bash
+git clone https://github.com/ThienNguyen3001/scikit-clarans.git
+cd scikit-clarans
 pip install .
 ```
-For development
+
+For development:
 ```bash
 pip install -e ".[dev]"
 ```
 
 ## Quick Start
+
 ### CLARANS
+
 ```python
 from clarans import CLARANS
 from sklearn.datasets import make_blobs
@@ -61,10 +67,6 @@ from sklearn.datasets import make_blobs
 X, _ = make_blobs(n_samples=1000, centers=5, random_state=42)
 
 # 2. Initialize CLARANS
-#    - n_clusters: 5 clusters
-#    - num_local: 3 restarts for better quality
-#    - init: 'k-medoids++' for smart starting points
-#    - cost_evaluation: 'delta' (default) for fast O(n) swap evaluations; 'brute_force' for classic baseline
 clarans = CLARANS(n_clusters=5, num_local=3, init='k-medoids++', cost_evaluation='delta', random_state=42)
 
 # 3. Fit
@@ -74,27 +76,26 @@ clarans.fit(X)
 print("Medoid Indices:", clarans.medoid_indices_)
 print("Labels:", clarans.labels_)
 ```
+
 ### FastCLARANS
 
-**FastCLARANS** implements the faster variant from Schubert & Rousseeuw (2021). It evaluates swaps with all k medoids simultaneously using FastPAM1 delta formulas, exploring k edges of the search graph in the time CLARANS explores one:
+FastCLARANS evaluates swaps across all $k$ medoids simultaneously using the FastPAM1 formulation from Schubert & Rousseeuw (2021):
 
 ```python
 from clarans import FastCLARANS
 
-# FastCLARANS computes distances on-the-fly (memory efficient)
-# and samples max(1, 250 // k, 2.5% of non-medoid points) per iteration
 fast_model = FastCLARANS(n_clusters=5, num_local=3, random_state=42)
 fast_model.fit(X)
 ```
 
-**Key differences from CLARANS:**
-- Samples only non-medoid candidates (not medoid-candidate pairs)
-- Evaluates swap with all k medoids at once (O(k) speedup per evaluation)
-- Memory efficient: O(n) instead of O(n²)
+Differences from CLARANS:
+- Samples non-medoid candidates instead of medoid-candidate pairs.
+- Evaluates swaps against all $k$ medoids in a single pass ($O(k)$ fewer distance queries).
+- Operates in $O(n)$ memory instead of $O(n^2)$.
 
 ## Examples
 
-This repository includes a number of runnable examples in the `examples/` folder showing common usage patterns and integrations. Run any example with:
+Runnable scripts are located in the `examples/` directory:
 
 ```bash
 python examples/plot_quick_start.py
@@ -102,15 +103,15 @@ python examples/plot_quick_start.py
 
 ## Documentation
 
-For full API reference and usage guides, please see the [Documentation](https://scikit-clarans.readthedocs.io/en/latest/index.html).
+Full API documentation and guides are available at https://scikit-clarans.readthedocs.io.
 
 ## Contributing
 
-Contributions are welcome! Please check out [CONTRIBUTING.md](CONTRIBUTING.md) for guidelines.
+Contributions and bug reports are welcome. See [CONTRIBUTING.md](CONTRIBUTING.md) for development setup and testing instructions.
 
 ## Citation
 
-If you use `scikit-clarans` in your software or research, please cite:
+If you use `scikit-clarans` in your research or software, please cite:
 
 ```bibtex
 @software{scikit_clarans,
@@ -136,4 +137,4 @@ The core algorithms implemented in this package originate from:
 
 ## License
 
-This project is licensed under the MIT License - see the [LICENSE](LICENSE) file for details.
+This project is licensed under the MIT License. See [LICENSE](LICENSE) for details.
