@@ -214,7 +214,7 @@ class CLARANS(ClusterMixin, TransformerMixin, BaseEstimator):
       randomized search from Ng & Han (2002). For faster execution on larger
       datasets, consider ``FastCLARANS``, which tests swaps with all k medoids
       simultaneously using FastPAM1 delta calculations.
-    
+
     References
     ----------
     * Ng, R. T., & Han, J. (2002). CLARANS: A method for clustering objects for
@@ -454,6 +454,17 @@ class CLARANS(ClusterMixin, TransformerMixin, BaseEstimator):
         """Calculate the negative tolerance threshold for improving swaps."""
         return -max(1e-16, 1e-12 * abs(cost))
 
+    @staticmethod
+    def _update_candidate_pool(
+        non_medoid_mask: np.ndarray,
+        old_medoid: int,
+        new_medoid: int,
+    ) -> np.ndarray:
+        """Update boolean non-medoid mask after a swap and return available candidate indices."""
+        non_medoid_mask[old_medoid] = True
+        non_medoid_mask[new_medoid] = False
+        return np.flatnonzero(non_medoid_mask)
+
     def _can_use_cython(
         self,
         d_xc_buf: Any,
@@ -663,6 +674,7 @@ class CLARANS(ClusterMixin, TransformerMixin, BaseEstimator):
             current_medoids_indices = deterministic_medoids.copy()
         else:
             current_medoids_indices = self._initialize_medoids(X, random_state)
+        current_medoids_indices.sort()
 
         if self.cost_evaluation == "delta":
             medoids_dist = self._compute_medoids_distances(X, current_medoids_indices)
@@ -717,7 +729,7 @@ class CLARANS(ClusterMixin, TransformerMixin, BaseEstimator):
                     None
                     if self.metric == "precomputed"
                     else X[
-                        random_non_medoid_candidate : random_non_medoid_candidate + 1
+                        random_non_medoid_candidate:random_non_medoid_candidate + 1
                     ]
                 )
                 d_xc = self._compute_1_vs_n(
@@ -774,9 +786,9 @@ class CLARANS(ClusterMixin, TransformerMixin, BaseEstimator):
                     current_cost = float(np.sum(near_dist))
 
                     # Update non-medoid pool
-                    non_medoid_mask[old_medoid] = True
-                    non_medoid_mask[random_non_medoid_candidate] = False
-                    available_candidates = np.flatnonzero(non_medoid_mask)
+                    available_candidates = self._update_candidate_pool(
+                        non_medoid_mask, old_medoid, random_non_medoid_candidate
+                    )
 
                     i = 0
                     swap_count += 1
@@ -807,9 +819,9 @@ class CLARANS(ClusterMixin, TransformerMixin, BaseEstimator):
                     delta_cost = neighbor_cost - current_cost
                     current_cost = neighbor_cost
 
-                    non_medoid_mask[old_medoid] = True
-                    non_medoid_mask[random_non_medoid_candidate] = False
-                    available_candidates = np.flatnonzero(non_medoid_mask)
+                    available_candidates = self._update_candidate_pool(
+                        non_medoid_mask, old_medoid, random_non_medoid_candidate
+                    )
 
                     i = 0
                     swap_count += 1
@@ -1147,6 +1159,22 @@ class CLARANS(ClusterMixin, TransformerMixin, BaseEstimator):
 
         return X, random_state, n_samples, n_features
 
+    def _assign_cluster_labels(self, X: Any) -> np.ndarray:
+        """Assign each sample in X to the nearest cluster center."""
+        params = self.metric_params if self.metric_params is not None else {}
+        if not issparse(X):
+            scipy_metric = _map_scipy_metric(self.metric)
+            try:
+                D = cdist(X, self.cluster_centers_, metric=scipy_metric, **params)
+                return np.argmin(D, axis=1)
+            except Exception:
+                pass
+
+        labels, _ = pairwise_distances_argmin_min(
+            X, self.cluster_centers_, metric=self.metric, metric_kwargs=params
+        )
+        return labels
+
     def _finalize_fit(self, X, best_cost, best_medoids):
         """Set fitted attributes and assign cluster labels."""
         self.inertia_ = float(best_cost)
@@ -1159,20 +1187,7 @@ class CLARANS(ClusterMixin, TransformerMixin, BaseEstimator):
             self.labels_ = np.argmin(dist_to_medoids, axis=1)
         else:
             self.cluster_centers_ = X[self.medoid_indices_]
-            params = self.metric_params if self.metric_params is not None else {}
-            if not issparse(X):
-                scipy_metric = _map_scipy_metric(self.metric)
-                try:
-                    D = cdist(X, self.cluster_centers_, metric=scipy_metric, **params)
-                    self.labels_ = np.argmin(D, axis=1)
-                except Exception:
-                    self.labels_, _ = pairwise_distances_argmin_min(
-                        X, self.cluster_centers_, metric=self.metric, metric_kwargs=params
-                    )
-            else:
-                self.labels_, _ = pairwise_distances_argmin_min(
-                    X, self.cluster_centers_, metric=self.metric, metric_kwargs=params
-                )
+            self.labels_ = self._assign_cluster_labels(X)
 
         return self
 
@@ -1225,20 +1240,7 @@ class CLARANS(ClusterMixin, TransformerMixin, BaseEstimator):
             return np.argmin(dist_to_medoids, axis=1)
 
         X = self._validate_data_compat(X, reset=False, ensure_min_samples=1)
-
-        params = self.metric_params if self.metric_params is not None else {}
-        if not issparse(X):
-            scipy_metric = _map_scipy_metric(self.metric)
-            try:
-                D = cdist(X, self.cluster_centers_, metric=scipy_metric, **params)
-                return np.argmin(D, axis=1)
-            except Exception:
-                pass
-
-        labels, _ = pairwise_distances_argmin_min(
-            X, self.cluster_centers_, metric=self.metric, metric_kwargs=params
-        )
-        return labels
+        return self._assign_cluster_labels(X)
 
     def transform(self, X: ArrayLike | "spmatrix") -> np.ndarray:
         """
