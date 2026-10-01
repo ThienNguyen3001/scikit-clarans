@@ -254,7 +254,9 @@ class CLARANS(ClusterMixin, TransformerMixin, BaseEstimator):
         self.cost_evaluation = cost_evaluation
         self.verbose = verbose
 
-    def _prepare_initial_medoids(self, X, random_state):
+    def _prepare_initial_medoids(
+        self, X: np.ndarray | "spmatrix", random_state: np.random.RandomState
+    ) -> np.ndarray | None:
         """Pre-compute initial medoids if the initialization strategy is deterministic.
 
         For deterministic strategies ('build', 'heuristic', or explicit array),
@@ -283,7 +285,9 @@ class CLARANS(ClusterMixin, TransformerMixin, BaseEstimator):
             return self._initialize_medoids(X, random_state)
         return None
 
-    def _initialize_medoids(self, X, random_state):
+    def _initialize_medoids(
+        self, X: np.ndarray | "spmatrix", random_state: np.random.RandomState
+    ) -> np.ndarray:
         """Select initial medoid indices according to ``self.init``.
 
         Parameters
@@ -1132,14 +1136,16 @@ class CLARANS(ClusterMixin, TransformerMixin, BaseEstimator):
                     f"{options_repr} or a callable. Got {self.metric!r} instead."
                 )
 
-    def _validate_input_and_params(self, X):
+    def _validate_input_and_params(
+        self, X: ArrayLike | "spmatrix"
+    ) -> tuple[np.ndarray | "spmatrix", np.random.RandomState, int, int]:
         """Validate estimator parameters and input data array."""
         self._validate_params()
 
-        X = self._validate_data_compat(X, reset=True, ensure_min_samples=2)
+        X_validated = self._validate_data_compat(X, reset=True, ensure_min_samples=2)
 
         random_state = check_random_state(self.random_state)
-        n_samples, n_features = X.shape
+        n_samples, n_features = X_validated.shape
 
         if self.n_clusters >= n_samples:
             raise ValueError(
@@ -1157,7 +1163,7 @@ class CLARANS(ClusterMixin, TransformerMixin, BaseEstimator):
             if hasattr(self, "feature_names_in_"):
                 del self.feature_names_in_
 
-        return X, random_state, n_samples, n_features
+        return X_validated, random_state, n_samples, n_features
 
     def _assign_cluster_labels(self, X: Any) -> np.ndarray:
         """Assign each sample in X to the nearest cluster center."""
@@ -1175,7 +1181,12 @@ class CLARANS(ClusterMixin, TransformerMixin, BaseEstimator):
         )
         return labels
 
-    def _finalize_fit(self, X, best_cost, best_medoids):
+    def _finalize_fit(
+        self,
+        X: np.ndarray | "spmatrix",
+        best_cost: float,
+        best_medoids: np.ndarray,
+    ) -> "CLARANS":
         """Set fitted attributes and assign cluster labels."""
         self.inertia_ = float(best_cost)
         self.medoid_indices_ = np.sort(best_medoids)
