@@ -221,6 +221,27 @@ class TestFastCLARANS(unittest.TestCase):
             np.array(["fastclarans0", "fastclarans1", "fastclarans2"], dtype=object),
         )
 
+    def test_get_feature_names_out_validation(self):
+        """get_feature_names_out should validate input_features against feature_names_in_."""
+        try:
+            import pandas as pd
+        except ImportError:
+            self.skipTest("pandas is not installed")
+
+        df = pd.DataFrame(self.X, columns=[f"col_{i}" for i in range(self.X.shape[1])])
+        model = FastCLARANS(n_clusters=3, random_state=42).fit(df)
+        self.assertTrue(hasattr(model, "feature_names_in_"))
+
+        valid_cols = [f"col_{i}" for i in range(self.X.shape[1])]
+        names = model.get_feature_names_out(valid_cols)
+        np.testing.assert_array_equal(
+            names, np.array(["fastclarans0", "fastclarans1", "fastclarans2"], dtype=object)
+        )
+
+        with self.assertRaises(ValueError) as ctx:
+            model.get_feature_names_out(["col_0"])
+        self.assertIn("input_features should have length equal", str(ctx.exception))
+
     def test_pandas_output(self):
         """FastCLARANS should support set_output(transform='pandas') per SLEP018."""
         try:

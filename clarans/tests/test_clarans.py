@@ -290,6 +290,27 @@ class TestCLARANS(unittest.TestCase):
             names, np.array(["clarans0", "clarans1", "clarans2"], dtype=object)
         )
 
+    def test_get_feature_names_out_validation(self):
+        """get_feature_names_out should validate input_features against feature_names_in_."""
+        try:
+            import pandas as pd
+        except ImportError:
+            self.skipTest("pandas is not installed")
+
+        df = pd.DataFrame(self.X, columns=[f"col_{i}" for i in range(self.X.shape[1])])
+        clarans = CLARANS(n_clusters=3, random_state=42).fit(df)
+        self.assertTrue(hasattr(clarans, "feature_names_in_"))
+
+        valid_cols = [f"col_{i}" for i in range(self.X.shape[1])]
+        names = clarans.get_feature_names_out(valid_cols)
+        np.testing.assert_array_equal(
+            names, np.array(["clarans0", "clarans1", "clarans2"], dtype=object)
+        )
+
+        with self.assertRaises(ValueError) as ctx:
+            clarans.get_feature_names_out(["col_0"])
+        self.assertIn("input_features should have length equal", str(ctx.exception))
+
     def test_pandas_output(self):
         """CLARANS should support set_output(transform='pandas') per SLEP018."""
         try:
@@ -549,6 +570,47 @@ class TestCLARANSValidationAndPrecomputed(unittest.TestCase):
         model.fit(X_dup)
         self.assertGreaterEqual(model.n_swaps_, 0)
 
+    def test_precomputed_dataframe_removes_feature_names_in(self):
+        """Precomputed distance matrix from DataFrame should strip feature_names_in_."""
+        try:
+            import pandas as pd
+        except ImportError:
+            self.skipTest("pandas is not installed")
+
+        df_D = pd.DataFrame(self.D, columns=[f"s_{i}" for i in range(len(self.D))])
+        model = CLARANS(n_clusters=3, metric="precomputed", random_state=42).fit(df_D)
+        self.assertFalse(hasattr(model, "feature_names_in_"))
+
+    def test_precomputed_init_2d_shape_mismatch(self):
+        """2D init array with wrong shape under metric='precomputed' should raise ValueError."""
+        invalid_init = np.zeros((4, self.D.shape[1]))
+        with self.assertRaises(ValueError) as ctx:
+            CLARANS(
+                n_clusters=3,
+                metric="precomputed",
+                init=invalid_init,
+                random_state=42,
+            ).fit(self.D)
+        self.assertIn("init array must be of shape", str(ctx.exception))
+
+    def test_init_unconvertible_raises(self):
+        """Unconvertible init object should raise ValueError."""
+        class Unconvertible:
+            def __array__(self, *args, **kwargs):
+                raise RuntimeError("Failed array conversion")
+
+        with self.assertRaises(ValueError) as ctx:
+            CLARANS(n_clusters=3, init=Unconvertible(), random_state=42).fit(self.X)
+        self.assertIn("Could not convert init to array", str(ctx.exception))
+
+    def test_init_centers_cdist_fallback(self):
+        """2D init with metric that cdist fails on should fall back to pairwise_distances."""
+        from unittest.mock import patch
+        with patch("clarans._clarans.cdist", side_effect=Exception("cdist failed")):
+            init_centers = self.X[:3]
+            model = CLARANS(n_clusters=3, init=init_centers, random_state=42).fit(self.X)
+            self.assertEqual(len(model.medoid_indices_), 3)
+
 
 class TestCascadingDistanceEngine(unittest.TestCase):
     """Tests for the cascading distance engine (cdist -> DistanceMetric -> pairwise)."""
@@ -690,6 +752,30 @@ class TestUtilsHelpers(unittest.TestCase):
         """2D medoids array should raise ValueError."""
         with self.assertRaises(ValueError):
             check_medoids(np.array([[0, 1], [2, 3]]))
+
+    def test_check_medoids_none_raises(self):
+        """Passing None for medoid_indices should raise ValueError."""
+        with self.assertRaises(ValueError) as ctx:
+            check_medoids(None)
+        self.assertIn("medoid_indices cannot be empty", str(ctx.exception))
+
+    def test_check_medoids_unconvertible_raises(self):
+        """Passing unconvertible object to check_medoids should raise ValueError."""
+        class BadObject:
+            def __array__(self, *args, **kwargs):
+                raise RuntimeError("Cannot convert")
+
+        with self.assertRaises(ValueError) as ctx:
+            check_medoids(BadObject())
+        self.assertIn("Could not convert medoid_indices to numpy array", str(ctx.exception))
+
+    def test_calculate_cost_cdist_fallback(self):
+        """calculate_cost should fall back to pairwise_distances when cdist fails on dense data."""
+        from unittest.mock import patch
+        X = np.array([[0.0, 0.0], [1.0, 1.0], [2.0, 2.0]])
+        with patch("clarans.utils.cdist", side_effect=Exception("cdist failed")):
+            cost = calculate_cost(X, [0, 1])
+            self.assertGreater(cost, 0.0)
 
     def test_public_imports_from_init(self):
         """calculate_cost, check_medoids, EfficiencyWarning, and HAS_CYTHON should be in clarans."""
@@ -880,6 +966,24 @@ class TestCLARANSMetricParams(unittest.TestCase):
         model = CLARANS(verbose=2)
         cloned = clone(model)
         self.assertEqual(cloned.verbose, 2)
+
+    def test_verbose_2_brute_force_swap_logging(self):
+        """verbose=2 with cost_evaluation='brute_force' should log swap details."""
+        import io
+        from contextlib import redirect_stdout
+
+        f = io.StringIO()
+        with redirect_stdout(f):
+            CLARANS(
+                n_clusters=2,
+                num_local=1,
+                max_neighbors=50,
+                cost_evaluation="brute_force",
+                verbose=2,
+                random_state=42,
+            ).fit(self.X)
+        output = f.getvalue()
+        self.assertIn("Restart", output)
 
 
 if __name__ == "__main__":
