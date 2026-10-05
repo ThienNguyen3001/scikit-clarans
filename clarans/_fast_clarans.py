@@ -179,7 +179,7 @@ class FastCLARANS(CLARANS):
     distances on-the-fly rather than precomputing a full distance matrix.
     This keeps memory usage at O(n) instead of O(n^2), making it suitable
     for larger datasets.
-    
+
     The key improvement from FastCLARANS is the sampling strategy: instead
     of sampling random (medoid, non-medoid) pairs like CLARANS, it samples
     only non-medoid candidates and evaluates swaps with all k medoids at
@@ -336,7 +336,7 @@ class FastCLARANS(CLARANS):
             cand_row = (
                 None
                 if self.metric == "precomputed"
-                else X[candidate_idx : candidate_idx + 1]
+                else X[candidate_idx:candidate_idx + 1]
             )
             d_xc = self._compute_1_vs_n(
                 cand_row, X, out=d_xc_buf, candidate_idx=candidate_idx
@@ -374,9 +374,9 @@ class FastCLARANS(CLARANS):
                 current_cost = float(np.sum(near_dist))
 
                 # Update non-medoid pool
-                non_medoid_mask[old_medoid] = True
-                non_medoid_mask[candidate_idx] = False
-                available_candidates = np.flatnonzero(non_medoid_mask)
+                available_candidates = self._update_candidate_pool(
+                    non_medoid_mask, old_medoid, candidate_idx
+                )
 
                 i = 0
                 swap_count += 1

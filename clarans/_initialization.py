@@ -6,14 +6,16 @@ adapted from the `scikit-learn-extra` KMedoids implementation:
 https://scikit-learn-extra.readthedocs.io/en/stable/generated/sklearn_extra.cluster.KMedoids.html
 """
 
+from __future__ import annotations
+
 import warnings
+from typing import Any, Callable
+
 import numpy as np
 from scipy.spatial.distance import cdist
 from scipy.sparse import issparse
 from sklearn.metrics import DistanceMetric, pairwise_distances
 from sklearn.utils import check_random_state
-
-from typing import Any
 
 from .utils import _core, _map_scipy_metric, _to_dense
 
@@ -28,7 +30,12 @@ def _check_init_args(X: Any, n_clusters: int) -> int:
     return n_samples
 
 
-def _compute_pairwise_distances(X, Y=None, metric="euclidean", metric_params=None):
+def _compute_pairwise_distances(
+    X: Any,
+    Y: Any = None,
+    metric: str | Callable = "euclidean",
+    metric_params: dict[str, Any] | None = None,
+) -> np.ndarray:
     """Compute pairwise distances using cdist for dense arrays when possible,
     falling back to scikit-learn's DistanceMetric and pairwise_distances."""
     scipy_metric = _map_scipy_metric(metric)
@@ -50,7 +57,12 @@ def _compute_pairwise_distances(X, Y=None, metric="euclidean", metric_params=Non
     return pairwise_distances(X, Y, metric=scipy_metric, **params)
 
 
-def initialize_heuristic(X, n_clusters, metric="euclidean", metric_params=None):
+def initialize_heuristic(
+    X: Any,
+    n_clusters: int,
+    metric: str | Callable = "euclidean",
+    metric_params: dict[str, Any] | None = None,
+) -> np.ndarray:
     """
     Initialize medoids using a heuristic approach.
 
@@ -98,7 +110,12 @@ def initialize_heuristic(X, n_clusters, metric="euclidean", metric_params=None):
     return current_medoids_indices
 
 
-def initialize_build(X, n_clusters, metric="euclidean", metric_params=None):
+def initialize_build(
+    X: Any,
+    n_clusters: int,
+    metric: str | Callable = "euclidean",
+    metric_params: dict[str, Any] | None = None,
+) -> np.ndarray:
     """
     Initialize medoids using the PAM BUILD step.
 
@@ -176,7 +193,7 @@ def initialize_build(X, n_clusters, metric="euclidean", metric_params=None):
     )
 
     for _ in range(1, n_clusters):
-        candidate_indices = np.where(~is_medoid)[0]
+        candidate_indices = np.flatnonzero(~is_medoid)
         if use_cython_build:
             cand_c = np.ascontiguousarray(candidate_indices, dtype=np.intp)
             best_idx_in_cand, _ = _core.pam_build_step(
@@ -197,8 +214,13 @@ def initialize_build(X, n_clusters, metric="euclidean", metric_params=None):
 
 
 def initialize_k_medoids_plus_plus(
-    X, n_clusters, random_state=None, metric="euclidean", n_local_trials=None, metric_params=None
-):
+    X: Any,
+    n_clusters: int,
+    random_state: int | np.random.RandomState | None = None,
+    metric: str | Callable = "euclidean",
+    n_local_trials: int | None = None,
+    metric_params: dict[str, Any] | None = None,
+) -> np.ndarray:
     """
     Initialize medoids using k-medoids++ (similar to k-means++).
 
@@ -238,20 +260,20 @@ def initialize_k_medoids_plus_plus(
     Adapted from the scikit-learn-extra KMedoids implementation:
     https://scikit-learn-extra.readthedocs.io/en/stable/generated/sklearn_extra.cluster.KMedoids.html
     """
-    random_state = check_random_state(random_state)
+    rng = check_random_state(random_state)
     n_samples = _check_init_args(X, n_clusters)
     medoid_indices = np.empty(n_clusters, dtype=int)
 
     if n_local_trials is None:
         n_local_trials = 2 + int(np.log(n_clusters))
 
-    first_medoid = random_state.randint(0, n_samples)
+    first_medoid = rng.randint(0, n_samples)
     medoid_indices[0] = first_medoid
 
     if metric == "precomputed":
         closest = _to_dense(X[:, first_medoid]).ravel()
     else:
-        first_row = X[first_medoid : first_medoid + 1]
+        first_row = X[first_medoid:first_medoid + 1]
         closest = _compute_pairwise_distances(
             X,
             first_row,
@@ -265,11 +287,11 @@ def initialize_k_medoids_plus_plus(
     for c in range(1, n_clusters):
         if current_pot <= 1e-16:
             remaining = np.setdiff1d(np.arange(n_samples), medoid_indices[:c])
-            chosen_candidate = int(random_state.choice(remaining))
+            chosen_candidate = int(rng.choice(remaining))
             medoid_indices[c] = chosen_candidate
             continue
 
-        rand_vals = random_state.random_sample(n_local_trials) * current_pot
+        rand_vals = rng.random_sample(n_local_trials) * current_pot
 
         cumsum_dist = np.cumsum(closest_dist_sq)
 
@@ -332,17 +354,18 @@ def initialize_k_medoids_plus_plus(
 
         if best_candidate is None:
             remaining = np.setdiff1d(np.arange(n_samples), medoid_indices[:c])
-            best_candidate = int(random_state.choice(remaining))
+            best_candidate = int(rng.choice(remaining))
             if metric == "precomputed":
                 row_dist = _to_dense(X[:, best_candidate]).ravel()
             else:
-                cand_row = X[best_candidate : best_candidate + 1]
+                cand_row = X[best_candidate:best_candidate + 1]
                 row_dist = _compute_pairwise_distances(
                     X, cand_row, metric=metric, metric_params=metric_params
                 ).ravel()
             best_dist_sq = np.minimum(closest_dist_sq, row_dist**2)
             best_pot = float(best_dist_sq.sum())
 
+        assert best_pot is not None and best_dist_sq is not None
         medoid_indices[c] = best_candidate
         current_pot = best_pot
         closest_dist_sq = best_dist_sq

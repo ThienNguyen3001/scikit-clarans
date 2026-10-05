@@ -274,24 +274,24 @@ def is_matrix_symmetric(
     """Check whether a square distance matrix is symmetric within tolerance."""
     cdef:
         Py_ssize_t i, j
-        floating val_ij, val_ji, diff, threshold
+        floating d_ij, d_ji, diff, threshold
         int symmetric = 1
 
     with nogil:
         for i in range(n_samples):
             for j in range(i + 1, n_samples):
-                val_ij = D[i, j]
-                val_ji = D[j, i]
-                if isnan(val_ij) or isnan(val_ji):
+                d_ij = D[i, j]
+                d_ji = D[j, i]
+                if isnan(d_ij) or isnan(d_ji):
                     symmetric = 0
                     break
-                if val_ij == val_ji:
+                if d_ij == d_ji:
                     continue
-                if isinf(val_ij) or isinf(val_ji):
+                if isinf(d_ij) or isinf(d_ji):
                     symmetric = 0
                     break
-                diff = fabs(val_ij - val_ji)
-                threshold = atol + rtol * fabs(val_ji)
+                diff = fabs(d_ij - d_ji)
+                threshold = atol + rtol * fabs(d_ji)
                 if diff > threshold:
                     symmetric = 0
                     break

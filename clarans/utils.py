@@ -68,9 +68,9 @@ def _to_dense(arr: Any) -> np.ndarray:
 
 def _is_valid_int(val: Any, min_val: int = 1, allow_bool: bool = False) -> bool:
     """Check if value is a valid integer >= min_val and optionally allow booleans."""
-    if not allow_bool and isinstance(val, (bool, np.bool_)):
-        return False
-    return bool(isinstance(val, (int, np.integer, bool, np.bool_)) and val >= min_val)
+    if isinstance(val, (bool, np.bool_)):
+        return bool(allow_bool and val >= min_val)
+    return bool(isinstance(val, (int, np.integer)) and val >= min_val)
 
 
 def _map_scipy_metric(metric: str | Callable) -> str | Callable:
