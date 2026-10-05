@@ -1089,20 +1089,17 @@ class CLARANS(ClusterMixin, TransformerMixin, BaseEstimator):
             raise ValueError(f"n_clusters must be >= 1; got {self.n_clusters}")
         if not _is_valid_int(self.num_local, min_val=1):
             raise ValueError(f"num_local must be >= 1; got {self.num_local}")
-        if self.max_neighbors == "auto":
-            pass
-        elif _is_valid_int(self.max_neighbors, min_val=1):
-            pass
-        elif isinstance(self.max_neighbors, (int, np.integer)) and not isinstance(
-            self.max_neighbors, (bool, np.bool_)
-        ):
-            raise ValueError(
-                f"max_neighbors must be >= 1; got {self.max_neighbors}"
-            )
-        else:
-            raise ValueError(
-                f"max_neighbors must be an integer >= 1 or 'auto'; got {self.max_neighbors!r}"
-            )
+        if self.max_neighbors != "auto":
+            if isinstance(self.max_neighbors, (bool, np.bool_)) or not isinstance(
+                self.max_neighbors, (int, np.integer)
+            ):
+                raise ValueError(
+                    f"max_neighbors must be an integer >= 1 or 'auto'; got {self.max_neighbors!r}"
+                )
+            if self.max_neighbors < 1:
+                raise ValueError(
+                    f"max_neighbors must be >= 1; got {self.max_neighbors}"
+                )
         if self.cost_evaluation not in {"delta", "brute_force"}:
             raise ValueError(
                 f"The 'cost_evaluation' parameter of {self.__class__.__name__} must be a str among "

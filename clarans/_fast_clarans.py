@@ -28,44 +28,20 @@ def _fallback_fastpam1_delta(
     n_clusters: int,
 ) -> tuple[int, float]:
     """Pure-Python fallback for FastPAM1 delta calculations when Cython is unavailable."""
-    removal_loss = np.zeros(n_clusters)
-    diff = second_dist - near_dist
-    with np.errstate(invalid="ignore"):
-        removal_loss += np.bincount(
-            near_idx_map, weights=diff, minlength=n_clusters
-        )
+    mask_closer = d_xc < near_dist
+    delta_td = float(np.sum(d_xc[mask_closer] - near_dist[mask_closer]))
 
-    mask_better_than_nearest = d_xc < near_dist
-    delta_td_plus_xc: float = float(
-        np.sum(
-            d_xc[mask_better_than_nearest]
-            - near_dist[mask_better_than_nearest]
-        )
+    weights = np.where(
+        mask_closer,
+        0.0,
+        np.where(d_xc < second_dist, d_xc - near_dist, second_dist - near_dist),
     )
-
-    total_delta = removal_loss + delta_td_plus_xc
-    mask_better_than_second = d_xc < second_dist
-
-    term1 = (
-        near_dist[mask_better_than_nearest]
-        - second_dist[mask_better_than_nearest]
+    delta_arr = (
+        np.bincount(near_idx_map, weights=weights, minlength=n_clusters)
+        + delta_td
     )
-    idx1 = near_idx_map[mask_better_than_nearest]
-    with np.errstate(invalid="ignore"):
-        total_delta += np.bincount(
-            idx1, weights=term1, minlength=n_clusters
-        )
-
-    mask_case2 = (~mask_better_than_nearest) & mask_better_than_second
-    term2 = d_xc[mask_case2] - second_dist[mask_case2]
-    idx2 = near_idx_map[mask_case2]
-    with np.errstate(invalid="ignore"):
-        total_delta += np.bincount(
-            idx2, weights=term2, minlength=n_clusters
-        )
-
-    min_delta_idx = int(np.argmin(total_delta))
-    return min_delta_idx, float(total_delta[min_delta_idx])
+    best_m = int(np.argmin(delta_arr))
+    return best_m, float(delta_arr[best_m])
 
 
 class FastCLARANS(CLARANS):
