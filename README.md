@@ -2,15 +2,23 @@
 
 > Scikit-learn compatible implementation of CLARANS and FastCLARANS for $k$-medoids clustering.
 
+<!-- Hàng 1: Phiên bản, Phân phối, Học thuật & Trải nghiệm nhanh -->
+[![PyPI version](https://img.shields.io/pypi/v/scikit-clarans.svg)](https://pypi.org/project/scikit-clarans/)
+[![Python 3.9+](https://img.shields.io/badge/python-3.9+-blue.svg)](https://www.python.org/downloads/)
 [![License](https://img.shields.io/github/license/ThienNguyen3001/scikit-clarans)](LICENSE)
 [![DOI](https://zenodo.org/badge/DOI/10.5281/zenodo.18366801.svg)](https://doi.org/10.5281/zenodo.18366801)
-[![Python 3.9+](https://img.shields.io/badge/python-3.9+-blue.svg)](https://www.python.org/downloads/)
-[![Docs Build](https://img.shields.io/github/actions/workflow/status/ThienNguyen3001/scikit-clarans/docs-build.yml?branch=main&label=Docs%20Build)](https://github.com/ThienNguyen3001/scikit-clarans/actions/workflows/docs-build.yml)
+[![Open In Colab](https://colab.research.google.com/assets/colab-badge.svg)](https://colab.research.google.com/drive/194aBBu0wZotnun25dXqlOrDj3HYHKo-a?usp=sharing)
+[![GitHub Stars](https://img.shields.io/github/stars/ThienNguyen3001/scikit-clarans?style=social)](https://github.com/ThienNguyen3001/scikit-clarans/stargazers)
+
+<br>
+
+<!-- Hàng 2: CI/CD, Kiểm thử, Code Style & Metric -->
 [![Test Suite](https://img.shields.io/github/actions/workflow/status/ThienNguyen3001/scikit-clarans/test_suite.yml?branch=main&label=Test%20Suite)](https://github.com/ThienNguyen3001/scikit-clarans/actions/workflows/test_suite.yml)
 [![Quality Check](https://img.shields.io/github/actions/workflow/status/ThienNguyen3001/scikit-clarans/lint_cov_check.yml?branch=main&label=Quality%20Check)](https://github.com/ThienNguyen3001/scikit-clarans/actions/workflows/lint_cov_check.yml)
-[![PyPI version](https://img.shields.io/pypi/v/scikit-clarans.svg)](https://pypi.org/project/scikit-clarans/)
-[![Open In Colab](https://colab.research.google.com/assets/colab-badge.svg)](https://colab.research.google.com/drive/194aBBu0wZotnun25dXqlOrDj3HYHKo-a?usp=sharing)
+[![Docs Build](https://img.shields.io/github/actions/workflow/status/ThienNguyen3001/scikit-clarans/docs-build.yml?branch=main&label=Docs)](https://github.com/ThienNguyen3001/scikit-clarans/actions/workflows/docs-build.yml)
+[![code style: flake8](https://img.shields.io/badge/code%20style-flake8-blue.svg)](https://flake8.pycqa.org/)
 [![PyPI Downloads](https://static.pepy.tech/personalized-badge/scikit-clarans?period=total&units=INTERNATIONAL_SYSTEM&left_color=BLACK&right_color=GREEN&left_text=downloads)](https://pepy.tech/projects/scikit-clarans)
+[![PRs Welcome](https://img.shields.io/badge/PRs-welcome-brightgreen.svg)](https://github.com/ThienNguyen3001/scikit-clarans/pulls)
 
 > [!NOTE]
 > This library is designed for coursework, algorithm study, and academic research. It uses Cython C-extensions with a pure Python fallback and maintains an $O(n)$ memory footprint instead of allocating an $O(n^2)$ pairwise distance matrix.
