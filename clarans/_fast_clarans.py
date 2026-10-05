@@ -220,33 +220,6 @@ class FastCLARANS(CLARANS):
         bufs["delta_arr_buf"] = np.zeros(self.n_clusters, dtype=buf_dtype)
         return bufs
 
-    def _call_single_local_search(
-        self,
-        X: np.ndarray | "spmatrix",
-        random_state: np.random.RandomState,
-        deterministic_medoids: np.ndarray | None,
-        buffers: dict[str, np.ndarray],
-        loc_idx: int = 1,
-    ) -> tuple[float, np.ndarray, int, int]:
-        """Dispatch to _single_local_search with FastPAM1 buffers."""
-        try:
-            return self._single_local_search(
-                X,
-                random_state,
-                deterministic_medoids,
-                buffers["d_xc_buf"],
-                buffers["delta_arr_buf"],
-                loc_idx=loc_idx,
-            )
-        except TypeError:
-            return self._single_local_search(
-                X,
-                random_state,
-                deterministic_medoids,
-                buffers["d_xc_buf"],
-                buffers["delta_arr_buf"],
-            )
-
     def _single_local_search(
         self,
         X: np.ndarray | "spmatrix",

@@ -56,7 +56,7 @@ class TestBug4Fix_MemoryLeakCleanup(unittest.TestCase):
         D = pairwise_distances(rng.randn(20, 3))
         model = CLARANS(n_clusters=3, metric="precomputed", random_state=42)
 
-        def mock_search(self_inner, X_in, rng_in, det, buf):
+        def mock_search(self_inner, *args, **kwargs):
             return float("inf"), np.array([0, 1, 2]), 10, 0
 
         with patch.object(CLARANS, "_single_local_search", mock_search):
@@ -74,7 +74,7 @@ class TestBug4Fix_MemoryLeakCleanup(unittest.TestCase):
         D = pairwise_distances(rng.randn(20, 3))
         model = FastCLARANS(n_clusters=3, metric="precomputed", random_state=42)
 
-        def mock_search(self_inner, X_in, rng_in, det, buf, delta_buf):
+        def mock_search(self_inner, *args, **kwargs):
             return float("inf"), np.array([0, 1, 2]), 10, 0
 
         with patch.object(FastCLARANS, "_single_local_search", mock_search):
@@ -572,9 +572,9 @@ class TestAlgorithmBugFixesAndEdgeCases(unittest.TestCase):
         call_idx = 0
         original_single_search = model._single_local_search
 
-        def mock_search(X_in, rng, det, buf):
+        def mock_search(*args, **kwargs):
             nonlocal call_idx
-            cost, medoids, evals, swaps = original_single_search(X_in, rng, det, buf)
+            cost, medoids, evals, swaps = original_single_search(*args, **kwargs)
             if call_idx == 0:
                 cost = float("nan")
             call_idx += 1
@@ -593,11 +593,9 @@ class TestAlgorithmBugFixesAndEdgeCases(unittest.TestCase):
         call_idx = 0
         original_single_search = model._single_local_search
 
-        def mock_search(X_in, rng, det, d_buf, delta_buf):
+        def mock_search(*args, **kwargs):
             nonlocal call_idx
-            cost, medoids, evals, swaps = original_single_search(
-                X_in, rng, det, d_buf, delta_buf
-            )
+            cost, medoids, evals, swaps = original_single_search(*args, **kwargs)
             if call_idx == 0:
                 cost = float("nan")
             call_idx += 1
