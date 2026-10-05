@@ -10,8 +10,6 @@
 [![Open In Colab](https://colab.research.google.com/assets/colab-badge.svg)](https://colab.research.google.com/drive/194aBBu0wZotnun25dXqlOrDj3HYHKo-a?usp=sharing)
 [![GitHub Stars](https://img.shields.io/github/stars/ThienNguyen3001/scikit-clarans?style=social)](https://github.com/ThienNguyen3001/scikit-clarans/stargazers)
 
-<br>
-
 <!-- Hàng 2: CI/CD, Kiểm thử, Code Style & Metric -->
 [![Test Suite](https://img.shields.io/github/actions/workflow/status/ThienNguyen3001/scikit-clarans/test_suite.yml?branch=main&label=Test%20Suite)](https://github.com/ThienNguyen3001/scikit-clarans/actions/workflows/test_suite.yml)
 [![Quality Check](https://img.shields.io/github/actions/workflow/status/ThienNguyen3001/scikit-clarans/lint_cov_check.yml?branch=main&label=Quality%20Check)](https://github.com/ThienNguyen3001/scikit-clarans/actions/workflows/lint_cov_check.yml)
