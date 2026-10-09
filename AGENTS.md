@@ -141,14 +141,32 @@ Run before opening a PR or tagging a release:
 4. Full tests: `pytest --cov=clarans clarans/tests/`
 5. Pre-commit: `pre-commit run --all-files`
 
-### Workflow 8: Package Release (`/release`)
+### Workflow 8: Package Release & Validation (`/release`)
+
+#### Step A: Local Packaging Validation (Dry-Run Only)
+Verify locally that sdist and wheels compile cleanly and metadata passes twine validation without uploading:
 1. Verify identical version strings in `pyproject.toml`, `meson.build`, `clarans/__init__.py`.
-2. Run `/preflight`.
-3. Clean build folders: `Remove-Item -Recurse -Force dist, build`
-4. Build packages: `python -m build --sdist --wheel`
-5. Validate packages: `twine check dist/*`
-6. Upload to PyPI: `twine upload dist/*`
-7. Tag git release: `git tag -a "v$ver" -m "Release version $ver"` && `git push origin "v$ver"`
+2. Run `/preflight` to ensure 100% tests, linters, and sklearn checks pass.
+3. Clean previous build folders: `Remove-Item -Recurse -Force dist, build`
+4. Build source archive & local wheel: `python -m build --sdist --wheel`
+5. Validate archive metadata and README syntax: `twine check dist/*`
+
+#### Step B: Production Publish via GitHub Actions (Recommended)
+Do **not** upload manually via `twine upload` from a local machine, as local builds only generate wheels for a single OS. The repository's CI pipeline (`.github/workflows/pypi-publish.yml`) uses `cibuildwheel` to automatically build native binary wheels for **Ubuntu, Windows, and macOS** and securely publishes them to PyPI via OIDC Trusted Publishing:
+1. Tag and push the new release:
+   ```powershell
+   $ver = python -c "import clarans; print(clarans.__version__)"
+   git tag -a "v$ver" -m "Release version $ver"
+   git push origin "v$ver"
+   ```
+2. Monitor the automated build and release progress at GitHub Actions: `https://github.com/ThienNguyen3001/scikit-clarans/actions/workflows/pypi-publish.yml`
+
+#### Step C: Optional TestPyPI Staging (Manual)
+If you wish to test package installation in an isolated sandbox before tagging:
+```powershell
+twine upload --repository testpypi dist/*
+pip install --index-url https://test.pypi.org/simple/ --extra-index-url https://pypi.org/simple scikit-clarans
+```
 
 ---
 
@@ -218,3 +236,69 @@ X_sparse = csr_matrix(X)
 model = FastCLARANS(n_clusters=5, metric="euclidean", random_state=42)
 model.fit(X_sparse)
 ```
+
+---
+
+## 6. Distance Engine & Metric Routing Architecture
+
+`scikit-clarans` routes distance evaluations through a 4-tier engine:
+1. **`'precomputed'`**: Used when the user supplies a precomputed pairwise distance matrix.
+   - Automatically validated for symmetry using `_core.is_matrix_symmetric` (C-accelerated).
+   - In precomputed mode, `cluster_centers_` is explicitly `None` (as coordinate positions in Euclidean space do not exist).
+2. **`cdist` (SciPy C-kernel)**: Used for dense input arrays with standard metrics (`euclidean`, `cityblock`, `cosine`, `chebyshev`, etc.).
+   - Metric alias translations in `_SCIPY_METRIC_MAP`: `manhattan` $\rightarrow$ `cityblock`, `l1` $\rightarrow$ `cityblock`, `l2` $\rightarrow$ `euclidean`, `infinity` $\rightarrow$ `chebyshev`, `sokalmichener` $\rightarrow$ `matching`.
+3. **`DistanceMetric` (Scikit-Learn Cython)**: Automatically engaged for sparse matrix inputs (`scipy.sparse.csr_matrix` / `csc_matrix`) to compute row-wise distances without densifying the full matrix.
+4. **`pairwise`**: Used as a fallback for custom callable metrics (`metric=custom_func`).
+5. **`nan_euclidean`**: Supports NaN-tolerant clustering where pairwise Euclidean distances are computed over non-missing feature subsets.
+
+---
+
+## 7. Seeding & Initialization Mechanics (`_initialization.py`)
+
+- **`'k-medoids++'`** (Default, Recommended): Probabilistic $D^2$-weighting adapted from Arthur & Vassilvitskii (2007). Employs local trial candidates ($2 + \ln(k)$) accelerated by `_core.kmedoids_pp_trials` for rapid convergence.
+- **`'random'`**: Uniform random sampling of $k$ distinct points. Fast but sensitive to local minima.
+- **`'heuristic'`**: Greedily selects points with the lowest sum of distances to all other points. Warning: computes full $O(n^2)$ distances.
+- **`'build'`**: The greedy BUILD phase from Kaufman & Rousseeuw (1990). Selects first medoid with minimum overall distance, then iteratively adds medoids maximizing total distance reduction. Warning: $O(n^2)$ complexity.
+- **Explicit Array (`init=array_like`)**: Users can supply initial medoid coordinates or indices. `scikit-clarans` snaps coordinates to the nearest distinct training samples and fills any duplicates with random points.
+
+---
+
+## 8. Critical Mathematical Invariants & Edge-Case Safeguards
+
+When maintaining or modifying algorithm logic, uphold these critical safeguards verified in `test_regressions.py` and `test_robustness.py`:
+
+1. **Delta Tolerance Threshold**:
+   - Swaps are accepted only if `total_delta < _delta_tolerance(cost)` where `_delta_tolerance(cost) = -max(1e-16, 1e-12 * abs(cost))`.
+   - **Reason**: Prevents infinite swap cycles caused by floating-point rounding jitter when delta is $\approx 0$.
+2. **Scikit-Learn `score(X)` Contract**:
+   - `score(X)` returns negative inertia (`-self.inertia_`) so higher values indicate better clustering in `GridSearchCV`.
+3. **Memory Leak Protection (`_precomputed_source`)**:
+   - When fitting on precomputed matrices, `self._precomputed_source` must be cleaned up in `finally` blocks if `fit()` encounters an exception or fails early.
+4. **Scikit-Learn Version Compatibility**:
+   - Maintain dual-support for both Scikit-Learn $\ge 1.6$ (`__sklearn_tags__`) and legacy versions (`_more_tags()`).
+5. **Numerical Overflow Detection**:
+   - Check costs for `np.isfinite()`. If extreme values ($> 10^{160}$) cause float64 Euclidean distance squared to overflow to infinity, raise a clean `ValueError` rather than crashing with unhandled index errors.
+6. **Thread-Safe Warnings**:
+   - Cython fallback warnings (`_warn_cython_unavailable()`) use Double-Checked Locking (`threading.Lock()`) to guarantee thread safety without contention.
+
+---
+
+## 9. Academic Citations & Software Heritage
+
+If referencing or reproducing algorithms from this library:
+
+- **CLARANS**:
+  > Ng, R. T., & Han, J. (2002). *CLARANS: A method for clustering objects for spatial data mining.* IEEE TKDE, 14(5), 1003-1016. [doi:10.1109/TKDE.2002.1033770](https://doi.org/10.1109/TKDE.2002.1033770)
+- **FastCLARANS & FastPAM1**:
+  > Schubert, E., & Rousseeuw, P. J. (2021). *Fast and eager k-medoids clustering: O(k) runtime improvement of the PAM, CLARA, and CLARANS algorithms.* Information Systems, 101, 101804. [doi:10.1016/j.is.2021.101804](https://doi.org/10.1016/j.is.2021.101804)
+- **Library Citation**:
+  ```bibtex
+  @software{scikit_clarans,
+    author       = {Nguyen, Ngoc Thien},
+    title        = {scikit-clarans: A Python Library for CLARANS Clustering},
+    year         = {2026},
+    publisher    = {Zenodo},
+    doi          = {10.5281/zenodo.18366801},
+    url          = {https://github.com/ThienNguyen3001/scikit-clarans}
+  }
+  ```
