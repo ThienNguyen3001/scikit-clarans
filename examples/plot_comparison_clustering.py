@@ -5,6 +5,15 @@ Side-by-Side Comparison: CLARANS, FastCLARANS, and K-Means
 
 This example performs a direct visual and performance comparison between
 classic CLARANS, FastCLARANS, and scikit-learn's standard KMeans clusterer.
+
+.. note::
+
+    **Why ``metric='sqeuclidean'``?**
+    Scikit-learn's ``KMeans.inertia_`` minimizes the sum of **squared** Euclidean
+    distances (:math:`\\sum d^2`). By default, CLARANS minimizes unsquared (linear)
+    distances. To align CLARANS and FastCLARANS with KMeans' exact objective
+    function for a fair, 1:1 inertia comparison, we configure both with
+    ``metric='sqeuclidean'``.
 """
 
 # Authors: Ngọc Thiện Nguyễn <thiennguyen03001@gmail.com>
@@ -15,15 +24,26 @@ import matplotlib.pyplot as plt
 from sklearn.datasets import make_blobs
 from sklearn.cluster import KMeans
 from clarans import CLARANS, FastCLARANS
-from clarans.utils import calculate_cost
 
 COLORS = ["#2b5c8f", "#d95f02", "#7570b3"]
 
 
 X, _ = make_blobs(n_samples=600, centers=3, cluster_std=0.70, random_state=42)
+
+# Use metric='sqeuclidean' so all three estimators minimize squared Euclidean distance
 models = [
-    ("CLARANS", CLARANS(n_clusters=3, num_local=5, random_state=42), "x", "Medoid"),
-    ("FastCLARANS", FastCLARANS(n_clusters=3, num_local=5, random_state=42), "x", "Medoid"),
+    (
+        "CLARANS",
+        CLARANS(n_clusters=3, num_local=5, metric="sqeuclidean", random_state=42),
+        "x",
+        "Medoid",
+    ),
+    (
+        "FastCLARANS",
+        FastCLARANS(n_clusters=3, num_local=5, metric="sqeuclidean", random_state=42),
+        "x",
+        "Medoid",
+    ),
     ("K-Means", KMeans(n_clusters=3, random_state=42, n_init=10), "+", "Centroid"),
 ]
 
@@ -51,11 +71,7 @@ for ax, (name, model, marker, label_name) in zip(axes, models):
             zorder=5,
         )
 
-    if hasattr(model, "medoid_indices_"):
-        cost = calculate_cost(X, model.medoid_indices_)
-        stat_str = f"Time: {elapsed:.3f}s | Cost: {cost:.1f}"
-    else:
-        stat_str = f"Time: {elapsed:.3f}s | Inertia: {model.inertia_:.1f}"
+    stat_str = f"Time: {elapsed:.3f}s | Inertia: {model.inertia_:.1f}"
 
     ax.set_title(name, fontsize=11, pad=8)
     ax.set_xticks([])
