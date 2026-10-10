@@ -1,15 +1,15 @@
 """
-=====================================================
-Graph Clustering with scikit-clarans (Neo4j Workflow)
-=====================================================
+=========================================================
+Graph Clustering with Precomputed Shortest-Path Distances
+=========================================================
 
-Tái hiện bài toán phân cụm đồ thị lớn (K-Medoids trên mạng lưới)
-tương tự bài blog của Neo4j.
+This example clusters network nodes with :class:`~clarans.CLARANS` using
+shortest-path distances on a connected graph.
 
-This example reproduces graph clustering with CLARANS on network data
-(inspired by Neo4j's graph clustering tutorial). Shortest-path distances
-are computed via SciPy, and CLARANS partitions the network using
-`metric='precomputed'`.
+A synthetic caveman graph with four dense communities is converted into
+a pairwise shortest-path distance matrix via SciPy, then partitioned with
+`metric='precomputed'`. The resulting medoids represent central hub nodes
+for each community.
 """
 
 # Authors: Ngọc Thiện Nguyễn <thiennguyen03001@gmail.com>
@@ -21,55 +21,44 @@ import numpy as np
 from scipy.sparse.csgraph import shortest_path
 from clarans import CLARANS
 
-# ==============================================================================
-# Bước 1: Tạo/Load đồ thị mẫu (Mô phỏng 4 cụm cộng đồng Caveman Graph)
-# ==============================================================================
-# Đồ thị gồm 4 cụm (hang), mỗi cụm có 25 nút kết nối dày đặc với nhau
+
+# Generate a connected caveman graph with 4 dense cliques of 25 nodes each
 G = nx.connected_caveman_graph(l=4, k=25)
 
-# Lọc thành phần liên thông lớn nhất (Giant Component) đúng như blog Neo4j
+# Keep the giant connected component
 largest_cc = max(nx.connected_components(G), key=len)
 G_giant = G.subgraph(largest_cc).copy()
 nodes = list(G_giant.nodes())
 n_nodes = len(nodes)
 print(f"Number of nodes in Giant Component: {n_nodes}")
 
-# ==============================================================================
-# Bước 2: Tính ma trận khoảng cách đường đi ngắn nhất (Shortest Path Distance)
-# ==============================================================================
-# Trích xuất ma trận kề thưa từ NetworkX
+# Compute the all-pairs shortest-path distance matrix
 adj_matrix = nx.to_scipy_sparse_array(G_giant, weight=None)
-
-# Tính khoảng cách đường đi ngắn nhất giữa các đỉnh (dùng C-kernel của SciPy cực nhanh)
 dist_matrix = shortest_path(adj_matrix, directed=False, unweighted=True)
 dist_matrix = np.asarray(dist_matrix, dtype=np.float64)
 
-# ==============================================================================
-# Bước 3: Phân cụm đồ thị bằng CLARANS (scikit-clarans)
-# ==============================================================================
+# Cluster the graph using precomputed graph distances
 k = 4
 model = CLARANS(
     n_clusters=k,
     num_local=3,
-    metric="precomputed",  # Chỉ định ma trận khoảng cách đã tính trước
+    metric="precomputed",
     random_state=42,
-    verbose=2,  # Bật log chi tiết từng restart
+    verbose=2,
 )
 model.fit(dist_matrix)
 
-# Trích xuất các Medoid Hubs (nút trung tâm đại diện cho từng cụm)
+# Identify medoid hub nodes representing each community
 medoid_nodes = [nodes[idx] for idx in model.medoid_indices_]
 print(f"\nMedoid Hubs (community representatives): {medoid_nodes}")
 print(f"Total shortest-path inertia: {model.inertia_:.1f}")
 
-# ==============================================================================
-# Bước 4: Trực quan hóa đồ thị và đánh dấu Medoids
-# ==============================================================================
+# Visualize the graph partition and highlight medoid hubs
 pos = nx.spring_layout(G_giant, seed=42)
 
 plt.figure(figsize=(10, 8))
 
-# 1. Vẽ các nút thành viên phân màu theo cụm
+# Draw member nodes colored by cluster assignment
 nx.draw_networkx_nodes(
     G_giant,
     pos,
@@ -79,10 +68,10 @@ nx.draw_networkx_nodes(
     alpha=0.85,
 )
 
-# 2. Vẽ các cạnh nối mờ
+# Draw edges
 nx.draw_networkx_edges(G_giant, pos, alpha=0.25, edge_color="gray")
 
-# 3. Đánh dấu nổi bật các Medoid Hubs bằng ngôi sao đỏ
+# Highlight medoid hubs with red stars
 nx.draw_networkx_nodes(
     G_giant,
     pos,

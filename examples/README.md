@@ -40,7 +40,7 @@ List of Gallery Examples (Sphinx-Gallery convention: `plot_*.py`)
 - `plot_custom_init_centers.py`: Supplying user-defined domain coordinates as initial seeds.
 - `plot_transform_data.py`: Using CLARANS as a feature transformer (cluster-distance space).
 - `plot_precomputed_distances.py`: Clustering using precomputed pairwise distance matrices.
-- `plot_graph_clustering.py`: Graph community clustering with precomputed shortest-path distances (Neo4j workflow).
+- `plot_graph_clustering.py`: Graph community clustering with precomputed shortest-path distances.
 
 Notes
 -----
