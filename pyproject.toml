@@ -53,6 +53,7 @@ dev = [
     "cython>=3.0",
     "ninja",
     "meson-python>=0.15.0",
+    "networkx",
 ]
 test = [
     "pytest",
@@ -68,6 +69,7 @@ docs = [
     "sphinx-gallery",
     "pillow",
     "matplotlib",
+    "networkx",
 ]
 
 [project.urls]
