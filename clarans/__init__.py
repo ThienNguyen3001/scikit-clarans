@@ -2,7 +2,7 @@ from ._clarans import CLARANS
 from ._fast_clarans import FastCLARANS
 from .utils import EfficiencyWarning, HAS_CYTHON, calculate_cost, check_medoids
 
-__version__ = "0.3.3"
+__version__ = "0.3.4"
 __all__ = [
     "CLARANS",
     "FastCLARANS",
