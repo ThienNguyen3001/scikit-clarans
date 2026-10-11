@@ -492,31 +492,6 @@ class CLARANS(ClusterMixin, TransformerMixin, BaseEstimator):
             and near_idx_map.flags.c_contiguous
         )
 
-    def _call_single_local_search(
-        self,
-        X: np.ndarray | "spmatrix",
-        random_state: np.random.RandomState,
-        deterministic_medoids: np.ndarray | None,
-        buffers: dict[str, np.ndarray],
-        loc_idx: int = 1,
-    ) -> tuple[float, np.ndarray, int, int]:
-        """Dispatch to _single_local_search with appropriate buffers."""
-        try:
-            return self._single_local_search(
-                X,
-                random_state,
-                deterministic_medoids,
-                buffers["d_xc_buf"],
-                loc_idx=loc_idx,
-            )
-        except TypeError:
-            return self._single_local_search(
-                X,
-                random_state,
-                deterministic_medoids,
-                buffers["d_xc_buf"],
-            )
-
     def fit(self, X: ArrayLike | "spmatrix", y: Any = None) -> "CLARANS":
         """
         Compute CLARANS clustering.
@@ -596,11 +571,12 @@ class CLARANS(ClusterMixin, TransformerMixin, BaseEstimator):
                 loc_start_time = time.perf_counter()
 
                 current_cost, current_medoids_indices, eval_count, swap_count = (
-                    self._call_single_local_search(
+                    self._single_local_search(
                         X,
                         random_state,
                         deterministic_medoids,
-                        buffers,
+                        d_xc_buf=buffers["d_xc_buf"],
+                        delta_arr_buf=buffers.get("delta_arr_buf"),
                         loc_idx=loc_idx + 1,
                     )
                 )
@@ -1030,15 +1006,6 @@ class CLARANS(ClusterMixin, TransformerMixin, BaseEstimator):
         second_dist = clean_subD[row_arange, second_smallest_idx]
         return smallest_idx, near_dist, second_dist
 
-    def _update_cache(
-        self, X: np.ndarray | "spmatrix", medoids_indices: Sequence[int] | np.ndarray
-    ) -> tuple[np.ndarray, np.ndarray, np.ndarray]:
-        """Compute nearest and second-nearest medoid information on-the-fly."""
-        subD = self._compute_medoids_distances(X, medoids_indices)
-        if not subD.flags.c_contiguous:
-            subD = np.ascontiguousarray(subD)
-        return self._compute_2min(subD)
-
     def _validate_data_compat(
         self,
         X: Any,
@@ -1089,20 +1056,17 @@ class CLARANS(ClusterMixin, TransformerMixin, BaseEstimator):
             raise ValueError(f"n_clusters must be >= 1; got {self.n_clusters}")
         if not _is_valid_int(self.num_local, min_val=1):
             raise ValueError(f"num_local must be >= 1; got {self.num_local}")
-        if self.max_neighbors == "auto":
-            pass
-        elif _is_valid_int(self.max_neighbors, min_val=1):
-            pass
-        elif isinstance(self.max_neighbors, (int, np.integer)) and not isinstance(
-            self.max_neighbors, (bool, np.bool_)
-        ):
-            raise ValueError(
-                f"max_neighbors must be >= 1; got {self.max_neighbors}"
-            )
-        else:
-            raise ValueError(
-                f"max_neighbors must be an integer >= 1 or 'auto'; got {self.max_neighbors!r}"
-            )
+        if self.max_neighbors != "auto":
+            if isinstance(self.max_neighbors, (bool, np.bool_)) or not isinstance(
+                self.max_neighbors, (int, np.integer)
+            ):
+                raise ValueError(
+                    f"max_neighbors must be an integer >= 1 or 'auto'; got {self.max_neighbors!r}"
+                )
+            if self.max_neighbors < 1:
+                raise ValueError(
+                    f"max_neighbors must be >= 1; got {self.max_neighbors}"
+                )
         if self.cost_evaluation not in {"delta", "brute_force"}:
             raise ValueError(
                 f"The 'cost_evaluation' parameter of {self.__class__.__name__} must be a str among "

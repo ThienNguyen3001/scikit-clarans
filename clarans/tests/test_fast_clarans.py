@@ -304,12 +304,6 @@ class TestFastCLARANS(unittest.TestCase):
         with self.assertRaises(TypeError):
             FastCLARANS(cost_evaluation="brute_force")  # type: ignore[call-arg]
 
-    def test_inherits_update_cache(self):
-        """FastCLARANS should inherit _update_cache directly from CLARANS without overriding."""
-        from clarans._clarans import CLARANS
-
-        self.assertIs(FastCLARANS._update_cache, CLARANS._update_cache)
-
 
 class TestFastCLARANSMetricParams(unittest.TestCase):
     """Test suite for metric_params parameter in FastCLARANS."""

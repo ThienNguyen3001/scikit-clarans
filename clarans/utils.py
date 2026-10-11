@@ -111,42 +111,34 @@ def check_medoids(
     TypeError
         If `medoid_indices` contains non-integer elements.
     """
-    raw_medoids = medoid_indices if medoid_indices is not None else medoids
-    if raw_medoids is None:
+    raw = medoid_indices if medoid_indices is not None else medoids
+    if raw is None:
         raise ValueError("medoid_indices cannot be empty.")
 
     try:
-        medoids_arr = np.asarray(raw_medoids)
+        arr = np.asarray(raw)
     except Exception as exc:
         raise ValueError(f"Could not convert medoid_indices to numpy array: {exc}") from exc
 
-    if medoids_arr.ndim != 1:
-        raise ValueError(f"medoid_indices must be 1-dimensional, got shape {medoids_arr.shape}")
-
-    if len(medoids_arr) == 0:
+    if arr.ndim != 1:
+        raise ValueError(f"medoid_indices must be 1-dimensional, got shape {arr.shape}")
+    if len(arr) == 0:
         raise ValueError("medoid_indices cannot be empty.")
+    if not np.issubdtype(arr.dtype, np.integer):
+        raise TypeError(f"medoid_indices must contain integers, got dtype {arr.dtype}")
 
-    if not np.issubdtype(medoids_arr.dtype, np.integer):
-        raise TypeError(f"medoid_indices must contain integers, got dtype {medoids_arr.dtype}")
-
-    medoids_arr = medoids_arr.astype(np.intp, copy=False)
-
-    if len(np.unique(medoids_arr)) != len(medoids_arr):
+    arr = arr.astype(np.intp, copy=False)
+    if len(np.unique(arr)) != len(arr):
         raise ValueError("medoid_indices must not contain duplicate elements.")
-
-    if np.any(medoids_arr < 0):
+    if np.any(arr < 0):
+        raise ValueError(f"All medoid indices must be non-negative (>= 0), got min={arr.min()}.")
+    if n_samples is not None and np.any(arr >= n_samples):
         raise ValueError(
-            f"All medoid indices must be non-negative (>= 0), got min={medoids_arr.min()}."
+            f"All medoid indices must be within [0, {n_samples - 1}], "
+            f"got min={arr.min()}, max={arr.max()}."
         )
 
-    if n_samples is not None:
-        if np.any(medoids_arr >= n_samples):
-            raise ValueError(
-                f"All medoid indices must be within [0, {n_samples - 1}], "
-                f"got min={medoids_arr.min()}, max={medoids_arr.max()}."
-            )
-
-    return medoids_arr
+    return arr
 
 
 def calculate_cost(

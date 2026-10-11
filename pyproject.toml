@@ -9,7 +9,7 @@ requires = [
 
 [project]
 name = "scikit-clarans"
-version = "0.3.3"
+version = "0.3.4"
 description = "A scikit-learn compatible implementation of CLARANS clustering algorithm"
 readme = "README.md"
 requires-python = ">=3.9"
@@ -44,6 +44,7 @@ dev = [
     "pytest",
     "pytest-cov",
     "flake8",
+    "black",
     "mypy",
     "pandas",
     "sphinx>=5.0",
@@ -53,6 +54,7 @@ dev = [
     "cython>=3.0",
     "ninja",
     "meson-python>=0.15.0",
+    "networkx",
 ]
 test = [
     "pytest",
@@ -68,6 +70,7 @@ docs = [
     "sphinx-gallery",
     "pillow",
     "matplotlib",
+    "networkx",
 ]
 
 [project.urls]
