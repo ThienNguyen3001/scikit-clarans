@@ -44,6 +44,7 @@ dev = [
     "pytest",
     "pytest-cov",
     "flake8",
+    "black",
     "mypy",
     "pandas",
     "sphinx>=5.0",
