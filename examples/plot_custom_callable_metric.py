@@ -134,6 +134,6 @@ for spine in ax.spines.values():
     spine.set_color("#cccccc")
     spine.set_linewidth(0.8)
 
-ax.legend(loc="upper left", frameon=True, facecolor="white", edgecolor="#cccccc", fontsize=8.5)
+ax.legend(loc="upper right", frameon=True, facecolor="white", edgecolor="#cccccc", fontsize=8.5)
 plt.tight_layout()
 plt.show()

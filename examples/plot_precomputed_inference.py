@@ -144,7 +144,16 @@ ax_b.set_ylabel("Distance to Nearest Medoid", fontsize=9.0)
 for spine in ax_b.spines.values():
     spine.set_color("#cccccc")
     spine.set_linewidth(0.8)
-ax_b.legend(loc="upper right", frameon=False, fontsize=8.0)
+ax_b.set_ylim(bottom=min_dists.min() - 1.5, top=min_dists.max() + 4.5)
+ax_b.legend(
+    loc="upper right",
+    ncol=2,
+    frameon=True,
+    facecolor="white",
+    edgecolor="#cccccc",
+    framealpha=0.92,
+    fontsize=8.0,
+)
 
 plt.suptitle(
     "Compact (n_test, k) vs. Full (n_test, n_train) Precomputed Inference",

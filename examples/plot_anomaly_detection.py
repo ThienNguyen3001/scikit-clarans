@@ -132,7 +132,14 @@ ax_a.set_yticks([])
 for spine in ax_a.spines.values():
     spine.set_color("#cccccc")
     spine.set_linewidth(0.8)
-ax_a.legend(loc="upper left", frameon=True, facecolor="white", edgecolor="#cccccc", fontsize=8.0)
+ax_a.legend(
+    loc="upper right",
+    frameon=True,
+    facecolor="white",
+    edgecolor="#cccccc",
+    framealpha=0.92,
+    fontsize=8.0,
+)
 
 # Panel (b): Score Histogram & Cutoff Threshold
 ax_b = axes[1]

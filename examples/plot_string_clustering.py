@@ -98,7 +98,7 @@ mds = MDS(
 coords_2d = mds.fit_transform(D)
 
 # 5. Visualization
-fig, axes = plt.subplots(1, 2, figsize=(12.0, 5.0))
+fig, axes = plt.subplots(1, 2, figsize=(12.0, 5.2))
 
 # Panel (a): 2D MDS semantic space with text annotations
 ax_a = axes[0]
@@ -148,7 +148,15 @@ ax_a.set_yticks([])
 for spine in ax_a.spines.values():
     spine.set_color("#cccccc")
     spine.set_linewidth(0.8)
-ax_a.legend(loc="lower left", frameon=True, facecolor="white", edgecolor="#cccccc", fontsize=8.0)
+ax_a.legend(
+    loc="upper center",
+    bbox_to_anchor=(0.5, -0.05),
+    ncol=2,
+    frameon=True,
+    facecolor="white",
+    edgecolor="#cccccc",
+    fontsize=8.0,
+)
 
 # Panel (b): Permuted Distance Matrix Ordered by Cluster
 sort_idx = np.argsort(model.labels_)

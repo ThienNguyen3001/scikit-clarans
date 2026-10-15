@@ -15,7 +15,6 @@ import matplotlib.pyplot as plt
 from sklearn.datasets import make_blobs
 from clarans import CLARANS
 
-
 X_train, _ = make_blobs(n_samples=400, centers=3, n_features=2, random_state=42)
 model = CLARANS(n_clusters=3, init="k-medoids++", random_state=42)
 model.fit(X_train)
@@ -29,7 +28,7 @@ X_query = rng.uniform(
 )
 query_preds = model.predict(X_query)
 
-fig, ax = plt.subplots(figsize=(7, 5))
+fig, ax = plt.subplots(figsize=(8.2, 5))
 colors = ["#2b5c8f", "#d95f02", "#7570b3"]
 
 # Training data
@@ -70,7 +69,18 @@ ax.scatter(
     zorder=10,
 )
 
-ax.set_title("CLARANS Cluster Predictions for New Unseen Samples")
-ax.legend(loc="upper right", fontsize=8)
+for spine in ax.spines.values():
+    spine.set_color("#cccccc")
+    spine.set_linewidth(0.8)
+
+ax.set_title("CLARANS Cluster Predictions for New Unseen Samples", fontsize=11, pad=8)
+ax.legend(
+    bbox_to_anchor=(1.02, 1),
+    loc="upper left",
+    frameon=True,
+    facecolor="white",
+    edgecolor="#cccccc",
+    fontsize=8.5,
+)
 plt.tight_layout()
 plt.show()
