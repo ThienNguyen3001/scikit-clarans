@@ -159,6 +159,26 @@ Number of restarts (``num_local``):
 Neighbor sampling (``max_neighbors``):
   The default ``max_neighbors='auto'`` scales with the dataset size according to formulas from the original papers (:math:`\max(250, 1.25\% \times k(n-k))` in CLARANS and :math:`\max(1, \lfloor 250/k \rfloor, 2.5\% \times (n-k))` in FastCLARANS). An explicit integer value (such as ``max_neighbors=200``) is mainly useful when you need a fixed ceiling on search steps for very large inputs.
 
+Distance metrics and routing
+^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+
+``scikit-clarans`` automatically routes distance computations based on the input data type, matrix sparsity, and chosen metric:
+
+1. **Dense array metrics**:
+   Standard distance functions (``'euclidean'``, ``'manhattan'``, ``'cosine'``, ``'chebyshev'``, ``'minkowski'``, ``'mahalanobis'``) are routed to SciPy's optimized ``cdist``. Metric aliases are mapped automatically (such as ``'cityblock'`` and ``'l1'`` to ``'manhattan'``, or ``'l2'`` to ``'euclidean'``). Keyword parameters such as ``{'p': 3}`` or ``{'VI': VI}`` are passed via ``metric_params``.
+
+2. **Sparse matrix inputs (scipy.sparse)**:
+   When ``X`` is a CSR or CSC sparse matrix, distance evaluations are routed to scikit-learn's ``DistanceMetric`` without densifying the full matrix, maintaining an :math:`O(n)` memory footprint.
+
+3. **Missing data (NaN) handling**:
+   When inputs contain missing values (NaN), configure ``metric='nan_euclidean'``. Any dimension where either sample is missing is excluded from the distance sum, and the Euclidean distance is scaled by :math:`\sqrt{d / d_{\text{valid}}}`.
+
+4. **Custom callable functions**:
+   Supply any Python distance function ``metric=func`` accepting two 1D vectors ``(u, v) -> float``. For example, a custom Haversine function can cluster geographical latitude and longitude coordinates on the Earth's surface.
+
+5. **Precomputed distance matrices**:
+   Pass a pairwise distance matrix with ``metric='precomputed'``. The algorithm validates symmetry using fast Cython kernels (``is_matrix_symmetric``) and handles both symmetric and directed/asymmetric matrices (:math:`D \neq D^T`). When performing inference with ``predict()`` or ``transform()`` on new query points, you can provide either the full matrix of shape :math:`(n_{\text{test}}, n_{\text{train}})` or a compact submatrix of shape :math:`(n_{\text{test}}, k)` matching only the :math:`k` medoids.
+
 Fitted attributes
 -----------------
 
