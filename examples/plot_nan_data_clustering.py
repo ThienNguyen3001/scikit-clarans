@@ -8,7 +8,7 @@ containing missing values (NaN) using ``metric='nan_euclidean'``.
 
 .. note::
 
-    **How ``nan_euclidean`` handles missing attributes:**
+    **How nan_euclidean handles missing attributes:**
     When computing pairwise distances between two samples :math:`u` and :math:`v`,
     any dimension where either vector contains a NaN is omitted from the Euclidean
     sum. The accumulated squared distance across non-missing dimensions is then

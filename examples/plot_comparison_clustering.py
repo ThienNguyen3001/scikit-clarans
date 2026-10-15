@@ -8,7 +8,7 @@ classic CLARANS, FastCLARANS, and scikit-learn's standard KMeans clusterer.
 
 .. note::
 
-    **Why ``metric='sqeuclidean'``?**
+    **Why metric='sqeuclidean'?**
     Scikit-learn's ``KMeans.inertia_`` minimizes the sum of **squared** Euclidean
     distances (:math:`\\sum d^2`). By default, CLARANS minimizes unsquared (linear)
     distances. To align CLARANS and FastCLARANS with KMeans' exact objective
