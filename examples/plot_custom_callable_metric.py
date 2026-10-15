@@ -128,8 +128,8 @@ ax.set_title(
     fontsize=11,
     pad=10,
 )
-ax.set_xlabel("Longitude (Degrees)", fontsize=9.5)
-ax.set_ylabel("Latitude (Degrees)", fontsize=9.5)
+ax.set_xticks([])
+ax.set_yticks([])
 for spine in ax.spines.values():
     spine.set_color("#cccccc")
     spine.set_linewidth(0.8)

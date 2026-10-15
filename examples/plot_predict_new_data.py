@@ -73,6 +73,9 @@ for spine in ax.spines.values():
     spine.set_color("#cccccc")
     spine.set_linewidth(0.8)
 
+ax.set_xticks([])
+ax.set_yticks([])
+
 ax.set_title("CLARANS Cluster Predictions for New Unseen Samples", fontsize=11, pad=8)
 ax.legend(
     bbox_to_anchor=(1.02, 1),
