@@ -42,6 +42,11 @@ List of Gallery Examples (Sphinx-Gallery convention: `plot_*.py`)
 - `plot_precomputed_distances.py`: Clustering using precomputed pairwise distance matrices.
 - `plot_graph_clustering.py`: Graph community clustering with precomputed shortest-path distances.
 - `plot_nan_data_clustering.py`: Handling missing values (NaN) with `metric='nan_euclidean'`.
+- `plot_custom_callable_metric.py`: Custom callable distance metric (Haversine geospatial GPS clustering).
+- `plot_asymmetric_distances.py`: Clustering on directed / asymmetric distance matrices ($D \neq D^T$).
+- `plot_anomaly_detection.py`: Unsupervised anomaly detection via distance-to-medoid scoring.
+- `plot_string_clustering.py`: Clustering non-vector text sequences with Levenshtein edit distance.
+- `plot_precomputed_inference.py`: Fast precomputed inference using compact $(n_{\text{test}}, k)$ matrices.
 
 Notes
 -----

@@ -12,6 +12,7 @@ Quick start and inference:
   * :doc:`auto_examples/plot_quick_start`: Fit a model on Gaussian blobs and inspect cluster medoids.
   * :doc:`auto_examples/plot_predict_new_data`: Assign unseen samples to existing cluster centers.
   * :doc:`auto_examples/plot_transform_data`: Transform observations into distance-to-medoid representations.
+  * :doc:`auto_examples/plot_precomputed_inference`: Accelerate precomputed inference using compact (n_test, k) distance submatrices.
 
 Initialization strategies:
   * :doc:`auto_examples/plot_initialization_comparison`: Compare ``k-medoids++``, ``random``, ``build``, and ``heuristic`` seeding.
@@ -22,12 +23,16 @@ Metrics and data representations:
   * :doc:`auto_examples/plot_sparse_input`: Cluster CSR sparse feature matrices directly.
   * :doc:`auto_examples/plot_precomputed_distances`: Cluster datasets using precomputed pairwise distance matrices.
   * :doc:`auto_examples/plot_nan_data_clustering`: Cluster incomplete data with missing values (NaN) using ``nan_euclidean``.
+  * :doc:`auto_examples/plot_custom_callable_metric`: Cluster geographic coordinates using a custom Haversine distance callable.
+  * :doc:`auto_examples/plot_asymmetric_distances`: Cluster directed networks on asymmetric precomputed distance matrices.
+  * :doc:`auto_examples/plot_string_clustering`: Cluster non-vector text sequences using Levenshtein edit distance.
 
 Cluster geometry and diagnostics:
   * :doc:`auto_examples/plot_clusters_blobs`: Medoid identification on isotropic Gaussian clusters.
   * :doc:`auto_examples/plot_clusters_moons`: Behavior on non-convex interleaving moons.
   * :doc:`auto_examples/plot_clusters_anisotropic`: Performance on elongated, anisotropic cluster shapes.
   * :doc:`auto_examples/plot_outlier_robustness`: Compare medoid resistance against centroids in the presence of extreme values.
+  * :doc:`auto_examples/plot_anomaly_detection`: Unsupervised outlier and anomaly detection via distance-to-medoid scoring.
   * :doc:`auto_examples/plot_silhouette_vs_k`: Select optimal cluster count :math:`k` using silhouette scores.
 
 Performance and benchmarks:
