@@ -1,7 +1,7 @@
 """
-========================================================================
+==========================================================================
 Fast Precomputed Inference: Compact (n_test, k) vs. Full (n_test, n_train)
-========================================================================
+==========================================================================
 
 This example demonstrates an optimization in scikit-clarans for
 inference (``predict`` and ``transform``) on precomputed distance matrices.
