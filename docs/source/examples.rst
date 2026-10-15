@@ -21,6 +21,7 @@ Metrics and data representations:
   * :doc:`auto_examples/plot_metrics_demo`: Evaluate clustering results using Euclidean, Manhattan, and Cosine metrics.
   * :doc:`auto_examples/plot_sparse_input`: Cluster CSR sparse feature matrices directly.
   * :doc:`auto_examples/plot_precomputed_distances`: Cluster datasets using precomputed pairwise distance matrices.
+  * :doc:`auto_examples/plot_nan_data_clustering`: Cluster incomplete data with missing values (NaN) using ``nan_euclidean``.
 
 Cluster geometry and diagnostics:
   * :doc:`auto_examples/plot_clusters_blobs`: Medoid identification on isotropic Gaussian clusters.
