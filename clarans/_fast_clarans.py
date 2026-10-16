@@ -36,10 +36,7 @@ def _fallback_fastpam1_delta(
         0.0,
         np.where(d_xc < second_dist, d_xc - near_dist, second_dist - near_dist),
     )
-    delta_arr = (
-        np.bincount(near_idx_map, weights=weights, minlength=n_clusters)
-        + delta_td
-    )
+    delta_arr = np.bincount(near_idx_map, weights=weights, minlength=n_clusters) + delta_td
     best_m = int(np.argmin(delta_arr))
     return best_m, float(delta_arr[best_m])
 
@@ -113,6 +110,12 @@ class FastCLARANS(CLARANS):
           cost, elapsed time, swaps performed, and candidates evaluated).
         - ``>=2``: Additionally prints details on each successful medoid swap.
 
+    n_jobs : int, default=None
+        The number of parallel jobs to run across ``num_local`` local search
+        restarts during ``fit``. ``None`` means 1 unless in a
+        ``joblib.parallel_backend`` context. ``-1`` means using all
+        processors.
+
     Attributes
     ----------
     cluster_centers_ : {ndarray, sparse matrix} of shape (n_clusters, n_features) or None
@@ -183,6 +186,7 @@ class FastCLARANS(CLARANS):
         metric_params: dict[str, Any] | None = None,
         random_state: int | np.random.RandomState | None = None,
         verbose: int = 0,
+        n_jobs: int | None = None,
     ) -> None:
         super().__init__(
             n_clusters=n_clusters,
@@ -194,6 +198,7 @@ class FastCLARANS(CLARANS):
             random_state=random_state,
             cost_evaluation="delta",
             verbose=verbose,
+            n_jobs=n_jobs,
         )
 
     def _init_search_budget(self, n_samples: int) -> None:
@@ -211,9 +216,7 @@ class FastCLARANS(CLARANS):
 
         self.n_neighbors_ = n_samples - self.n_clusters
 
-    def _allocate_search_buffers(
-        self, X: Any, n_samples: int
-    ) -> dict[str, np.ndarray]:
+    def _allocate_search_buffers(self, X: Any, n_samples: int) -> dict[str, np.ndarray]:
         """Pre-allocate reusable scratch buffers for neighbor evaluations."""
         bufs = super()._allocate_search_buffers(X, n_samples)
         buf_dtype = bufs["d_xc_buf"].dtype
@@ -228,6 +231,7 @@ class FastCLARANS(CLARANS):
         d_xc_buf: np.ndarray | None = None,
         delta_arr_buf: np.ndarray | None = None,
         loc_idx: int = 1,
+        **kwargs: Any,
     ) -> tuple[float, np.ndarray, int, int]:
         """Perform a single local search from initial medoids to a local optimum."""
         n_samples = X.shape[0]
@@ -245,18 +249,14 @@ class FastCLARANS(CLARANS):
 
         if self.verbose >= 2:
             r_idx = loc_idx
-            print(
-                f"  Restart {r_idx}/{self.num_local} (init cost: {current_cost:.5f}):"
-            )
+            print(f"  Restart {r_idx}/{self.num_local} (init cost: {current_cost:.5f}):")
 
         non_medoid_mask = np.ones(n_samples, dtype=bool)
         non_medoid_mask[current_medoids_indices] = False
         available_candidates = np.flatnonzero(non_medoid_mask)
 
         # Check whether Cython kernel can be used for this batch
-        can_use_cython = self._can_use_cython(
-            d_xc_buf, near_idx_map, near_dist, second_dist
-        )
+        can_use_cython = self._can_use_cython(d_xc_buf, near_idx_map, near_dist, second_dist)
         delta_buf_arg = (
             delta_arr_buf
             if (
@@ -277,19 +277,13 @@ class FastCLARANS(CLARANS):
                 break
 
             candidate_idx = int(
-                available_candidates[
-                    random_state.randint(0, len(available_candidates))
-                ]
+                available_candidates[random_state.randint(0, len(available_candidates))]
             )
 
             cand_row = (
-                None
-                if self.metric == "precomputed"
-                else X[candidate_idx:candidate_idx + 1]
+                None if self.metric == "precomputed" else X[candidate_idx : candidate_idx + 1]
             )
-            d_xc = self._compute_1_vs_n(
-                cand_row, X, out=d_xc_buf, candidate_idx=candidate_idx
-            )
+            d_xc = self._compute_1_vs_n(cand_row, X, out=d_xc_buf, candidate_idx=candidate_idx)
 
             if self.n_clusters == 1:
                 candidate_cost = float(np.sum(d_xc))
