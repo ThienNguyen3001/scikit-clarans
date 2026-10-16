@@ -15,9 +15,7 @@ from clarans.utils import calculate_cost, check_medoids
 
 class TestCLARANS(unittest.TestCase):
     def setUp(self):
-        self.X, self.y = make_blobs(
-            n_samples=100, centers=3, n_features=2, random_state=42
-        )
+        self.X, self.y = make_blobs(n_samples=100, centers=3, n_features=2, random_state=42)
 
     def test_fit(self):
         clarans = CLARANS(n_clusters=3, num_local=2, max_neighbors=10, random_state=42)
@@ -183,13 +181,12 @@ class TestCLARANS(unittest.TestCase):
     def test_medoid_uniqueness_multiple_seeds(self):
         """All medoids should be unique across multiple random seeds."""
         for seed in range(10):
-            clarans = CLARANS(
-                n_clusters=3, num_local=1, max_neighbors=30, random_state=seed
-            )
+            clarans = CLARANS(n_clusters=3, num_local=1, max_neighbors=30, random_state=seed)
             clarans.fit(self.X)
             unique_count = len(np.unique(clarans.medoid_indices_))
             self.assertEqual(
-                unique_count, 3,
+                unique_count,
+                3,
                 f"Seed {seed}: Expected 3 unique medoids, got {unique_count}",
             )
 
@@ -200,7 +197,8 @@ class TestCLARANS(unittest.TestCase):
         for i, center in enumerate(clarans.cluster_centers_):
             medoid_idx = clarans.medoid_indices_[i]
             np.testing.assert_array_equal(
-                center, self.X[medoid_idx],
+                center,
+                self.X[medoid_idx],
                 f"Cluster center {i} doesn't match X[{medoid_idx}]",
             )
 
@@ -219,7 +217,8 @@ class TestCLARANS(unittest.TestCase):
         clarans.fit(self.X)
         predicted = clarans.predict(self.X)
         np.testing.assert_array_equal(
-            predicted, clarans.labels_,
+            predicted,
+            clarans.labels_,
             "predict(X) should match labels_ on training data",
         )
 
@@ -232,11 +231,13 @@ class TestCLARANS(unittest.TestCase):
         clarans2.fit(self.X)
 
         np.testing.assert_array_equal(
-            clarans1.medoid_indices_, clarans2.medoid_indices_,
+            clarans1.medoid_indices_,
+            clarans2.medoid_indices_,
             "Same random_state should give same medoids",
         )
         np.testing.assert_array_equal(
-            clarans1.labels_, clarans2.labels_,
+            clarans1.labels_,
+            clarans2.labels_,
             "Same random_state should give same labels",
         )
 
@@ -323,9 +324,7 @@ class TestCLARANS(unittest.TestCase):
         clarans.fit(self.X)
         transformed = clarans.transform(self.X)
         self.assertIsInstance(transformed, pd.DataFrame)
-        self.assertListEqual(
-            list(transformed.columns), ["clarans0", "clarans1", "clarans2"]
-        )
+        self.assertListEqual(list(transformed.columns), ["clarans0", "clarans1", "clarans2"])
 
 
 class TestCLARANSEdgeCases(unittest.TestCase):
@@ -389,9 +388,7 @@ class TestCostCalculation(unittest.TestCase):
         medoids = np.array([0, 30, 60])
         cost = calculate_cost(self.X, medoids, "euclidean")
         medoid_points = self.X[medoids]
-        _, min_dists = pairwise_distances_argmin_min(
-            self.X, medoid_points, metric="euclidean"
-        )
+        _, min_dists = pairwise_distances_argmin_min(self.X, medoid_points, metric="euclidean")
         expected = np.sum(min_dists)
         self.assertAlmostEqual(cost, expected, places=6)
 
@@ -407,9 +404,7 @@ class TestCostCalculation(unittest.TestCase):
         medoids = np.array([0, 30, 60])
         for metric in ["euclidean", "manhattan"]:
             cost = calculate_cost(self.X, medoids, metric)
-            _, min_dists = pairwise_distances_argmin_min(
-                self.X, self.X[medoids], metric=metric
-            )
+            _, min_dists = pairwise_distances_argmin_min(self.X, self.X[medoids], metric=metric)
             expected = np.sum(min_dists)
             self.assertAlmostEqual(cost, expected, places=6)
 
@@ -420,6 +415,16 @@ class TestCostCalculation(unittest.TestCase):
         cost = calculate_cost(D, medoids, metric="precomputed")
         expected = calculate_cost(self.X, medoids, metric="euclidean")
         self.assertAlmostEqual(cost, expected, places=5)
+
+    def test_cost_with_preallocated_out(self):
+        """calculate_cost should populate pre-allocated out buffer and match without out."""
+        medoids = np.array([0, 30, 60])
+        cost_no_out = calculate_cost(self.X, medoids, "euclidean")
+        out_buf = np.empty((self.X.shape[0], len(medoids)), dtype=np.float64)
+        cost_with_out = calculate_cost(self.X, medoids, "euclidean", out=out_buf)
+        self.assertAlmostEqual(cost_no_out, cost_with_out, places=9)
+        expected_D = pairwise_distances(self.X, self.X[medoids], metric="euclidean")
+        np.testing.assert_allclose(out_buf, expected_D, rtol=1e-5, atol=1e-6)
 
 
 class TestCLARANSValidationAndPrecomputed(unittest.TestCase):
@@ -507,6 +512,7 @@ class TestCLARANSValidationAndPrecomputed(unittest.TestCase):
     def test_deterministic_init_warning_and_caching(self):
         """CLARANS should warn when num_local > 1 with deterministic init and succeed."""
         import warnings
+
         for init_strategy in ["heuristic", "build", self.X[:3]]:
             with warnings.catch_warnings(record=True) as w:
                 warnings.simplefilter("always")
@@ -535,9 +541,7 @@ class TestCLARANSValidationAndPrecomputed(unittest.TestCase):
         model_brute.fit(self.X)
         self.assertEqual(len(model_brute.medoid_indices_), 3)
 
-        np.testing.assert_array_equal(
-            model_delta.medoid_indices_, model_brute.medoid_indices_
-        )
+        np.testing.assert_array_equal(model_delta.medoid_indices_, model_brute.medoid_indices_)
         self.assertAlmostEqual(model_delta.inertia_, model_brute.inertia_, places=5)
 
         with self.assertRaises(ValueError):
@@ -556,9 +560,7 @@ class TestCLARANSValidationAndPrecomputed(unittest.TestCase):
 
     def test_parameters_num_local_max_neighbors(self):
         """Using num_local and max_neighbors should work and set max_neighbors_."""
-        model = CLARANS(
-            n_clusters=3, num_local=2, max_neighbors=25, random_state=42
-        )
+        model = CLARANS(n_clusters=3, num_local=2, max_neighbors=25, random_state=42)
         model.fit(self.X)
         self.assertEqual(model.max_neighbors_, 25)
         self.assertFalse(hasattr(model, "maxneighbor_"))
@@ -595,6 +597,7 @@ class TestCLARANSValidationAndPrecomputed(unittest.TestCase):
 
     def test_init_unconvertible_raises(self):
         """Unconvertible init object should raise ValueError."""
+
         class Unconvertible:
             def __array__(self, *args, **kwargs):
                 raise RuntimeError("Failed array conversion")
@@ -606,6 +609,7 @@ class TestCLARANSValidationAndPrecomputed(unittest.TestCase):
     def test_init_centers_cdist_fallback(self):
         """2D init with metric that cdist fails on should fall back to pairwise_distances."""
         from unittest.mock import patch
+
         with patch("clarans._clarans.cdist", side_effect=Exception("cdist failed")):
             init_centers = self.X[:3]
             model = CLARANS(n_clusters=3, init=init_centers, random_state=42).fit(self.X)
@@ -618,6 +622,7 @@ class TestCascadingDistanceEngine(unittest.TestCase):
     def setUp(self):
         self.X_dense, _ = make_blobs(n_samples=60, centers=3, n_features=4, random_state=42)
         import scipy.sparse as sp
+
         self.X_sparse = sp.csr_matrix(self.X_dense)
 
     def test_cdist_selected_for_dense_metrics(self):
@@ -640,6 +645,7 @@ class TestCascadingDistanceEngine(unittest.TestCase):
 
     def test_distance_metric_selected_for_callable(self):
         """Scikit-Learn DistanceMetric should be chosen for callable distance functions."""
+
         def my_metric(u, v):
             return float(np.sum(np.abs(u - v)))
 
@@ -761,6 +767,7 @@ class TestUtilsHelpers(unittest.TestCase):
 
     def test_check_medoids_unconvertible_raises(self):
         """Passing unconvertible object to check_medoids should raise ValueError."""
+
         class BadObject:
             def __array__(self, *args, **kwargs):
                 raise RuntimeError("Cannot convert")
@@ -772,6 +779,7 @@ class TestUtilsHelpers(unittest.TestCase):
     def test_calculate_cost_cdist_fallback(self):
         """calculate_cost should fall back to pairwise_distances when cdist fails on dense data."""
         from unittest.mock import patch
+
         X = np.array([[0.0, 0.0], [1.0, 1.0], [2.0, 2.0]])
         with patch("clarans.utils.cdist", side_effect=Exception("cdist failed")):
             cost = calculate_cost(X, [0, 1])
@@ -797,8 +805,9 @@ class TestUtilsHelpers(unittest.TestCase):
         from unittest.mock import patch
         import clarans.utils as utils
 
-        with patch.object(utils, "HAS_CYTHON", False), patch.object(
-            utils, "_cython_warning_issued", False
+        with (
+            patch.object(utils, "HAS_CYTHON", False),
+            patch.object(utils, "_cython_warning_issued", False),
         ):
             with warnings.catch_warnings(record=True) as w:
                 warnings.simplefilter("always")
@@ -824,9 +833,7 @@ class TestCLARANSMetricParams(unittest.TestCase):
 
     def test_minkowski_with_p(self):
         """CLARANS should support Minkowski metric with p passed via metric_params."""
-        model = CLARANS(
-            n_clusters=2, metric="minkowski", metric_params={"p": 3}, random_state=42
-        )
+        model = CLARANS(n_clusters=2, metric="minkowski", metric_params={"p": 3}, random_state=42)
         model.fit(self.X)
         self.assertEqual(model.labels_.shape, (len(self.X),))
         self.assertEqual(model.cluster_centers_.shape, (2, 3))
@@ -855,13 +862,14 @@ class TestCLARANSMetricParams(unittest.TestCase):
         self.assertIn("vi", str(ctx.exception).lower())
 
         with self.assertRaises(ValueError) as ctx:
-            CLARANS(
-                n_clusters=2, metric="mahalanobis", metric_params={}, random_state=42
-            ).fit(self.X)
+            CLARANS(n_clusters=2, metric="mahalanobis", metric_params={}, random_state=42).fit(
+                self.X
+            )
         self.assertIn("vi", str(ctx.exception).lower())
 
     def test_custom_callable_with_metric_params(self):
         """CLARANS should forward metric_params to custom callable metric."""
+
         def custom_dist(x, y, weight=1.0):
             return np.sum(np.abs(x - y)) * weight
 
@@ -877,9 +885,7 @@ class TestCLARANSMetricParams(unittest.TestCase):
     def test_invalid_metric_params_type(self):
         """Non-dict metric_params should raise ValueError."""
         with self.assertRaises(ValueError) as ctx:
-            CLARANS(n_clusters=2, metric_params="not_a_dict", random_state=42).fit(
-                self.X
-            )
+            CLARANS(n_clusters=2, metric_params="not_a_dict", random_state=42).fit(self.X)
         self.assertIn("metric_params", str(ctx.exception).lower())
 
     def test_clone_preserves_metric_params(self):

@@ -146,6 +146,7 @@ def calculate_cost(
     medoid_indices: Sequence[int] | np.ndarray,
     metric: str | Callable = "euclidean",
     metric_params: dict | None = None,
+    out: np.ndarray | None = None,
 ) -> float:
     """Calculate the total cost (sum of distances) for a given set of medoids.
 
@@ -164,6 +165,10 @@ def calculate_cost(
     metric_params : dict, default=None
         Additional keyword arguments for the metric function.
 
+    out : ndarray of shape (n_samples, n_clusters), default=None
+        Optional pre-allocated array to store pairwise distances when using
+        dense inputs with standard metrics.
+
     Returns
     -------
     cost : float
@@ -181,12 +186,18 @@ def calculate_cost(
     if not issparse(X):
         scipy_metric = _map_scipy_metric(metric)
         try:
-            D = cdist(X, medoids, metric=scipy_metric, **params)
+            if (
+                out is not None
+                and out.shape == (X.shape[0], len(medoids))
+                and out.flags.c_contiguous
+                and out.dtype == np.float64
+            ):
+                D = cdist(X, medoids, metric=scipy_metric, out=out, **params)
+            else:
+                D = cdist(X, medoids, metric=scipy_metric, **params)
             return float(np.sum(np.min(D, axis=1)))
         except Exception:
             pass
 
-    _, min_dists = pairwise_distances_argmin_min(
-        X, medoids, metric=metric, metric_kwargs=params
-    )
+    _, min_dists = pairwise_distances_argmin_min(X, medoids, metric=metric, metric_kwargs=params)
     return float(np.sum(min_dists))
