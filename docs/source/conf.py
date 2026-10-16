@@ -86,13 +86,20 @@ intersphinx_mapping = {
     "python": ("https://docs.python.org/3", None),
     "numpy": ("https://numpy.org/doc/stable/", None),
     "sklearn": ("https://scikit-learn.org/stable/", None),
-    "scipy": ("https://docs.scipy.org/doc/scipy/", None)
+    "scipy": ("https://docs.scipy.org/doc/scipy/", None),
 }
 
 # -- Options for HTML output -------------------------------------------------
 # https://www.sphinx-doc.org/en/master/usage/configuration.html#options-for-html-output
 
 html_theme = "sphinx_rtd_theme"
+html_theme_options = {
+    "collapse_navigation": True,
+    "sticky_navigation": True,
+    "navigation_depth": 4,
+    "includehidden": True,
+    "titles_only": True,
+}
 html_static_path = ["_static"]
 
 html_css_files = [
@@ -106,10 +113,35 @@ html_js_files = [
 ]
 
 html_sidebars = {
-    '**': [
-        'globaltoc.html',
-        'relations.html',
-        'sourcelink.html',
-        'searchbox.html',
+    "**": [
+        "globaltoc.html",
+        "relations.html",
+        "sourcelink.html",
+        "searchbox.html",
     ]
 }
+
+
+def remove_gallery_nested_toctree(app, docname, source):
+    """Remove redundant toctree appended at the end of auto_examples/index.rst.
+
+    Sphinx-Gallery appends a toctree of all subsection indices at the end of
+    auto_examples/index.rst. In docutils AST, this places the toctree inside
+    the last section ('Benchmarks and Convergence'), causing the sidebar to
+    display all categories nested under the benchmarks section.
+    Since all subsection indices are already included in docs/source/index.rst,
+    we strip this trailing toctree so the gallery index displays clean headings.
+    """
+    if docname == "auto_examples/index":
+        import re
+
+        source[0] = re.sub(
+            r"\.\. toctree::\s+:hidden:\s+:includehidden:.*?(?=\.\. only::|\Z)",
+            "",
+            source[0],
+            flags=re.DOTALL,
+        )
+
+
+def setup(app):
+    app.connect("source-read", remove_gallery_nested_toctree)
