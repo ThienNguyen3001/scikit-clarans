@@ -136,7 +136,15 @@ for k in range(3):
 ax_a.set_title("FastCLARANS Clusters + Exemplar Medoids", fontsize=11, pad=8)
 ax_a.set_xlabel("Time Index", fontsize=10)
 ax_a.set_ylabel("Signal Amplitude", fontsize=10)
-ax_a.legend(loc="upper right", frameon=False, fontsize=9)
+ax_a.set_ylim(-0.85, 1.50)
+ax_a.legend(
+    loc="upper left",
+    frameon=True,
+    facecolor="white",
+    framealpha=0.92,
+    edgecolor="#e0e0e0",
+    fontsize=8.5,
+)
 for spine in ax_a.spines.values():
     spine.set_color("#cccccc")
     spine.set_linewidth(0.8)
@@ -144,8 +152,7 @@ for spine in ax_a.spines.values():
 # Panel (b): The destructive interference problem in K-Means vs. Medoid
 ax_b = axes[1]
 # Pick the Gaussian surge cluster to contrast the arithmetic mean vs medoid
-cluster_energy = [np.sum(curves_arr[model.medoid_indices_[k]]) for k in range(3)]
-gaussian_cluster_idx = int(np.argmax(cluster_energy))
+gaussian_cluster_idx = int(model.labels_[0])
 gaussian_mask = model.labels_ == gaussian_cluster_idx
 gaussian_curves = curves_arr[gaussian_mask]
 arithmetic_mean = np.mean(gaussian_curves, axis=0)
@@ -173,7 +180,15 @@ ax_b.plot(
 ax_b.set_title("Medoid vs. Pointwise Mean (Averaging Artifact)", fontsize=11, pad=8)
 ax_b.set_xlabel("Time Index", fontsize=10)
 ax_b.set_yticks([])
-ax_b.legend(loc="upper right", frameon=False, fontsize=9)
+ax_b.set_ylim(-0.15, 1.45)
+ax_b.legend(
+    loc="upper right",
+    frameon=True,
+    facecolor="white",
+    framealpha=0.92,
+    edgecolor="#e0e0e0",
+    fontsize=8.5,
+)
 for spine in ax_b.spines.values():
     spine.set_color("#cccccc")
     spine.set_linewidth(0.8)
@@ -208,7 +223,15 @@ ax_c.scatter(
 ax_c.set_title("2D Projection of DTW Distance Space", fontsize=11, pad=8)
 ax_c.set_xticks([])
 ax_c.set_yticks([])
-ax_c.legend(loc="upper right", frameon=False, fontsize=9)
+ax_c.margins(0.20)
+ax_c.legend(
+    loc="upper right",
+    frameon=True,
+    facecolor="white",
+    framealpha=0.92,
+    edgecolor="#e0e0e0",
+    fontsize=8.5,
+)
 for spine in ax_c.spines.values():
     spine.set_color("#cccccc")
     spine.set_linewidth(0.8)

@@ -159,8 +159,15 @@ ax_a.set_xticks(x_coords)
 ax_a.set_xticklabels(feature_labels, fontsize=9.5)
 ax_a.set_ylabel("Normalized Feature Value", fontsize=10)
 ax_a.set_title("Medoid Personas Across Attributes", fontsize=11, pad=8)
-ax_a.set_ylim(-0.08, 1.08)
-ax_a.legend(loc="upper right", frameon=False, fontsize=9)
+ax_a.set_ylim(-0.08, 1.42)
+ax_a.legend(
+    loc="upper left",
+    frameon=True,
+    facecolor="white",
+    framealpha=0.92,
+    edgecolor="#e0e0e0",
+    fontsize=8.5,
+)
 for spine in ax_a.spines.values():
     spine.set_color("#cccccc")
     spine.set_linewidth(0.8)
@@ -195,7 +202,15 @@ ax_b.scatter(
 ax_b.set_title("2D Projection of Gower Metric Space", fontsize=11, pad=8)
 ax_b.set_xticks([])
 ax_b.set_yticks([])
-ax_b.legend(loc="upper right", frameon=False, fontsize=9)
+ax_b.margins(0.22)
+ax_b.legend(
+    loc="upper left",
+    frameon=True,
+    facecolor="white",
+    framealpha=0.92,
+    edgecolor="#e0e0e0",
+    fontsize=8.5,
+)
 for spine in ax_b.spines.values():
     spine.set_color("#cccccc")
     spine.set_linewidth(0.8)
@@ -240,8 +255,15 @@ ax_c.set_xticks(bar_x)
 ax_c.set_xticklabels(bar_categories, fontsize=10)
 ax_c.set_ylabel("Channel Value / Probability", fontsize=10)
 ax_c.set_title("Concrete Category vs. Fractional Mean", fontsize=11, pad=8)
-ax_c.set_ylim(0, 1.15)
-ax_c.legend(loc="upper right", frameon=False, fontsize=9)
+ax_c.set_ylim(0, 1.35)
+ax_c.legend(
+    loc="upper right",
+    frameon=True,
+    facecolor="white",
+    framealpha=0.92,
+    edgecolor="#e0e0e0",
+    fontsize=8.5,
+)
 for spine in ax_c.spines.values():
     spine.set_color("#cccccc")
     spine.set_linewidth(0.8)
