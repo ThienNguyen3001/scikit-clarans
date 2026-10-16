@@ -8,13 +8,12 @@ How to run
 ----------
 From the repository root, run any example with::
 
-    python examples/plot_quick_start.py
+    python examples/plot_clusters_blobs.py
 
 List of Gallery Examples (Sphinx-Gallery convention: `plot_*.py`)
 -----------------------------------------------------------------
 
 ### 1. Basic Clustering & Geometries
-- `plot_quick_start.py`: Minimalist 2D clustering and medoids plotting.
 - `plot_clusters_blobs.py`: CLARANS on synthetic isotropic Gaussian blobs.
 - `plot_clusters_moons.py`: Clustering on non-convex interleaving moons.
 - `plot_clusters_anisotropic.py`: Clustering on linearly transformed anisotropic clusters.

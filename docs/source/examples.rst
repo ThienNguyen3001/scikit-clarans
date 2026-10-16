@@ -8,8 +8,7 @@ For rendered output with generated plots and downloadable Jupyter notebooks (``.
 Overview of examples
 --------------------
 
-Quick start and inference:
-  * :doc:`auto_examples/plot_quick_start`: Fit a model on Gaussian blobs and inspect cluster medoids.
+Inference and transformations:
   * :doc:`auto_examples/plot_predict_new_data`: Assign unseen samples to existing cluster centers.
   * :doc:`auto_examples/plot_transform_data`: Transform observations into distance-to-medoid representations.
   * :doc:`auto_examples/plot_precomputed_inference`: Accelerate precomputed inference using compact (n_test, k) distance submatrices.
