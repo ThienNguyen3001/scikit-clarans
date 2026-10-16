@@ -64,6 +64,10 @@ sphinx_gallery_conf = {
     "image_scrapers": ("matplotlib",),
     "show_memory": False,
     "plot_gallery": "True",
+    "recommender": {
+        "enable": True,
+        "n_examples": 4,
+    },
 }
 
 # Copybutton settings: strip Python/terminal prompts when copying
