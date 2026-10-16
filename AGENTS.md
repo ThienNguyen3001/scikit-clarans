@@ -154,7 +154,7 @@ python examples/benchmarks/plot_cost_evaluation_strategy.py
 ```
 
 ### Examples (`/examples`)
-Run all 26 gallery scripts with headless `MPLBACKEND=Agg`:
+Run all 28 gallery scripts with headless `MPLBACKEND=Agg`:
 ```powershell
 & .venv\Scripts\Activate.ps1
 $env:MPLBACKEND = "Agg"

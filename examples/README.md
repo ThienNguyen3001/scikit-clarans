@@ -27,6 +27,8 @@ List of Gallery Examples by Category
 - `plot_custom_callable_metric.py`: Custom callable distance metric (Haversine geospatial GPS clustering).
 - `plot_asymmetric_distances.py`: Clustering on directed / asymmetric distance matrices ($D \neq D^T$).
 - `plot_string_clustering.py`: Clustering non-vector text sequences with Levenshtein edit distance.
+- `plot_time_series_dtw.py`: Clustering temporal signals with Dynamic Time Warping (DTW) distance matrices.
+- `plot_mixed_data_gower.py`: Clustering mixed continuous, binary, and categorical data using Gower's dissimilarity.
 
 ### 3. Seeding & Validation (`examples/initialization/`)
 - `plot_initialization_comparison.py`: Visual comparison of seeding methods (Random, k-medoids++, Heuristic, BUILD).

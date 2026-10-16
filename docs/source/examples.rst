@@ -22,6 +22,8 @@ Distance metrics and representations:
   * :doc:`auto_examples/distance_metrics/plot_custom_callable_metric`: Cluster geographic coordinates using a custom Haversine distance callable.
   * :doc:`auto_examples/distance_metrics/plot_asymmetric_distances`: Cluster directed networks on asymmetric precomputed distance matrices.
   * :doc:`auto_examples/distance_metrics/plot_string_clustering`: Cluster non-vector text sequences using Levenshtein edit distance.
+  * :doc:`auto_examples/distance_metrics/plot_time_series_dtw`: Cluster temporal signals with Dynamic Time Warping (DTW) distance matrices.
+  * :doc:`auto_examples/distance_metrics/plot_mixed_data_gower`: Cluster mixed continuous, binary, and categorical data using Gower's dissimilarity.
 
 Seeding and validation:
   * :doc:`auto_examples/initialization/plot_initialization_comparison`: Compare ``k-medoids++``, ``random``, ``build``, and ``heuristic`` seeding.
