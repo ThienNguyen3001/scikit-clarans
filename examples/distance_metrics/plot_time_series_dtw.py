@@ -149,7 +149,7 @@ for spine in ax_a.spines.values():
     spine.set_color("#cccccc")
     spine.set_linewidth(0.8)
 
-# Panel (b): The destructive interference problem in K-Means vs. Medoid
+# Panel (b): The destructive interference problem of pointwise averaging vs. Medoid
 ax_b = axes[1]
 # Pick the Gaussian surge cluster to contrast the arithmetic mean vs medoid
 gaussian_cluster_idx = int(model.labels_[0])
@@ -167,7 +167,7 @@ ax_b.plot(
     color="#d95f02",
     linestyle="--",
     linewidth=2.2,
-    label="Pointwise Mean (K-Means Centroid)",
+    label="Pointwise Mean (Centroid)",
 )
 ax_b.plot(
     t,

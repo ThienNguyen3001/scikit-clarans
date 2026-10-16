@@ -216,17 +216,17 @@ for spine in ax_b.spines.values():
     spine.set_color("#cccccc")
     spine.set_linewidth(0.8)
 
-# Panel (c): Real Persona vs. Blurry K-Means Mean on discrete features
+# Panel (c): Real Persona vs. Fractional Centroid on discrete features
 ax_c = axes[2]
 # Contrast discrete category resolution: FastCLARANS picks an exact channel,
-# whereas one-hot K-Means produces fractional channel probabilities.
+# whereas taking the arithmetic mean produces fractional channel probabilities.
 bar_categories = ["Branch", "Online", "Mobile"]
 bar_x = np.arange(len(bar_categories))
 bar_width = 0.35
 
 # Take Segment 0 (Mobile Professionals) as an example
 seg0_mask = model.labels_ == 0
-k_means_channel_means = [
+centroid_channel_means = [
     np.mean(channels[seg0_mask] == 0),
     np.mean(channels[seg0_mask] == 1),
     np.mean(channels[seg0_mask] == 2),
@@ -245,10 +245,10 @@ ax_c.bar(
 )
 ax_c.bar(
     bar_x + bar_width / 2,
-    k_means_channel_means,
+    centroid_channel_means,
     width=bar_width,
     color="#d95f02",
-    label="K-Means Arithmetic Mean",
+    label="Arithmetic Mean (Centroid)",
     alpha=0.85,
 )
 
