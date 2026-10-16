@@ -40,10 +40,22 @@ extensions = [
     "sphinx_gallery.gen_gallery",
 ]
 
+from sphinx_gallery.sorting import ExplicitOrder
+
 # Sphinx-Gallery settings (scikit-learn standard)
 sphinx_gallery_conf = {
     "examples_dirs": "../../examples",
     "gallery_dirs": "auto_examples",
+    "subsection_order": ExplicitOrder(
+        [
+            "../../examples/cluster_geometry",
+            "../../examples/distance_metrics",
+            "../../examples/initialization",
+            "../../examples/inference",
+            "../../examples/robustness",
+            "../../examples/benchmarks",
+        ]
+    ),
     "filename_pattern": r"plot_",
     "ignore_pattern": r"__init__\.py",
     "download_all_examples": True,

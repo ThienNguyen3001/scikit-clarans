@@ -144,9 +144,9 @@ sphinx-build -b html docs/source docs/build/html -W --keep-going
 ```powershell
 & .venv\Scripts\Activate.ps1
 # 1. Gallery benchmarks
-python examples/plot_clarans_vs_fastclarans.py
-python examples/plot_runtime_scaling.py
-python examples/plot_cost_evaluation_strategy.py
+python examples/benchmarks/plot_clarans_vs_fastclarans.py
+python examples/benchmarks/plot_runtime_scaling.py
+python examples/benchmarks/plot_cost_evaluation_strategy.py
 
 # 2. Interactive and telemetry benchmarks
 # - benchmarks/benchmark_clarans_colab.ipynb (Large-scale Colab benchmarking)
@@ -158,7 +158,7 @@ Run all 26 gallery scripts with headless `MPLBACKEND=Agg`:
 ```powershell
 & .venv\Scripts\Activate.ps1
 $env:MPLBACKEND = "Agg"
-Get-ChildItem examples/plot_*.py | ForEach-Object {
+Get-ChildItem -Path examples -Recurse -Filter "plot_*.py" | ForEach-Object {
     Write-Host "Testing $($_.Name)..." -ForegroundColor Cyan
     python $_.FullName
 }

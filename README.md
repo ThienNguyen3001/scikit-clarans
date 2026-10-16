@@ -105,7 +105,7 @@ Differences from CLARANS:
 Runnable scripts are located in the `examples/` directory:
 
 ```bash
-python examples/plot_clusters_blobs.py
+python examples/cluster_geometry/plot_clusters_blobs.py
 ```
 
 ## Documentation
