@@ -202,9 +202,10 @@ ax_b.scatter(
 ax_b.set_title("2D Projection of Gower Metric Space", fontsize=11, pad=8)
 ax_b.set_xticks([])
 ax_b.set_yticks([])
-ax_b.margins(0.22)
+ax_b.set_ylim(-0.45, 0.55)
 ax_b.legend(
-    loc="upper left",
+    loc="upper center",
+    ncol=2,
     frameon=True,
     facecolor="white",
     framealpha=0.92,

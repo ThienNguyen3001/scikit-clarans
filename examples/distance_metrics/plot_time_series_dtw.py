@@ -223,9 +223,10 @@ ax_c.scatter(
 ax_c.set_title("2D Projection of DTW Distance Space", fontsize=11, pad=8)
 ax_c.set_xticks([])
 ax_c.set_yticks([])
-ax_c.margins(0.20)
+ax_c.set_ylim(-6.8, 5.8)
 ax_c.legend(
-    loc="upper right",
+    loc="upper center",
+    ncol=2,
     frameon=True,
     facecolor="white",
     framealpha=0.92,
