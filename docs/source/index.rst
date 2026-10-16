@@ -36,7 +36,12 @@ Key characteristics:
    :maxdepth: 2
    :caption: Example Gallery
 
-   auto_examples/index
+   auto_examples/cluster_geometry/index
+   auto_examples/distance_metrics/index
+   auto_examples/initialization/index
+   auto_examples/inference/index
+   auto_examples/robustness/index
+   auto_examples/benchmarks/index
 
 .. toctree::
    :maxdepth: 3
