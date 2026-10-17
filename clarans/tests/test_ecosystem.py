@@ -351,6 +351,20 @@ class TestNJobsParallelism(unittest.TestCase):
             cloned.set_params(n_jobs=-1)
             self.assertEqual(cloned.n_jobs, -1)
 
+    def test_n_jobs_nested_parallelism_grid_search_cv(self):
+        """Verify nested parallelism when GridSearchCV(n_jobs=2) wraps CLARANS(n_jobs=2)."""
+        param_grid = {"n_clusters": [2, 3]}
+        for model_cls in [CLARANS, FastCLARANS]:
+            grid = GridSearchCV(
+                estimator=model_cls(num_local=2, random_state=42, n_jobs=2),
+                param_grid=param_grid,
+                cv=2,
+                n_jobs=2,
+            )
+            grid.fit(self.X)
+            self.assertIn(grid.best_params_["n_clusters"], [2, 3])
+            self.assertTrue(hasattr(grid.best_estimator_, "medoid_indices_"))
+
 
 if __name__ == "__main__":
     unittest.main()
