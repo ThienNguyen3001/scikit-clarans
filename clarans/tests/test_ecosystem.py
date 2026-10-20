@@ -21,7 +21,7 @@ import numpy as np
 from sklearn.base import clone
 from sklearn.datasets import make_blobs
 from sklearn.linear_model import LogisticRegression
-from sklearn.metrics import adjusted_rand_score
+from sklearn.metrics import adjusted_rand_score, pairwise_distances
 from sklearn.model_selection import GridSearchCV
 from sklearn.pipeline import Pipeline
 from sklearn.preprocessing import StandardScaler
@@ -108,6 +108,24 @@ class TestEcosystemIntegration(unittest.TestCase):
             t1 = m1.fit_transform(self.X)
             t2 = m1.transform(self.X)
             np.testing.assert_allclose(t1, t2)
+
+    def test_pipeline_and_gridsearch_precomputed_n_features_in(self):
+        """Pipeline and GridSearchCV integration with metric='precomputed' sets n_features_in_."""
+        D = pairwise_distances(self.X[:30])
+        for model_cls in [CLARANS, FastCLARANS]:
+            pipe = Pipeline(
+                [("clustering", model_cls(n_clusters=2, metric="precomputed", random_state=42))]
+            )
+            pipe.fit(D)
+            self.assertEqual(pipe.n_features_in_, 30)
+
+            grid = GridSearchCV(
+                model_cls(metric="precomputed", random_state=42),
+                param_grid={"n_clusters": [2, 3]},
+                cv=2,
+            )
+            grid.fit(D)
+            self.assertEqual(grid.n_features_in_, 30)
 
 
 class TestSerialization(unittest.TestCase):

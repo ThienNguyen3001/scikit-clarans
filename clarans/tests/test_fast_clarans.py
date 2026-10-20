@@ -9,9 +9,7 @@ from clarans import FastCLARANS
 
 class TestFastCLARANS(unittest.TestCase):
     def setUp(self):
-        self.X, self.y = make_blobs(
-            n_samples=100, centers=3, n_features=2, random_state=42
-        )
+        self.X, self.y = make_blobs(n_samples=100, centers=3, n_features=2, random_state=42)
 
     def test_fit(self):
         model = FastCLARANS(n_clusters=3, num_local=2, max_neighbors=10, random_state=42)
@@ -121,15 +119,16 @@ class TestFastCLARANS(unittest.TestCase):
         self.assertGreaterEqual(model.inertia_, 0)
 
     def test_n_iter_and_n_swaps_attributes(self):
-        """Test that n_iter_, n_swaps_, and n_neighbors_ are set correctly in FastCLARANS,
-        and deprecated total_n_iter_ / total_n_swaps_ / total_neighbors_ are removed.
+        """Test that n_iter_, n_swaps_, and neighborhood_size_ are set correctly in FastCLARANS,
+        and deprecated total_n_iter_ / total_n_swaps_ / total_neighbors_ / n_neighbors_ are removed.
         """
         # Multi-restart run
         model = FastCLARANS(n_clusters=3, num_local=2, max_neighbors=50, random_state=42)
         model.fit(self.X)
         self.assertTrue(hasattr(model, "n_iter_"))
         self.assertTrue(hasattr(model, "n_swaps_"))
-        self.assertTrue(hasattr(model, "n_neighbors_"))
+        self.assertTrue(hasattr(model, "neighborhood_size_"))
+        self.assertFalse(hasattr(model, "n_neighbors_"))
         self.assertFalse(hasattr(model, "total_neighbors_"))
         self.assertFalse(hasattr(model, "total_n_iter_"))
         self.assertFalse(hasattr(model, "total_n_swaps_"))
@@ -138,9 +137,9 @@ class TestFastCLARANS(unittest.TestCase):
         self.assertGreaterEqual(model.n_swaps_, 0)
         self.assertLessEqual(model.n_swaps_, model.n_iter_)
 
-        # n_neighbors_ check: n - k candidate points
+        # neighborhood_size_ check: n - k candidate points
         n_samples = self.X.shape[0]
-        self.assertEqual(model.n_neighbors_, n_samples - 3)
+        self.assertEqual(model.neighborhood_size_, n_samples - 3)
 
         # Single-restart run
         m_single = FastCLARANS(n_clusters=3, num_local=1, max_neighbors=50, random_state=42)
@@ -174,8 +173,8 @@ class TestFastCLARANS(unittest.TestCase):
         self.assertEqual(len(model.medoid_indices_), 3)
         self.assertEqual(len(model.labels_), 100)
         self.assertGreaterEqual(model.inertia_, 0)
-        self.assertIsNone(model.cluster_centers_)
-        self.assertFalse(hasattr(model, "n_features_in_"))
+        self.assertFalse(hasattr(model, "cluster_centers_"))
+        self.assertEqual(model.n_features_in_, 100)
 
         # predict on square matrix
         labels = model.predict(D)
@@ -194,6 +193,7 @@ class TestFastCLARANS(unittest.TestCase):
     def test_deterministic_init_warning(self):
         """FastCLARANS should warn when num_local > 1 with deterministic init and succeed."""
         import warnings
+
         with warnings.catch_warnings(record=True) as w:
             warnings.simplefilter("always")
             model = FastCLARANS(
@@ -268,9 +268,7 @@ class TestFastCLARANS(unittest.TestCase):
 
     def test_parameters_num_local_max_neighbors(self):
         """FastCLARANS with num_local and max_neighbors should work and set max_neighbors_."""
-        model = FastCLARANS(
-            n_clusters=3, num_local=2, max_neighbors=25, random_state=42
-        )
+        model = FastCLARANS(n_clusters=3, num_local=2, max_neighbors=25, random_state=42)
         model.fit(self.X)
         self.assertEqual(model.max_neighbors_, 25)
         self.assertFalse(hasattr(model, "maxneighbor_"))
@@ -345,17 +343,15 @@ class TestFastCLARANSMetricParams(unittest.TestCase):
         self.assertIn("vi", str(ctx.exception).lower())
 
         with self.assertRaises(ValueError) as ctx:
-            FastCLARANS(
-                n_clusters=2, metric="mahalanobis", metric_params={}, random_state=42
-            ).fit(self.X)
+            FastCLARANS(n_clusters=2, metric="mahalanobis", metric_params={}, random_state=42).fit(
+                self.X
+            )
         self.assertIn("vi", str(ctx.exception).lower())
 
     def test_invalid_metric_params_type(self):
         """Non-dict metric_params should raise ValueError in FastCLARANS."""
         with self.assertRaises(ValueError) as ctx:
-            FastCLARANS(n_clusters=2, metric_params="not_a_dict", random_state=42).fit(
-                self.X
-            )
+            FastCLARANS(n_clusters=2, metric_params="not_a_dict", random_state=42).fit(self.X)
         self.assertIn("metric_params", str(ctx.exception).lower())
 
     def test_clone_preserves_metric_params(self):

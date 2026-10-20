@@ -118,9 +118,10 @@ class FastCLARANS(CLARANS):
 
     Attributes
     ----------
-    cluster_centers_ : {ndarray, sparse matrix} of shape (n_clusters, n_features) or None
-        Coordinates of cluster centers (medoids). If ``metric='precomputed'``,
-        this is ``None``.
+    cluster_centers_ : {ndarray, sparse matrix} of shape (n_clusters, n_features)
+        Coordinates of cluster centers (medoids). Defined only when
+        ``metric != 'precomputed'`` (precomputed distance matrices do not carry
+        feature coordinates; use ``medoid_indices_`` instead).
 
     labels_ : ndarray of shape (n_samples,)
         Labels of each point indicating the nearest medoid.
@@ -136,7 +137,7 @@ class FastCLARANS(CLARANS):
         Effective maximum number of non-improving non-medoid candidates
         sampled per local search before concluding convergence.
 
-    n_neighbors_ : int
+    neighborhood_size_ : int
         Total number of non-medoid candidate points, equal to
         ``n_samples - n_clusters``.
 
@@ -149,8 +150,9 @@ class FastCLARANS(CLARANS):
         restart.
 
     n_features_in_ : int
-        Number of features seen during :term:`fit`. Defined only when
-        ``metric != 'precomputed'``.
+        Number of features seen during :term:`fit`. For ``metric='precomputed'``,
+        this equals the number of training samples (the column dimension of the
+        distance matrix).
 
     Notes
     -----
@@ -202,7 +204,7 @@ class FastCLARANS(CLARANS):
         )
 
     def _init_search_budget(self, n_samples: int) -> None:
-        """Initialize max_neighbors_ and n_neighbors_ search budget for FastCLARANS."""
+        """Initialize max_neighbors_ and neighborhood_size_ search budget for FastCLARANS."""
         if self.max_neighbors == "auto":
             # Sample 2.5% of non-medoid points (Schubert & Rousseeuw, 2021)
             # with a floor of 250 // k to evaluate at least 250 edges per restart.
@@ -214,7 +216,7 @@ class FastCLARANS(CLARANS):
         else:
             self.max_neighbors_ = int(self.max_neighbors)
 
-        self.n_neighbors_ = n_samples - self.n_clusters
+        self.neighborhood_size_ = n_samples - self.n_clusters
 
     def _allocate_search_buffers(self, X: Any, n_samples: int) -> dict[str, np.ndarray]:
         """Pre-allocate reusable scratch buffers for neighbor evaluations."""
