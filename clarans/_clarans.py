@@ -646,17 +646,30 @@ class CLARANS(ClusterMixin, TransformerMixin, BaseEstimator):
                     best_cost = current_cost
                     best_medoids = current_medoids_indices.copy()
                     best_loc_idx = loc_idx
-                    is_new_best = True
-                else:
-                    is_new_best = False
 
-                if self.verbose:
+            if best_medoids is None or not np.isfinite(best_cost):
+                raise ValueError(
+                    f"Clustering failed: all local search iterations produced non-finite "
+                    f"costs ({best_cost}). Check input data or distance metric."
+                )
+
+            self.n_iter_ = total_eval_count
+            self.n_swaps_ = total_swap_count
+
+            if self.verbose:
+                for loc_idx, (
+                    current_cost,
+                    _,
+                    eval_count,
+                    swap_count,
+                    loc_elapsed,
+                ) in enumerate(results):
                     stop = (
                         "exhausted"
                         if (eval_count - swap_count) < self.max_neighbors_
                         else "converged"
                     )
-                    star = "*" if is_new_best else " "
+                    star = "*" if loc_idx == best_loc_idx else " "
                     if self.verbose >= 2:
                         print(
                             f"    {loc_idx + 1:>2}  {current_cost:>14.5f}{star} "
@@ -670,16 +683,6 @@ class CLARANS(ClusterMixin, TransformerMixin, BaseEstimator):
                             f"{loc_elapsed:>7.3f}s  {stop}"
                         )
 
-            if best_medoids is None or not np.isfinite(best_cost):
-                raise ValueError(
-                    f"Clustering failed: all local search iterations produced non-finite "
-                    f"costs ({best_cost}). Check input data or distance metric."
-                )
-
-            self.n_iter_ = total_eval_count
-            self.n_swaps_ = total_swap_count
-
-            if self.verbose:
                 total_elapsed = time.perf_counter() - start_fit_time
                 print(
                     f"  Best: #{best_loc_idx + 1} | "
