@@ -192,8 +192,8 @@ After calling ``fit(X)``, both ``CLARANS`` and ``FastCLARANS`` store the cluster
      - Type
      - Description
    * - ``cluster_centers_``
-     - ndarray or None
-     - Coordinates of the selected medoids with shape ``(n_clusters, n_features)``. Evaluates to ``None`` when ``metric='precomputed'``.
+     - ndarray
+     - Coordinates of the selected medoids with shape ``(n_clusters, n_features)``. Defined only when ``metric != 'precomputed'``.
    * - ``medoid_indices_``
      - ndarray
      - Row indices of the selected medoids in the training data ``X`` with shape ``(n_clusters,)``.
@@ -206,18 +206,18 @@ After calling ``fit(X)``, both ``CLARANS`` and ``FastCLARANS`` store the cluster
    * - ``max_neighbors_``
      - int
      - Effective threshold of non-improving neighbor evaluations per restart. Equals the resolved integer value when ``max_neighbors='auto'``.
-   * - ``n_neighbors_``
+   * - ``neighborhood_size_``
      - int
      - Search neighborhood size: :math:`k(n-k)` in ``CLARANS`` (graph transitions) or :math:`n-k` in ``FastCLARANS`` (candidate points).
    * - ``n_iter_``
      - int
-     - Total number of candidate evaluations tested across all ``num_local`` restarts.
+     - Number of candidate evaluations tested during the best local search restart.
    * - ``n_swaps_``
      - int
-     - Total number of accepted medoid swaps across all ``num_local`` restarts.
+     - Number of accepted medoid swaps performed during the best local search restart.
    * - ``n_features_in_``
      - int
-     - Number of input features seen during ``fit``. Undefined when ``metric='precomputed'``.
+     - Number of input features seen during ``fit``. When ``metric='precomputed'``, equals the number of training samples (column dimension).
 
 Attribute details and conventions
 ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
@@ -226,18 +226,18 @@ Inertia calculation:
   ``inertia_`` represents the sum of unsquared distances :math:`\sum_{i=1}^n \min_{m \in M} d(x_i, m)` using the chosen distance metric. Standard ``KMeans`` in scikit-learn computes the sum of squared Euclidean distances (:math:`\sum d^2`). When comparing inertia across estimators or distance functions, account for the difference between linear and squared scale.
 
 Coordinates with precomputed metrics:
-  When ``metric='precomputed'``, the input ``X`` is a distance matrix of shape ``(n_samples, n_samples)``. Because the original feature coordinates are not passed to ``fit``, ``cluster_centers_`` is set to ``None``. Use ``medoid_indices_`` to retrieve the row positions of the selected medoids in your original data.
+  When ``metric='precomputed'``, the input ``X`` is a distance matrix of shape ``(n_samples, n_samples)``. Because the original feature coordinates are not passed to ``fit``, ``cluster_centers_`` is not defined (hasattr returns ``False``). Use ``medoid_indices_`` to retrieve the row positions of the selected medoids in your original data.
 
 Neighbor attributes and auto-scaling:
   The constructor parameter ``max_neighbors`` accepts an integer or the string ``'auto'``. The fitted attribute ``max_neighbors_`` (with a trailing underscore) always stores the concrete integer limit used during the search.
 
-  The total neighborhood size ``n_neighbors_`` differs between estimators because of their search formulation:
+  The total neighborhood size ``neighborhood_size_`` differs between estimators because of their search formulation:
 
-  * In ``CLARANS``, each search step samples a pair of (medoid, non-medoid), so ``n_neighbors_`` equals the number of edges in graph :math:`G_{n,k}`, namely :math:`k(n-k)`.
-  * In ``FastCLARANS``, each step samples a non-medoid candidate point and evaluates all :math:`k` medoid swaps simultaneously, so ``n_neighbors_`` equals :math:`n-k`.
+  * In ``CLARANS``, each search step samples a pair of (medoid, non-medoid), so ``neighborhood_size_`` equals the number of edges in graph :math:`G_{n,k}`, namely :math:`k(n-k)`.
+  * In ``FastCLARANS``, each step samples a non-medoid candidate point and evaluates all :math:`k` medoid swaps simultaneously, so ``neighborhood_size_`` equals :math:`n-k`.
 
 Iteration and swap counters:
-  In scikit-learn clusterers such as ``KMeans``, ``n_iter_`` typically records the iteration count of the best restart. In ``scikit-clarans``, ``n_iter_`` records the cumulative count of candidate evaluations tested across all ``num_local`` restarts. Accepted medoid replacements are tracked separately in ``n_swaps_``.
+  In accordance with scikit-learn clustering conventions (e.g., ``KMeans``, ``KMedoids``), ``n_iter_`` and ``n_swaps_`` record the candidate evaluations and accepted medoid swaps performed during the best local search restart (the run that achieved minimum ``inertia_``).
 
 Monitoring search progress
 --------------------------

@@ -194,9 +194,10 @@ class CLARANS(ClusterMixin, TransformerMixin, BaseEstimator):
 
     Attributes
     ----------
-    cluster_centers_ : {ndarray, sparse matrix} of shape (n_clusters, n_features) or None
-        Coordinates of cluster centers (medoids). If ``metric='precomputed'``,
-        this is ``None``.
+    cluster_centers_ : {ndarray, sparse matrix} of shape (n_clusters, n_features)
+        Coordinates of cluster centers (medoids). Defined only when
+        ``metric != 'precomputed'`` (precomputed distance matrices do not carry
+        feature coordinates; use ``medoid_indices_`` instead).
 
     labels_ : ndarray of shape (n_samples,)
         Labels of each point indicating the nearest medoid.
@@ -211,21 +212,22 @@ class CLARANS(ClusterMixin, TransformerMixin, BaseEstimator):
         Effective maximum number of non-improving neighbors examined per
         local search before concluding convergence.
 
-    n_neighbors_ : int
+    neighborhood_size_ : int
         Total number of neighbor transitions in the search graph G_{n, k},
         equal to ``n_clusters * (n_samples - n_clusters)``.
 
     n_iter_ : int
-        Total number of candidate neighbors evaluated across all ``num_local``
-        searches.
+        Number of candidate neighbors evaluated during the best local search
+        restart.
 
     n_swaps_ : int
-        Total number of successful medoid swaps performed across all
-        ``num_local`` searches.
+        Number of successful medoid swaps performed during the best local search
+        restart.
 
     n_features_in_ : int
-        Number of features seen during :term:`fit`. Defined only when
-        ``metric != 'precomputed'``.
+        Number of features seen during :term:`fit`. For ``metric='precomputed'``,
+        this equals the number of training samples (the column dimension of the
+        distance matrix).
 
     Notes
     -----
@@ -259,6 +261,8 @@ class CLARANS(ClusterMixin, TransformerMixin, BaseEstimator):
     >>> model = CLARANS(n_clusters=3, random_state=0)
     >>> model.fit(X)
     """
+
+    cluster_centers_: Any
 
     def __init__(
         self,
@@ -452,7 +456,7 @@ class CLARANS(ClusterMixin, TransformerMixin, BaseEstimator):
         }
 
     def _init_search_budget(self, n_samples: int) -> None:
-        """Initialize max_neighbors_ and n_neighbors_ search budget."""
+        """Initialize max_neighbors_ and neighborhood_size_ search budget."""
         if self.max_neighbors == "auto":
             self.max_neighbors_ = max(
                 250, int(0.0125 * self.n_clusters * (n_samples - self.n_clusters))
@@ -460,7 +464,7 @@ class CLARANS(ClusterMixin, TransformerMixin, BaseEstimator):
         else:
             self.max_neighbors_ = int(self.max_neighbors)
 
-        self.n_neighbors_ = self.n_clusters * (n_samples - self.n_clusters)
+        self.neighborhood_size_ = self.n_clusters * (n_samples - self.n_clusters)
 
     def _allocate_search_buffers(self, X: Any, n_samples: int) -> dict[str, np.ndarray]:
         """Pre-allocate reusable scratch buffers for neighbor evaluations."""
@@ -563,6 +567,8 @@ class CLARANS(ClusterMixin, TransformerMixin, BaseEstimator):
         best_cost = np.inf
         best_medoids = None
         best_loc_idx = 0
+        best_eval_count = 0
+        best_swap_count = 0
         total_eval_count = 0
         total_swap_count = 0
 
@@ -571,7 +577,7 @@ class CLARANS(ClusterMixin, TransformerMixin, BaseEstimator):
 
         if self.verbose:
             _name = self.__class__.__name__
-            tot_nb = self.n_neighbors_
+            tot_nb = self.neighborhood_size_
             pct = (self.max_neighbors_ / tot_nb * 100) if tot_nb > 0 else 100.0
             print(
                 f"[{_name}] n={n_samples}, k={self.n_clusters}, "
@@ -646,6 +652,8 @@ class CLARANS(ClusterMixin, TransformerMixin, BaseEstimator):
                     best_cost = current_cost
                     best_medoids = current_medoids_indices.copy()
                     best_loc_idx = loc_idx
+                    best_eval_count = eval_count
+                    best_swap_count = swap_count
 
             if best_medoids is None or not np.isfinite(best_cost):
                 raise ValueError(
@@ -653,8 +661,8 @@ class CLARANS(ClusterMixin, TransformerMixin, BaseEstimator):
                     f"costs ({best_cost}). Check input data or distance metric."
                 )
 
-            self.n_iter_ = total_eval_count
-            self.n_swaps_ = total_swap_count
+            self.n_iter_ = best_eval_count
+            self.n_swaps_ = best_swap_count
 
             if self.verbose:
                 for loc_idx, (
@@ -1166,10 +1174,6 @@ class CLARANS(ClusterMixin, TransformerMixin, BaseEstimator):
                     f"Precomputed distance matrix must be square "
                     f"(got shape ({n_samples}, {n_features}))"
                 )
-            if hasattr(self, "n_features_in_"):
-                del self.n_features_in_
-            if hasattr(self, "feature_names_in_"):
-                del self.feature_names_in_
 
         return X_validated, random_state, n_samples, n_features
 
@@ -1201,7 +1205,8 @@ class CLARANS(ClusterMixin, TransformerMixin, BaseEstimator):
         self._n_features_out = self.n_clusters
 
         if self.metric == "precomputed":
-            self.cluster_centers_ = None
+            if hasattr(self, "cluster_centers_"):
+                del self.cluster_centers_
             dist_to_medoids = _to_dense(X[:, self.medoid_indices_])
             self.labels_ = np.argmin(dist_to_medoids, axis=1)
         else:
