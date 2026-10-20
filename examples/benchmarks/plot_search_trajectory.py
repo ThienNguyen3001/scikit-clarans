@@ -12,8 +12,8 @@ are evaluated until ``max_neighbors_`` consecutive non-improving samples are
 tested (convergence).
 
 Setting ``verbose=1`` prints real-time iteration statistics, while fitted
-attributes (``n_iter_``, ``n_swaps_``, ``max_neighbors_``, ``n_neighbors_``)
-record cumulative evaluation and swap metrics.
+attributes (``n_iter_``, ``n_swaps_``, ``max_neighbors_``, ``neighborhood_size_``)
+record evaluation and swap metrics for the best restart.
 """
 
 # Authors: Ngọc Thiện Nguyễn <thiennguyen03001@gmail.com>
@@ -46,10 +46,10 @@ model.fit(X)
 
 print("\nFitted search attributes:")
 print(f"  Best inertia_     : {model.inertia_:.4f}")
-print(f"  Total n_iter_     : {model.n_iter_} candidate evaluations")
-print(f"  Total n_swaps_    : {model.n_swaps_} accepted medoid swaps")
+print(f"  Best n_iter_      : {model.n_iter_} candidate evaluations")
+print(f"  Best n_swaps_     : {model.n_swaps_} accepted medoid swaps")
 print(f"  max_neighbors_    : {model.max_neighbors_} (auto threshold)")
-print(f"  n_neighbors_      : {model.n_neighbors_} (non-medoid candidate pool)")
+print(f"  neighborhood_size_: {model.neighborhood_size_} (non-medoid candidate pool)")
 
 # 2. Analyze search trajectory across different num_local restart counts
 restarts = [1, 2, 3, 4, 5, 6]
@@ -86,11 +86,21 @@ ax1.legend()
 # Panel 2: Cumulative evaluations and swaps
 ax2 = fig.add_subplot(1, 3, 2)
 ax2.plot(
-    restarts, total_evals, marker="s", color="#55a868", linewidth=2, label="Evals (n_iter_)",
+    restarts,
+    total_evals,
+    marker="s",
+    color="#55a868",
+    linewidth=2,
+    label="Evals (n_iter_)",
 )
 ax2_twin = ax2.twinx()
 ax2_twin.plot(
-    restarts, total_swaps, marker="^", color="#8172b3", linewidth=2, linestyle="--",
+    restarts,
+    total_swaps,
+    marker="^",
+    color="#8172b3",
+    linewidth=2,
+    linestyle="--",
     label="Swaps (n_swaps_)",
 )
 ax2.set_xlabel("Number of restarts (num_local)")

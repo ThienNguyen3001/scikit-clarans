@@ -212,7 +212,7 @@ class CLARANS(ClusterMixin, TransformerMixin, BaseEstimator):
         Effective maximum number of non-improving neighbors examined per
         local search before concluding convergence.
 
-    n_neighbors_ : int
+    neighborhood_size_ : int
         Total number of neighbor transitions in the search graph G_{n, k},
         equal to ``n_clusters * (n_samples - n_clusters)``.
 
@@ -456,7 +456,7 @@ class CLARANS(ClusterMixin, TransformerMixin, BaseEstimator):
         }
 
     def _init_search_budget(self, n_samples: int) -> None:
-        """Initialize max_neighbors_ and n_neighbors_ search budget."""
+        """Initialize max_neighbors_ and neighborhood_size_ search budget."""
         if self.max_neighbors == "auto":
             self.max_neighbors_ = max(
                 250, int(0.0125 * self.n_clusters * (n_samples - self.n_clusters))
@@ -464,7 +464,7 @@ class CLARANS(ClusterMixin, TransformerMixin, BaseEstimator):
         else:
             self.max_neighbors_ = int(self.max_neighbors)
 
-        self.n_neighbors_ = self.n_clusters * (n_samples - self.n_clusters)
+        self.neighborhood_size_ = self.n_clusters * (n_samples - self.n_clusters)
 
     def _allocate_search_buffers(self, X: Any, n_samples: int) -> dict[str, np.ndarray]:
         """Pre-allocate reusable scratch buffers for neighbor evaluations."""
@@ -577,7 +577,7 @@ class CLARANS(ClusterMixin, TransformerMixin, BaseEstimator):
 
         if self.verbose:
             _name = self.__class__.__name__
-            tot_nb = self.n_neighbors_
+            tot_nb = self.neighborhood_size_
             pct = (self.max_neighbors_ / tot_nb * 100) if tot_nb > 0 else 100.0
             print(
                 f"[{_name}] n={n_samples}, k={self.n_clusters}, "

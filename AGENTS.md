@@ -59,7 +59,7 @@ Both `CLARANS` and `FastCLARANS` inherit from `BaseEstimator`, `ClusterMixin`, a
    - `cluster_centers_`: Coordinates of medoids (not defined when `metric='precomputed'`).
    - `inertia_`: Total sum of distances from samples to closest medoids.
    - `max_neighbors_`: Effective sampling budget per local search restart.
-   - `n_neighbors_`: Total neighborhood size in search space ($k(n-k)$ for CLARANS, $n-k$ for FastCLARANS).
+   - `neighborhood_size_`: Total neighborhood size in search space ($k(n-k)$ for CLARANS, $n-k$ for FastCLARANS).
    - `n_iter_`: Candidate neighbors evaluated during the best restart.
    - `n_swaps_`: Successful medoid swaps performed during the best restart.
    - `n_features_in_`: Number of features seen during `fit()` (equals $n$ when `metric='precomputed'`).
