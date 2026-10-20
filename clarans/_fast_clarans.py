@@ -141,12 +141,12 @@ class FastCLARANS(CLARANS):
         ``n_samples - n_clusters``.
 
     n_iter_ : int
-        Total number of candidate neighbors evaluated across all ``num_local``
-        searches.
+        Number of candidate neighbors evaluated during the best local search
+        restart.
 
     n_swaps_ : int
-        Total number of successful medoid swaps performed across all
-        ``num_local`` searches.
+        Number of successful medoid swaps performed during the best local search
+        restart.
 
     n_features_in_ : int
         Number of features seen during :term:`fit`. Defined only when

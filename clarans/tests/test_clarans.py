@@ -150,7 +150,7 @@ class TestCLARANS(unittest.TestCase):
         c_single.fit(self.X)
         self.assertGreaterEqual(c_single.n_iter_, 1)
         self.assertLessEqual(c_single.n_swaps_, c_single.n_iter_)
-        self.assertGreaterEqual(clarans.n_iter_, c_single.n_iter_)
+        self.assertLessEqual(clarans.inertia_, c_single.inertia_)
 
     def test_medoid_indices_sorted(self):
         """Test that medoid_indices_ is always sorted."""

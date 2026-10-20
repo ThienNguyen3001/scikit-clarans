@@ -216,12 +216,12 @@ class CLARANS(ClusterMixin, TransformerMixin, BaseEstimator):
         equal to ``n_clusters * (n_samples - n_clusters)``.
 
     n_iter_ : int
-        Total number of candidate neighbors evaluated across all ``num_local``
-        searches.
+        Number of candidate neighbors evaluated during the best local search
+        restart.
 
     n_swaps_ : int
-        Total number of successful medoid swaps performed across all
-        ``num_local`` searches.
+        Number of successful medoid swaps performed during the best local search
+        restart.
 
     n_features_in_ : int
         Number of features seen during :term:`fit`. Defined only when
@@ -563,6 +563,8 @@ class CLARANS(ClusterMixin, TransformerMixin, BaseEstimator):
         best_cost = np.inf
         best_medoids = None
         best_loc_idx = 0
+        best_eval_count = 0
+        best_swap_count = 0
         total_eval_count = 0
         total_swap_count = 0
 
@@ -646,6 +648,8 @@ class CLARANS(ClusterMixin, TransformerMixin, BaseEstimator):
                     best_cost = current_cost
                     best_medoids = current_medoids_indices.copy()
                     best_loc_idx = loc_idx
+                    best_eval_count = eval_count
+                    best_swap_count = swap_count
 
             if best_medoids is None or not np.isfinite(best_cost):
                 raise ValueError(
@@ -653,8 +657,8 @@ class CLARANS(ClusterMixin, TransformerMixin, BaseEstimator):
                     f"costs ({best_cost}). Check input data or distance metric."
                 )
 
-            self.n_iter_ = total_eval_count
-            self.n_swaps_ = total_swap_count
+            self.n_iter_ = best_eval_count
+            self.n_swaps_ = best_swap_count
 
             if self.verbose:
                 for loc_idx, (

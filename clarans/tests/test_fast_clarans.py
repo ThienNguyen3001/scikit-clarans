@@ -147,7 +147,7 @@ class TestFastCLARANS(unittest.TestCase):
         m_single.fit(self.X)
         self.assertGreaterEqual(m_single.n_iter_, 1)
         self.assertLessEqual(m_single.n_swaps_, m_single.n_iter_)
-        self.assertGreaterEqual(model.n_iter_, m_single.n_iter_)
+        self.assertLessEqual(model.inertia_, m_single.inertia_)
 
     def test_invalid_parameters(self):
         """Test parameter validation in FastCLARANS."""
