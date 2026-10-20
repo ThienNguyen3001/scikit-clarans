@@ -467,7 +467,7 @@ class TestCLARANSValidationAndPrecomputed(unittest.TestCase):
         self.assertEqual(len(model.labels_), 50)
         self.assertGreaterEqual(model.inertia_, 0)
         self.assertIsNone(model.cluster_centers_)
-        self.assertFalse(hasattr(model, "n_features_in_"))
+        self.assertEqual(model.n_features_in_, 50)
 
         # predict on full square matrix
         labels = model.predict(self.D)
@@ -570,16 +570,18 @@ class TestCLARANSValidationAndPrecomputed(unittest.TestCase):
         model.fit(X_dup)
         self.assertGreaterEqual(model.n_swaps_, 0)
 
-    def test_precomputed_dataframe_removes_feature_names_in(self):
-        """Precomputed distance matrix from DataFrame should strip feature_names_in_."""
+    def test_precomputed_dataframe_retains_feature_names_in(self):
+        """Precomputed distance matrix from DataFrame should retain feature_names_in_."""
         try:
             import pandas as pd
         except ImportError:
             self.skipTest("pandas is not installed")
 
-        df_D = pd.DataFrame(self.D, columns=[f"s_{i}" for i in range(len(self.D))])
+        columns = [f"s_{i}" for i in range(len(self.D))]
+        df_D = pd.DataFrame(self.D, columns=columns)
         model = CLARANS(n_clusters=3, metric="precomputed", random_state=42).fit(df_D)
-        self.assertFalse(hasattr(model, "feature_names_in_"))
+        self.assertTrue(hasattr(model, "feature_names_in_"))
+        np.testing.assert_array_equal(model.feature_names_in_, np.asarray(columns, dtype=object))
 
     def test_precomputed_init_2d_shape_mismatch(self):
         """2D init array with wrong shape under metric='precomputed' should raise ValueError."""

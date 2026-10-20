@@ -217,7 +217,7 @@ After calling ``fit(X)``, both ``CLARANS`` and ``FastCLARANS`` store the cluster
      - Total number of accepted medoid swaps across all ``num_local`` restarts.
    * - ``n_features_in_``
      - int
-     - Number of input features seen during ``fit``. Undefined when ``metric='precomputed'``.
+     - Number of input features seen during ``fit``. When ``metric='precomputed'``, equals the number of training samples (column dimension).
 
 Attribute details and conventions
 ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^

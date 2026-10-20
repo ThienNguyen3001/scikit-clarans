@@ -62,7 +62,7 @@ Both `CLARANS` and `FastCLARANS` inherit from `BaseEstimator`, `ClusterMixin`, a
    - `n_neighbors_`: Total neighborhood size in search space ($k(n-k)$ for CLARANS, $n-k$ for FastCLARANS).
    - `n_iter_`: Candidate neighbors evaluated during the best restart.
    - `n_swaps_`: Successful medoid swaps performed during the best restart.
-   - `n_features_in_`: Number of features seen during `fit()` (dense/sparse mode).
+   - `n_features_in_`: Number of features seen during `fit()` (equals $n$ when `metric='precomputed'`).
 4. Implement standard estimator methods: `fit(X)`, `predict(X)`, `transform(X)`, `fit_predict(X)`, `fit_transform(X)`, `score(X)`, and `get_feature_names_out(input_features=None)`.
 5. Ensure all checks in `clarans/tests/test_common.py` pass via `@parametrize_with_checks`.
 

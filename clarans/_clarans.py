@@ -224,8 +224,9 @@ class CLARANS(ClusterMixin, TransformerMixin, BaseEstimator):
         restart.
 
     n_features_in_ : int
-        Number of features seen during :term:`fit`. Defined only when
-        ``metric != 'precomputed'``.
+        Number of features seen during :term:`fit`. For ``metric='precomputed'``,
+        this equals the number of training samples (the column dimension of the
+        distance matrix).
 
     Notes
     -----
@@ -1170,10 +1171,6 @@ class CLARANS(ClusterMixin, TransformerMixin, BaseEstimator):
                     f"Precomputed distance matrix must be square "
                     f"(got shape ({n_samples}, {n_features}))"
                 )
-            if hasattr(self, "n_features_in_"):
-                del self.n_features_in_
-            if hasattr(self, "feature_names_in_"):
-                del self.feature_names_in_
 
         return X_validated, random_state, n_samples, n_features
 

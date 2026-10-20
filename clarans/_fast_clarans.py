@@ -149,8 +149,9 @@ class FastCLARANS(CLARANS):
         restart.
 
     n_features_in_ : int
-        Number of features seen during :term:`fit`. Defined only when
-        ``metric != 'precomputed'``.
+        Number of features seen during :term:`fit`. For ``metric='precomputed'``,
+        this equals the number of training samples (the column dimension of the
+        distance matrix).
 
     Notes
     -----

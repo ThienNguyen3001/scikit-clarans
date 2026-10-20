@@ -887,7 +887,7 @@ class TestSklearnAPICompliance(unittest.TestCase):
             self.assertTrue(tags.input_tags.pairwise)
 
     def test_n_features_in_set_after_fit(self):
-        """n_features_in_ should be set for non-precomputed, absent for precomputed."""
+        """n_features_in_ should be set for both standard and precomputed inputs."""
         for cls in [CLARANS, FastCLARANS]:
             m = cls(n_clusters=3, random_state=42).fit(self.X)
             self.assertTrue(hasattr(m, "n_features_in_"))
@@ -895,7 +895,8 @@ class TestSklearnAPICompliance(unittest.TestCase):
 
             D = pairwise_distances(self.X)
             m_pre = cls(n_clusters=3, metric="precomputed", random_state=42).fit(D)
-            self.assertFalse(hasattr(m_pre, "n_features_in_"))
+            self.assertTrue(hasattr(m_pre, "n_features_in_"))
+            self.assertEqual(m_pre.n_features_in_, D.shape[1])
 
 
 # ===========================================================================
