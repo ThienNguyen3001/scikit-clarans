@@ -194,9 +194,10 @@ class CLARANS(ClusterMixin, TransformerMixin, BaseEstimator):
 
     Attributes
     ----------
-    cluster_centers_ : {ndarray, sparse matrix} of shape (n_clusters, n_features) or None
-        Coordinates of cluster centers (medoids). If ``metric='precomputed'``,
-        this is ``None``.
+    cluster_centers_ : {ndarray, sparse matrix} of shape (n_clusters, n_features)
+        Coordinates of cluster centers (medoids). Defined only when
+        ``metric != 'precomputed'`` (precomputed distance matrices do not carry
+        feature coordinates; use ``medoid_indices_`` instead).
 
     labels_ : ndarray of shape (n_samples,)
         Labels of each point indicating the nearest medoid.
@@ -260,6 +261,8 @@ class CLARANS(ClusterMixin, TransformerMixin, BaseEstimator):
     >>> model = CLARANS(n_clusters=3, random_state=0)
     >>> model.fit(X)
     """
+
+    cluster_centers_: Any
 
     def __init__(
         self,
@@ -1202,7 +1205,8 @@ class CLARANS(ClusterMixin, TransformerMixin, BaseEstimator):
         self._n_features_out = self.n_clusters
 
         if self.metric == "precomputed":
-            self.cluster_centers_ = None
+            if hasattr(self, "cluster_centers_"):
+                del self.cluster_centers_
             dist_to_medoids = _to_dense(X[:, self.medoid_indices_])
             self.labels_ = np.argmin(dist_to_medoids, axis=1)
         else:

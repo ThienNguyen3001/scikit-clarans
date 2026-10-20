@@ -56,7 +56,7 @@ Both `CLARANS` and `FastCLARANS` inherit from `BaseEstimator`, `ClusterMixin`, a
 3. Name all fitted attributes with a single trailing underscore:
    - `labels_`: Cluster labels for each training sample.
    - `medoid_indices_`: Indices of selected medoids in training data.
-   - `cluster_centers_`: Coordinates of medoids (set to `None` if `metric='precomputed'`).
+   - `cluster_centers_`: Coordinates of medoids (not defined when `metric='precomputed'`).
    - `inertia_`: Total sum of distances from samples to closest medoids.
    - `max_neighbors_`: Effective sampling budget per local search restart.
    - `n_neighbors_`: Total neighborhood size in search space ($k(n-k)$ for CLARANS, $n-k$ for FastCLARANS).

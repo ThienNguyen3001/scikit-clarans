@@ -192,8 +192,8 @@ After calling ``fit(X)``, both ``CLARANS`` and ``FastCLARANS`` store the cluster
      - Type
      - Description
    * - ``cluster_centers_``
-     - ndarray or None
-     - Coordinates of the selected medoids with shape ``(n_clusters, n_features)``. Evaluates to ``None`` when ``metric='precomputed'``.
+     - ndarray
+     - Coordinates of the selected medoids with shape ``(n_clusters, n_features)``. Defined only when ``metric != 'precomputed'``.
    * - ``medoid_indices_``
      - ndarray
      - Row indices of the selected medoids in the training data ``X`` with shape ``(n_clusters,)``.
@@ -226,7 +226,7 @@ Inertia calculation:
   ``inertia_`` represents the sum of unsquared distances :math:`\sum_{i=1}^n \min_{m \in M} d(x_i, m)` using the chosen distance metric. Standard ``KMeans`` in scikit-learn computes the sum of squared Euclidean distances (:math:`\sum d^2`). When comparing inertia across estimators or distance functions, account for the difference between linear and squared scale.
 
 Coordinates with precomputed metrics:
-  When ``metric='precomputed'``, the input ``X`` is a distance matrix of shape ``(n_samples, n_samples)``. Because the original feature coordinates are not passed to ``fit``, ``cluster_centers_`` is set to ``None``. Use ``medoid_indices_`` to retrieve the row positions of the selected medoids in your original data.
+  When ``metric='precomputed'``, the input ``X`` is a distance matrix of shape ``(n_samples, n_samples)``. Because the original feature coordinates are not passed to ``fit``, ``cluster_centers_`` is not defined (hasattr returns ``False``). Use ``medoid_indices_`` to retrieve the row positions of the selected medoids in your original data.
 
 Neighbor attributes and auto-scaling:
   The constructor parameter ``max_neighbors`` accepts an integer or the string ``'auto'``. The fitted attribute ``max_neighbors_`` (with a trailing underscore) always stores the concrete integer limit used during the search.

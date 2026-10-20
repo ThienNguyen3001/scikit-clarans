@@ -174,7 +174,7 @@ class TestFastCLARANS(unittest.TestCase):
         self.assertEqual(len(model.medoid_indices_), 3)
         self.assertEqual(len(model.labels_), 100)
         self.assertGreaterEqual(model.inertia_, 0)
-        self.assertIsNone(model.cluster_centers_)
+        self.assertFalse(hasattr(model, "cluster_centers_"))
         self.assertEqual(model.n_features_in_, 100)
 
         # predict on square matrix

@@ -466,7 +466,7 @@ class TestCLARANSValidationAndPrecomputed(unittest.TestCase):
         self.assertEqual(len(model.medoid_indices_), 3)
         self.assertEqual(len(model.labels_), 50)
         self.assertGreaterEqual(model.inertia_, 0)
-        self.assertIsNone(model.cluster_centers_)
+        self.assertFalse(hasattr(model, "cluster_centers_"))
         self.assertEqual(model.n_features_in_, 50)
 
         # predict on full square matrix
@@ -582,6 +582,15 @@ class TestCLARANSValidationAndPrecomputed(unittest.TestCase):
         model = CLARANS(n_clusters=3, metric="precomputed", random_state=42).fit(df_D)
         self.assertTrue(hasattr(model, "feature_names_in_"))
         np.testing.assert_array_equal(model.feature_names_in_, np.asarray(columns, dtype=object))
+
+    def test_precomputed_refit_clears_cluster_centers(self):
+        """Refitting a model with metric='precomputed' clears existing cluster_centers_."""
+        m = CLARANS(n_clusters=2, random_state=42).fit(self.X)
+        self.assertTrue(hasattr(m, "cluster_centers_"))
+
+        m.set_params(metric="precomputed")
+        m.fit(self.D)
+        self.assertFalse(hasattr(m, "cluster_centers_"))
 
     def test_precomputed_init_2d_shape_mismatch(self):
         """2D init array with wrong shape under metric='precomputed' should raise ValueError."""

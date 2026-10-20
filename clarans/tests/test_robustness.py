@@ -709,7 +709,7 @@ class TestPrecomputedEdgeCases(unittest.TestCase):
             )
             m.fit(D_sparse)
             self.assertEqual(len(m.medoid_indices_), 3)
-            self.assertIsNone(m.cluster_centers_)
+            self.assertFalse(hasattr(m, "cluster_centers_"))
             labels = m.predict(D_sparse)
             self.assertEqual(labels.shape, (40,))
             trans = m.transform(D_sparse)

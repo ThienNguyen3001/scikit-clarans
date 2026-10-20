@@ -118,9 +118,10 @@ class FastCLARANS(CLARANS):
 
     Attributes
     ----------
-    cluster_centers_ : {ndarray, sparse matrix} of shape (n_clusters, n_features) or None
-        Coordinates of cluster centers (medoids). If ``metric='precomputed'``,
-        this is ``None``.
+    cluster_centers_ : {ndarray, sparse matrix} of shape (n_clusters, n_features)
+        Coordinates of cluster centers (medoids). Defined only when
+        ``metric != 'precomputed'`` (precomputed distance matrices do not carry
+        feature coordinates; use ``medoid_indices_`` instead).
 
     labels_ : ndarray of shape (n_samples,)
         Labels of each point indicating the nearest medoid.
