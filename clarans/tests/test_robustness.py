@@ -78,27 +78,25 @@ class TestNumericalVulnerabilitiesAndOverflow(unittest.TestCase):
         X_normal = rng.randn(50, 2)
 
         # Normal scale yields successful swaps
-        m_normal = CLARANS(
-            n_clusters=3, init="random", max_neighbors=200, random_state=42
-        ).fit(X_normal)
-        self.assertGreater(
-            m_normal.n_swaps_, 0, "Normal scale should perform swaps"
+        m_normal = CLARANS(n_clusters=3, init="random", max_neighbors=200, random_state=42).fit(
+            X_normal
         )
+        self.assertGreater(m_normal.n_swaps_, 0, "Normal scale should perform swaps")
 
         # Micro scale now also succeeds thanks to dynamic tolerance
         X_micro = X_normal * 1e-13
-        m_micro = CLARANS(
-            n_clusters=3, init="random", max_neighbors=200, random_state=42
-        ).fit(X_micro)
+        m_micro = CLARANS(n_clusters=3, init="random", max_neighbors=200, random_state=42).fit(
+            X_micro
+        )
         self.assertGreater(
             m_micro.n_swaps_,
             0,
             "Micro-scale data should perform swaps with dynamic tolerance",
         )
 
-        fm_micro = FastCLARANS(
-            n_clusters=3, init="random", max_neighbors=200, random_state=42
-        ).fit(X_micro)
+        fm_micro = FastCLARANS(n_clusters=3, init="random", max_neighbors=200, random_state=42).fit(
+            X_micro
+        )
         self.assertGreater(
             fm_micro.n_swaps_,
             0,
@@ -109,6 +107,7 @@ class TestNumericalVulnerabilitiesAndOverflow(unittest.TestCase):
         """A custom callable distance metric returning NaN is safely caught
         and raises a descriptive ValueError.
         """
+
         def nan_metric(u, v):
             return np.nan
 
@@ -211,6 +210,7 @@ class TestPrecomputedMatrixFlaws(unittest.TestCase):
         """
         try:
             from clarans import _core
+
             if _core is None:
                 self.skipTest("Cython _core extension is not compiled.")
         except ImportError:
@@ -237,11 +237,13 @@ class TestPrecomputedMatrixFlaws(unittest.TestCase):
 
     def test_negative_distances_in_precomputed_matrix(self):
         """Precomputed matrices with negative entries produce predictable negative inertia."""
-        D = np.array([
-            [0.0, -1.0, -2.0],
-            [-1.0, 0.0, -3.0],
-            [-2.0, -3.0, 0.0],
-        ])
+        D = np.array(
+            [
+                [0.0, -1.0, -2.0],
+                [-1.0, 0.0, -3.0],
+                [-2.0, -3.0, 0.0],
+            ]
+        )
         m = CLARANS(n_clusters=2, metric="precomputed", random_state=42).fit(D)
         self.assertLess(
             m.inertia_, 0.0, "Model accepted negative distances and produced negative inertia"
@@ -494,16 +496,16 @@ class TestNumpyFallbackPaths(unittest.TestCase):
     extensions are unavailable (simulated via monkey-patching _core to None)."""
 
     def setUp(self):
-        self.X, _ = make_blobs(
-            n_samples=40, centers=3, n_features=2, random_state=42
-        )
+        self.X, _ = make_blobs(n_samples=40, centers=3, n_features=2, random_state=42)
 
     def _fit_with_core_none(self, model_cls, **kwargs):
         """Fit a model with _core patched to None in all modules."""
         model = model_cls(n_clusters=3, num_local=1, max_neighbors=10, random_state=42, **kwargs)
-        with patch("clarans._clarans._core", None), \
-             patch("clarans._fast_clarans._core", None), \
-             patch("clarans._initialization._core", None):
+        with (
+            patch("clarans._clarans._core", None),
+            patch("clarans._fast_clarans._core", None),
+            patch("clarans._initialization._core", None),
+        ):
             model.fit(self.X)
         return model
 
@@ -543,15 +545,11 @@ class TestMetricAliasAndExotic(unittest.TestCase):
     produce correct results end-to-end."""
 
     def setUp(self):
-        self.X, _ = make_blobs(
-            n_samples=50, centers=3, n_features=2, random_state=42
-        )
+        self.X, _ = make_blobs(n_samples=50, centers=3, n_features=2, random_state=42)
 
     def test_l1_alias_matches_manhattan(self):
         """Metric alias 'l1' should produce identical results to 'manhattan'."""
-        m_l1 = CLARANS(
-            n_clusters=3, metric="l1", random_state=42, num_local=1, max_neighbors=20
-        )
+        m_l1 = CLARANS(n_clusters=3, metric="l1", random_state=42, num_local=1, max_neighbors=20)
         m_l1.fit(self.X)
         m_man = CLARANS(
             n_clusters=3, metric="manhattan", random_state=42, num_local=1, max_neighbors=20
@@ -562,9 +560,7 @@ class TestMetricAliasAndExotic(unittest.TestCase):
 
     def test_l2_alias_matches_euclidean(self):
         """Metric alias 'l2' should produce identical results to 'euclidean'."""
-        m_l2 = CLARANS(
-            n_clusters=3, metric="l2", random_state=42, num_local=1, max_neighbors=20
-        )
+        m_l2 = CLARANS(n_clusters=3, metric="l2", random_state=42, num_local=1, max_neighbors=20)
         m_l2.fit(self.X)
         m_euc = CLARANS(
             n_clusters=3, metric="euclidean", random_state=42, num_local=1, max_neighbors=20
@@ -602,12 +598,8 @@ class TestPredictTransformUnseenData(unittest.TestCase):
     training set, including single-sample edge case."""
 
     def setUp(self):
-        self.X_train, _ = make_blobs(
-            n_samples=80, centers=3, n_features=2, random_state=42
-        )
-        self.X_new, _ = make_blobs(
-            n_samples=20, centers=3, n_features=2, random_state=99
-        )
+        self.X_train, _ = make_blobs(n_samples=80, centers=3, n_features=2, random_state=42)
+        self.X_new, _ = make_blobs(n_samples=20, centers=3, n_features=2, random_state=99)
 
     def test_predict_unseen_data(self):
         """predict() on new data should return labels in [0, n_clusters)."""
@@ -652,15 +644,16 @@ class TestPrecomputedEdgeCases(unittest.TestCase):
     invalid columns, sparse precomputed matrix."""
 
     def setUp(self):
-        self.X, _ = make_blobs(
-            n_samples=40, centers=3, n_features=2, random_state=42
-        )
+        self.X, _ = make_blobs(n_samples=40, centers=3, n_features=2, random_state=42)
         self.D = pairwise_distances(self.X, metric="euclidean")
 
     def _fit_precomputed(self, cls=CLARANS):
         m = cls(
-            n_clusters=3, metric="precomputed", random_state=42,
-            num_local=1, max_neighbors=20,
+            n_clusters=3,
+            metric="precomputed",
+            random_state=42,
+            num_local=1,
+            max_neighbors=20,
         )
         m.fit(self.D)
         return m
@@ -704,8 +697,11 @@ class TestPrecomputedEdgeCases(unittest.TestCase):
         D_sparse = sparse.csr_matrix(self.D)
         for cls in [CLARANS, FastCLARANS]:
             m = cls(
-                n_clusters=3, metric="precomputed", random_state=42,
-                num_local=1, max_neighbors=20,
+                n_clusters=3,
+                metric="precomputed",
+                random_state=42,
+                num_local=1,
+                max_neighbors=20,
             )
             m.fit(D_sparse)
             self.assertEqual(len(m.medoid_indices_), 3)
@@ -773,9 +769,7 @@ class TestMathematicalInvariants(unittest.TestCase):
     that must always hold regardless of data or random state."""
 
     def setUp(self):
-        self.X, _ = make_blobs(
-            n_samples=80, centers=3, n_features=2, random_state=42
-        )
+        self.X, _ = make_blobs(n_samples=80, centers=3, n_features=2, random_state=42)
 
     def test_inertia_equals_calculate_cost(self):
         """inertia_ must exactly equal calculate_cost(X, medoid_indices_, metric)."""
@@ -784,7 +778,9 @@ class TestMathematicalInvariants(unittest.TestCase):
                 m = cls(n_clusters=3, metric=metric, random_state=42).fit(self.X)
                 expected = calculate_cost(self.X, m.medoid_indices_, metric)
                 self.assertAlmostEqual(
-                    m.inertia_, expected, places=6,
+                    m.inertia_,
+                    expected,
+                    places=6,
                     msg=f"{cls.__name__} metric={metric}: inertia mismatch",
                 )
 
@@ -802,7 +798,8 @@ class TestMathematicalInvariants(unittest.TestCase):
             m = cls(n_clusters=3, random_state=42).fit(X)
             unique_labels = np.unique(m.labels_)
             self.assertEqual(
-                len(unique_labels), 3,
+                len(unique_labels),
+                3,
                 f"{cls.__name__}: Expected 3 unique labels, got {len(unique_labels)}",
             )
 
@@ -810,12 +807,20 @@ class TestMathematicalInvariants(unittest.TestCase):
         """delta and brute_force must agree on precomputed distance matrix."""
         D = pairwise_distances(self.X, metric="euclidean")
         m_delta = CLARANS(
-            n_clusters=3, cost_evaluation="delta", metric="precomputed",
-            random_state=42, num_local=1, max_neighbors=20,
+            n_clusters=3,
+            cost_evaluation="delta",
+            metric="precomputed",
+            random_state=42,
+            num_local=1,
+            max_neighbors=20,
         ).fit(D)
         m_bf = CLARANS(
-            n_clusters=3, cost_evaluation="brute_force", metric="precomputed",
-            random_state=42, num_local=1, max_neighbors=20,
+            n_clusters=3,
+            cost_evaluation="brute_force",
+            metric="precomputed",
+            random_state=42,
+            num_local=1,
+            max_neighbors=20,
         ).fit(D)
         np.testing.assert_array_equal(m_delta.medoid_indices_, m_bf.medoid_indices_)
         self.assertAlmostEqual(m_delta.inertia_, m_bf.inertia_, places=9)
@@ -825,13 +830,17 @@ class TestMathematicalInvariants(unittest.TestCase):
         costs = []
         for k in [1, 2, 3, 5]:
             m = CLARANS(
-                n_clusters=k, random_state=42, num_local=2, max_neighbors=50,
+                n_clusters=k,
+                random_state=42,
+                num_local=2,
+                max_neighbors=50,
             ).fit(self.X)
             costs.append(m.inertia_)
         # Each step should be non-increasing (with a tolerance for stochastic variation)
         for i in range(len(costs) - 1):
             self.assertGreaterEqual(
-                costs[i] + 1e-6, costs[i + 1],
+                costs[i] + 1e-6,
+                costs[i + 1],
                 f"Cost did not decrease: k={[1, 2, 3, 5][i]} cost={costs[i]:.2f} "
                 f"→ k={[1, 2, 3, 5][i + 1]} cost={costs[i + 1]:.2f}",
             )
@@ -845,9 +854,7 @@ class TestSklearnAPICompliance(unittest.TestCase):
     (get_params, set_params, repr, tags, n_features_in_)."""
 
     def setUp(self):
-        self.X, self.y = make_blobs(
-            n_samples=60, centers=3, n_features=2, random_state=42
-        )
+        self.X, self.y = make_blobs(n_samples=60, centers=3, n_features=2, random_state=42)
 
     def test_get_set_params_roundtrip(self):
         """get_params → set_params → get_params should be idempotent."""
@@ -958,9 +965,7 @@ class TestFastCLARANSSpecific(unittest.TestCase):
     """Group J – Tests specific to FastCLARANS behavior distinct from CLARANS."""
 
     def setUp(self):
-        self.X, _ = make_blobs(
-            n_samples=100, centers=3, n_features=2, random_state=42
-        )
+        self.X, _ = make_blobs(n_samples=100, centers=3, n_features=2, random_state=42)
 
     def test_fast_clarans_max_neighbors_auto_formula(self):
         """FastCLARANS auto formula should be 2.5% of (n - k), NOT CLARANS's 1.25% * k * (n-k)."""
@@ -992,12 +997,17 @@ class TestFastCLARANSSpecific(unittest.TestCase):
         D = pairwise_distances(self.X)
         for init in ["random", "heuristic", "k-medoids++", "build"]:
             m = FastCLARANS(
-                n_clusters=3, init=init, metric="precomputed",
-                random_state=42, num_local=1, max_neighbors=10,
+                n_clusters=3,
+                init=init,
+                metric="precomputed",
+                random_state=42,
+                num_local=1,
+                max_neighbors=10,
             )
             m.fit(D)
             self.assertEqual(
-                len(m.medoid_indices_), 3,
+                len(m.medoid_indices_),
+                3,
                 f"FastCLARANS precomputed init={init} failed",
             )
 
@@ -1009,9 +1019,7 @@ class TestCalculateCostExhaustive(unittest.TestCase):
     """Group K – Exhaustive tests for the calculate_cost utility function."""
 
     def setUp(self):
-        self.X, _ = make_blobs(
-            n_samples=50, centers=3, n_features=2, random_state=42
-        )
+        self.X, _ = make_blobs(n_samples=50, centers=3, n_features=2, random_state=42)
 
     def test_calculate_cost_sparse_input(self):
         """calculate_cost should work with CSR sparse X."""
@@ -1023,6 +1031,7 @@ class TestCalculateCostExhaustive(unittest.TestCase):
 
     def test_calculate_cost_callable_metric(self):
         """calculate_cost should work with a callable metric function."""
+
         def my_l1(u, v):
             return float(np.sum(np.abs(u - v)))
 
@@ -1093,13 +1102,77 @@ class TestCythonKernelEdgeCases(unittest.TestCase):
         np.fill_diagonal(D, 0.0)
         dist_to_nearest = np.full(n, 100.0, dtype=np.float64)
         candidates = np.array([3], dtype=np.intp)
-        best_idx, best_gain = _core.pam_build_step(
-            D, candidates, dist_to_nearest, n, 1
-        )
+        best_idx, best_gain = _core.pam_build_step(D, candidates, dist_to_nearest, n, 1)
         self.assertEqual(best_idx, 0)  # Only one candidate, index 0 in candidates
         # Gain should be sum of max(0, 100 - D[i, 3]) for all i
         expected_gain = float(np.sum(np.maximum(0.0, 100.0 - D[:, 3])))
         self.assertAlmostEqual(best_gain, expected_gain, places=8)
+
+
+class TestSparseMatrixInitAndCosineSupport(unittest.TestCase):
+    """Tests for sparse matrix initialization and cosine metric handling."""
+
+    def setUp(self):
+        try:
+            from scipy import sparse
+
+            self.sparse = sparse
+        except ImportError:
+            self.skipTest("scipy is not installed")
+
+        self.rng = np.random.RandomState(42)
+        self.X_dense = self.rng.uniform(0.1, 1.0, (20, 5))
+        # Zero out half the entries to make it genuinely sparse
+        mask = self.rng.rand(*self.X_dense.shape) < 0.5
+        self.X_dense[mask] = 0.0
+        self.X_sparse = self.sparse.csr_matrix(self.X_dense)
+
+    def test_init_sparse_matrix_with_sparse_X(self):
+        """Passing a sparse matrix as init when X is sparse must succeed."""
+        init_sparse = self.X_sparse[[0, 5]]
+        for model_cls in [CLARANS, FastCLARANS]:
+            m = model_cls(n_clusters=2, init=init_sparse, random_state=42)
+            m.fit(self.X_sparse)
+            self.assertEqual(len(m.medoid_indices_), 2)
+            self.assertTrue(self.sparse.issparse(m.cluster_centers_))
+            # Test predict and transform with sparse data
+            preds = m.predict(self.X_sparse)
+            self.assertEqual(len(preds), 20)
+            dists = m.transform(self.X_sparse)
+            self.assertEqual(dists.shape, (20, 2))
+
+    def test_init_sparse_matrix_with_dense_X(self):
+        """Passing a sparse matrix as init when X is dense must succeed."""
+        init_sparse = self.sparse.csr_matrix(self.X_dense[[1, 6]])
+        for model_cls in [CLARANS, FastCLARANS]:
+            m = model_cls(n_clusters=2, init=init_sparse, random_state=42)
+            m.fit(self.X_dense)
+            self.assertEqual(len(m.medoid_indices_), 2)
+            self.assertFalse(self.sparse.issparse(m.cluster_centers_))
+
+    def test_sparse_csr_cosine_clustering(self):
+        """Sparse CSR input with metric='cosine' must work across fit, predict, transform."""
+        for model_cls in [CLARANS, FastCLARANS]:
+            m = model_cls(n_clusters=3, metric="cosine", random_state=42)
+            m.fit(self.X_sparse)
+            self.assertEqual(len(m.medoid_indices_), 3)
+            self.assertTrue(self.sparse.issparse(m.cluster_centers_))
+
+            # Predict and transform on sparse input
+            preds_sp = m.predict(self.X_sparse)
+            self.assertEqual(len(preds_sp), 20)
+            dists_sp = m.transform(self.X_sparse)
+            self.assertEqual(dists_sp.shape, (20, 3))
+
+            # Predict and transform on dense input (cross-format prediction)
+            preds_dense = m.predict(self.X_dense)
+            np.testing.assert_array_equal(preds_sp, preds_dense)
+            dists_dense = m.transform(self.X_dense)
+            np.testing.assert_allclose(dists_sp, dists_dense, atol=1e-12)
+
+            # Score must return negative inertia
+            s = m.score(self.X_sparse)
+            self.assertAlmostEqual(s, -m.inertia_)
 
 
 if __name__ == "__main__":

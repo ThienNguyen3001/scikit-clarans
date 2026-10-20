@@ -374,20 +374,24 @@ class CLARANS(ClusterMixin, TransformerMixin, BaseEstimator):
 
         if self.metric == "precomputed":
             if (
-                init_arr.ndim == 1
+                not issparse(self.init)
+                and init_arr.ndim == 1
                 and len(init_arr) == self.n_clusters
                 and np.issubdtype(init_arr.dtype, np.integer)
             ):
                 current_medoids_indices = check_medoids(init_arr, n_samples=n_samples)
                 return np.array(current_medoids_indices, dtype=int)
 
-            init_centers = check_array(self.init)
+            init_centers = check_array(self.init, accept_sparse=["csr", "csc"])
             if init_centers.shape != (self.n_clusters, n_features):
                 raise ValueError(f"init array must be of shape ({self.n_clusters}, {n_features})")
-            current_medoids_indices = np.argmin(init_centers, axis=1)
+            if issparse(init_centers):
+                current_medoids_indices = np.asarray(init_centers.argmin(axis=1)).ravel()
+            else:
+                current_medoids_indices = np.argmin(init_centers, axis=1)
         else:
             try:
-                init_centers = check_array(self.init)
+                init_centers = check_array(self.init, accept_sparse=["csr", "csc"])
             except ValueError as err:
                 if "Expected 2D array, got 1D array instead" in str(err):
                     raise ValueError(
@@ -1180,7 +1184,7 @@ class CLARANS(ClusterMixin, TransformerMixin, BaseEstimator):
     def _assign_cluster_labels(self, X: Any) -> np.ndarray:
         """Assign each sample in X to the nearest cluster center."""
         params = self.metric_params if self.metric_params is not None else {}
-        if not issparse(X):
+        if not issparse(X) and not issparse(self.cluster_centers_):
             scipy_metric = _map_scipy_metric(self.metric)
             try:
                 D = cdist(X, self.cluster_centers_, metric=scipy_metric, **params)
@@ -1290,7 +1294,7 @@ class CLARANS(ClusterMixin, TransformerMixin, BaseEstimator):
         X = self._validate_data_compat(X, reset=False, ensure_min_samples=1)
 
         params = self.metric_params if self.metric_params is not None else {}
-        if not issparse(X):
+        if not issparse(X) and not issparse(self.cluster_centers_):
             scipy_metric = _map_scipy_metric(self.metric)
             try:
                 return cdist(X, self.cluster_centers_, metric=scipy_metric, **params)

@@ -203,7 +203,7 @@ After calling ``fit(X)``, both ``CLARANS`` and ``FastCLARANS`` store the cluster
      - Type
      - Description
    * - ``cluster_centers_``
-     - ndarray
+     - {ndarray, sparse matrix}
      - Coordinates of the selected medoids with shape ``(n_clusters, n_features)``. Defined only when ``metric != 'precomputed'``.
    * - ``medoid_indices_``
      - ndarray
