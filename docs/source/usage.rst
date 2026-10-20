@@ -133,6 +133,10 @@ Both estimators share core parameters, with ``CLARANS`` providing an additional 
      - Both
      - ``0``
      - Verbosity level (``0`` for silent, ``1`` for per-search progress summary, ``>=2`` for per-swap details).
+   * - ``n_jobs``
+     - Both
+     - ``None``
+     - Number of parallel jobs to run across ``num_local`` restarts during ``fit``. ``None`` means 1 unless in a ``joblib.parallel_backend`` context; ``-1`` uses all available CPU threads.
 
 Tuning guidelines
 ^^^^^^^^^^^^^^^^^
@@ -158,6 +162,13 @@ Number of restarts (``num_local``):
 
 Neighbor sampling (``max_neighbors``):
   The default ``max_neighbors='auto'`` scales with the dataset size according to formulas from the original papers (:math:`\max(250, 1.25\% \times k(n-k))` in CLARANS and :math:`\max(1, \lfloor 250/k \rfloor, 2.5\% \times (n-k))` in FastCLARANS). An explicit integer value (such as ``max_neighbors=200``) is mainly useful when you need a fixed ceiling on search steps for very large inputs.
+
+Parallel execution (``n_jobs``):
+  When ``num_local > 1``, setting ``n_jobs`` (e.g., ``n_jobs=-1`` or ``n_jobs=4``) parallelizes independent local search restarts across worker threads using ``joblib.Parallel(prefer="threads")``.
+
+  * **GIL release & speedup**: Because the core swap evaluation loops run in Cython with ``nogil`` blocks, multithreaded restarts achieve true multicore speedups without inter-process communication (IPC) or data serialization overhead.
+  * **Bit-for-bit reproducibility**: Seeds for each local search are partitioned deterministically from ``random_state`` before parallel dispatch, ensuring identical clustering results regardless of the ``n_jobs`` setting (e.g., ``n_jobs=1`` and ``n_jobs=-1`` yield bit-for-bit identical outputs).
+  * **Zero-overhead sequential fast path**: When ``num_local=1`` or the effective job count is 1, execution avoids worker thread dispatch overhead completely.
 
 Distance metrics and routing
 ^^^^^^^^^^^^^^^^^^^^^^^^^^^^

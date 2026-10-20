@@ -36,6 +36,7 @@ scikit-clarans implements $k$-medoids clustering in Python using the scikit-lear
 
 * Scikit-learn compatibility: Extends `BaseEstimator` and `ClusterMixin` for use in `Pipeline`, `GridSearchCV`, and model evaluation workflows.
 * C acceleration: Core delta computations run in Cython with a pure Python and NumPy fallback.
+* Parallel restarts: Accelerate `num_local` local search restarts using multithreaded `n_jobs` execution over Cython `nogil` blocks with deterministic reproducibility.
 * Distance routing: Automatically routes distance calculations to SciPy `cdist` for dense arrays, scikit-learn `DistanceMetric` for sparse matrices, or `pairwise_distances`.
 * Missing values support: Native clustering of incomplete data (containing `NaN`) via `metric='nan_euclidean'`.
 * Custom callable metrics: Pass user-defined distance functions (`metric=callable`) to cluster domain objects (e.g., GPS coordinates via Haversine, text sequences via Levenshtein).

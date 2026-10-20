@@ -244,6 +244,7 @@ pip install --index-url https://test.pypi.org/simple/ --extra-index-url https://
   - `FastCLARANS`: Default `'auto'` sets $\max(1, \lfloor 250 / k \rfloor, \lfloor 0.025(n - k) \rfloor)$ non-medoid candidates (Schubert & Rousseeuw, 2021).
   - `CLARANS`: Default `'auto'` sets $\max(250, \lfloor 0.0125 \cdot k(n - k) \rfloor)$ edge evaluations (Ng & Han, 2002).
   - Avoid small integer constants (like 40), which trigger premature stagnation.
+- `n_jobs`: Number of parallel jobs across `num_local` search restarts (`None` or integer, `-1` uses all processors). Parallelized with `joblib.Parallel(prefer="threads")` exploiting Cython `nogil` blocks with deterministic seed splitting.
 - `cost_evaluation`: Strategy for swap evaluation (`CLARANS` only):
   - `'delta'` (default): FastPAM1-style nearest and second-nearest distance tracking in $O(n \cdot d)$.
   - `'brute_force'`: Recalculates full clustering cost in $O(n \cdot k \cdot d)$ per candidate (classic Ng & Han).
