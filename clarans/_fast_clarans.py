@@ -171,7 +171,8 @@ class FastCLARANS(CLARANS):
     ----------
     * Schubert, E., & Rousseeuw, P. J. (2021). Fast and eager k-medoids
       clustering: O(k) runtime improvement of the PAM, CLARA, and CLARANS
-      algorithms. Information Systems, 101, 101804.
+      algorithms. Information Systems, 101, 101804. The original reference
+      implementation in Java is part of the ELKI data mining framework.
     * scikit-learn-extra contributors. KMedoids clustering implementation
       and initialization strategies ('k-medoids++', 'heuristic', 'build').
       https://scikit-learn-extra.readthedocs.io/en/stable/generated/sklearn_extra.cluster.KMedoids.html
