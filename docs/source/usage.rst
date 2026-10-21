@@ -152,13 +152,16 @@ Initialization strategy (``init``):
   * ``'random'``: Uniform random sampling. Very fast, though it may require increasing ``num_local`` to reach comparable solution quality.
   * ``'build'``: Greedy initialization from classic PAM. Provides good starting points on small datasets, but computes the full pairwise distance matrix (:math:`O(n^2)` time and memory). Avoid for datasets larger than 5,000 samples.
   * ``'heuristic'``: Selects the :math:`k` samples with the smallest sum of distances to all other points (:math:`O(n^2)` time and memory). Avoid for datasets larger than 5,000 samples.
-  * Array-like: User-provided array of initial medoid coordinates or indices.
+  * Array-like: User-provided array of initial medoid coordinates of shape ``(n_clusters, n_features)``, or 1D integer indices of shape ``(n_clusters,)`` when ``metric='precomputed'``.
+
+    * **Coordinate Snapping**: Because medoids must be actual observations from the training dataset :math:`X`, user-provided coordinates are automatically snapped to their nearest unique training sample using the configured distance metric.
+    * **Duplicate Back-filling**: If multiple coordinates snap to the same training sample, ``scikit-clarans`` issues a ``UserWarning`` and automatically back-fills the missing slots with randomly chosen available training points, guaranteeing exactly :math:`k` distinct medoids without breaking downstream pipelines.
 
 Number of restarts (``num_local``):
   For randomized initialization (``'k-medoids++'`` or ``'random'``), increasing ``num_local`` to 3 to 5 helps find better local minima when solutions vary across runs.
   
   .. note::
-     Deterministic initialization methods such as ``'build'``, ``'heuristic'``, or explicit coordinate arrays always produce the same starting points. With deterministic seeding, set ``num_local=1`` to avoid repeated identical searches.
+     Deterministic initialization methods such as ``'build'``, ``'heuristic'``, or explicit coordinate arrays always produce the same starting points. ``scikit-clarans`` pre-computes and caches these initial medoids once before the search loop to avoid redundant :math:`O(n^2)` recalculations across restarts. Set ``num_local=1`` to save computation.
 
 Neighbor sampling (``max_neighbors``):
   The default ``max_neighbors='auto'`` scales with the dataset size according to formulas from the original papers (:math:`\max(250, 1.25\% \times k(n-k))` in CLARANS and :math:`\max(1, \lfloor 250/k \rfloor, 2.5\% \times (n-k))` in FastCLARANS). An explicit integer value (such as ``max_neighbors=200``) is mainly useful when you need a fixed ceiling on search steps for very large inputs.
