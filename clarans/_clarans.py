@@ -925,15 +925,18 @@ class CLARANS(ClusterMixin, TransformerMixin, BaseEstimator):
             except Exception:
                 pass
 
-        # Sparse arrays or custom metrics: scikit-learn DistanceMetric
-        try:
-            self._dm_instance = DistanceMetric.get_metric(self.metric, **params)
-            self._dm_instance.pairwise(X[:1], X[:1])
-            self._dist_engine = "distance_metric"
-            self._scipy_metric = None
-            return
-        except Exception:
-            pass
+        # Sparse arrays with string metric or dense arrays with custom metrics: DistanceMetric.
+        # Note: PyFuncDistance in DistanceMetric does not support sparse matrices (returns -999.0).
+        if not (issparse(X) and not isinstance(self.metric, str)):
+            try:
+                self._dm_instance = DistanceMetric.get_metric(self.metric, **params)
+                test_dist = self._dm_instance.pairwise(X[:1], X[:1])
+                if not (test_dist == -999.0).any():
+                    self._dist_engine = "distance_metric"
+                    self._scipy_metric = None
+                    return
+            except Exception:
+                pass
 
         # Fallback to pairwise_distances
         self._dist_engine = "pairwise"

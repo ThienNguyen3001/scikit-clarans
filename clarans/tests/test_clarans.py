@@ -1,6 +1,7 @@
 import unittest
 
 import numpy as np
+from scipy.sparse import issparse
 from sklearn.exceptions import NotFittedError
 from sklearn.datasets import make_blobs
 from sklearn.metrics import (
@@ -656,6 +657,32 @@ class TestCascadingDistanceEngine(unittest.TestCase):
         )
         model.fit(self.X_dense)
         self.assertEqual(model._dist_engine, "distance_metric")
+
+    def test_pairwise_selected_for_sparse_callable(self):
+        """Pairwise engine should be chosen for callable distance functions on sparse matrices."""
+
+        def my_metric(u, v):
+            if issparse(u):
+                u = u.toarray().ravel()
+            if issparse(v):
+                v = v.toarray().ravel()
+            return float(np.sum(np.abs(u - v)))
+
+        for model_cls in [CLARANS, FastCLARANS]:
+            model = model_cls(
+                n_clusters=3, metric=my_metric, num_local=1, max_neighbors=20, random_state=42
+            )
+            model.fit(self.X_sparse)
+            self.assertEqual(model._dist_engine, "pairwise")
+            self.assertTrue(np.isfinite(model.inertia_))
+            self.assertGreater(model.inertia_, 0.0)
+
+            # Check predict and transform on sparse input
+            preds = model.predict(self.X_sparse[:5])
+            self.assertEqual(preds.shape, (5,))
+            trans = model.transform(self.X_sparse[:5])
+            self.assertEqual(trans.shape, (5, 3))
+            self.assertTrue(np.all(trans >= 0.0))
 
     def test_precomputed_engine_selected(self):
         """Precomputed engine should be chosen for precomputed distance matrices."""
