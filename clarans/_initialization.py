@@ -14,19 +14,21 @@ from typing import Any, Callable
 import numpy as np
 from scipy.spatial.distance import cdist
 from scipy.sparse import issparse
-from sklearn.metrics import DistanceMetric, pairwise_distances
-from sklearn.utils import check_random_state
+from sklearn.metrics import (
+    DistanceMetric,
+    pairwise_distances,
+    pairwise_distances_argmin_min,
+)
+from sklearn.utils import check_array, check_random_state
 
-from .utils import _core, _map_scipy_metric, _to_dense
+from .utils import _core, _map_scipy_metric, _to_dense, check_medoids
 
 
 def _check_init_args(X: Any, n_clusters: int) -> int:
     """Validate dataset shape and cluster count for initialization."""
     n_samples = X.shape[0]
     if n_clusters >= n_samples:
-        raise ValueError(
-            f"n_clusters must be less than n_samples ({n_samples}); got {n_clusters}"
-        )
+        raise ValueError(f"n_clusters must be less than n_samples ({n_samples}); got {n_clusters}")
     return n_samples
 
 
@@ -273,7 +275,7 @@ def initialize_k_medoids_plus_plus(
     if metric == "precomputed":
         closest = _to_dense(X[:, first_medoid]).ravel()
     else:
-        first_row = X[first_medoid:first_medoid + 1]
+        first_row = X[first_medoid : first_medoid + 1]
         closest = _compute_pairwise_distances(
             X,
             first_row,
@@ -300,13 +302,13 @@ def initialize_k_medoids_plus_plus(
 
         if metric == "precomputed":
             cols_dense = _to_dense(X[:, candidate_ids])
-            dists_candidates = np.ascontiguousarray((cols_dense.T)**2)
+            dists_candidates = np.ascontiguousarray((cols_dense.T) ** 2)
         else:
             candidates_X = X[candidate_ids]
             cand_dists = _compute_pairwise_distances(
                 X, candidates_X, metric=metric, metric_params=metric_params
             )
-            dists_candidates = np.ascontiguousarray((cand_dists.T)**2)
+            dists_candidates = np.ascontiguousarray((cand_dists.T) ** 2)
 
         best_candidate = None
         best_pot = None
@@ -358,7 +360,7 @@ def initialize_k_medoids_plus_plus(
             if metric == "precomputed":
                 row_dist = _to_dense(X[:, best_candidate]).ravel()
             else:
-                cand_row = X[best_candidate:best_candidate + 1]
+                cand_row = X[best_candidate : best_candidate + 1]
                 row_dist = _compute_pairwise_distances(
                     X, cand_row, metric=metric, metric_params=metric_params
                 ).ravel()
@@ -371,3 +373,111 @@ def initialize_k_medoids_plus_plus(
         closest_dist_sq = best_dist_sq
 
     return medoid_indices
+
+
+def initialize_from_array(
+    init: Any,
+    X: Any,
+    random_state: np.random.RandomState,
+    n_clusters: int,
+    metric: str | Callable = "euclidean",
+    metric_params: dict[str, Any] | None = None,
+) -> np.ndarray:
+    """Map user-provided initial medoids or centers array to dataset observation indices.
+
+    Snaps coordinates to the nearest unique training observations in X and automatically
+    fills duplicate assignments with randomly chosen available training points.
+
+    Parameters
+    ----------
+    init : array-like of shape (n_clusters, n_features) or (n_clusters,)
+        The user-provided coordinates or medoid indices.
+    X : {ndarray, sparse matrix} of shape (n_samples, n_features)
+        The validated input data matrix.
+    random_state : RandomState
+        Random number generator.
+    n_clusters : int
+        Number of clusters to form.
+    metric : str or callable, default='euclidean'
+        Distance metric.
+    metric_params : dict, default=None
+        Additional metric keyword parameters.
+
+    Returns
+    -------
+    current_medoids_indices : ndarray of shape (n_clusters,), dtype int
+        Indices of the selected medoids in the dataset.
+    """
+    n_samples, n_features = X.shape
+
+    try:
+        init_arr = np.asarray(init)
+    except Exception as err:
+        raise ValueError(f"Could not convert init to array: {err}") from err
+
+    if metric == "precomputed":
+        if (
+            not issparse(init)
+            and init_arr.ndim == 1
+            and len(init_arr) == n_clusters
+            and np.issubdtype(init_arr.dtype, np.integer)
+        ):
+            current_medoids_indices = check_medoids(init_arr, n_samples=n_samples)
+            return np.array(current_medoids_indices, dtype=int)
+
+        init_centers = check_array(init, accept_sparse=["csr", "csc"])
+        if init_centers.shape != (n_clusters, n_features):
+            raise ValueError(f"init array must be of shape ({n_clusters}, {n_features})")
+        if issparse(init_centers):
+            current_medoids_indices = np.asarray(init_centers.argmin(axis=1)).ravel()
+        else:
+            current_medoids_indices = np.argmin(init_centers, axis=1)
+    else:
+        try:
+            init_centers = check_array(init, accept_sparse=["csr", "csc"])
+        except ValueError as err:
+            if "Expected 2D array, got 1D array instead" in str(err):
+                raise ValueError(
+                    f"init array must be 2D of shape ({n_clusters}, {n_features}). "
+                    "If you want to specify medoid indices, use metric='precomputed' "
+                    "or pass X[indices] as initial centers."
+                ) from err
+            raise
+        if init_centers.shape != (n_clusters, n_features):
+            raise ValueError(f"init array must be of shape ({n_clusters}, {n_features})")
+
+        params = metric_params if metric_params is not None else {}
+        if not issparse(X) and not issparse(init_centers):
+            scipy_metric = _map_scipy_metric(metric)
+            try:
+                D = cdist(init_centers, X, metric=scipy_metric, **params)
+                current_medoids_indices = np.argmin(D, axis=1)
+            except Exception:
+                current_medoids_indices, _ = pairwise_distances_argmin_min(
+                    init_centers, X, metric=metric, metric_kwargs=params
+                )
+        else:
+            current_medoids_indices, _ = pairwise_distances_argmin_min(
+                init_centers, X, metric=metric, metric_kwargs=params
+            )
+
+    current_medoids_indices = np.unique(np.array(current_medoids_indices, dtype=int))
+
+    if len(current_medoids_indices) < n_clusters:
+        warnings.warn(
+            "Provided init centers map to duplicate points in X. "
+            "Filling duplicates with random points.",
+            UserWarning,
+            stacklevel=2,
+        )
+        remaining = n_clusters - len(current_medoids_indices)
+        all_indices = np.arange(n_samples)
+        available = np.setdiff1d(all_indices, current_medoids_indices, assume_unique=True)
+
+        if len(available) < remaining:
+            raise ValueError("Not enough unique points to fill up to n_clusters.")
+
+        fillers = random_state.choice(available, remaining, replace=False)
+        current_medoids_indices = np.concatenate([current_medoids_indices, fillers])
+
+    return np.array(current_medoids_indices, dtype=int)

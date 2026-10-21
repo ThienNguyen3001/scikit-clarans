@@ -22,6 +22,7 @@ except ImportError:
 
 from ._initialization import (
     initialize_build,
+    initialize_from_array,
     initialize_heuristic,
     initialize_k_medoids_plus_plus,
 )
@@ -33,7 +34,6 @@ from .utils import (
     _to_dense,
     _warn_cython_unavailable,
     calculate_cost,
-    check_medoids,
 )
 
 # Handle scikit-learn parameter name differences (< 1.6 vs >= 1.6)
@@ -367,77 +367,14 @@ class CLARANS(ClusterMixin, TransformerMixin, BaseEstimator):
         n_features: int,
     ) -> np.ndarray:
         """Map user-provided initial medoids or centers array to dataset observation indices."""
-        try:
-            init_arr = np.asarray(self.init)
-        except Exception as err:
-            raise ValueError(f"Could not convert init to array: {err}") from err
-
-        if self.metric == "precomputed":
-            if (
-                not issparse(self.init)
-                and init_arr.ndim == 1
-                and len(init_arr) == self.n_clusters
-                and np.issubdtype(init_arr.dtype, np.integer)
-            ):
-                current_medoids_indices = check_medoids(init_arr, n_samples=n_samples)
-                return np.array(current_medoids_indices, dtype=int)
-
-            init_centers = check_array(self.init, accept_sparse=["csr", "csc"])
-            if init_centers.shape != (self.n_clusters, n_features):
-                raise ValueError(f"init array must be of shape ({self.n_clusters}, {n_features})")
-            if issparse(init_centers):
-                current_medoids_indices = np.asarray(init_centers.argmin(axis=1)).ravel()
-            else:
-                current_medoids_indices = np.argmin(init_centers, axis=1)
-        else:
-            try:
-                init_centers = check_array(self.init, accept_sparse=["csr", "csc"])
-            except ValueError as err:
-                if "Expected 2D array, got 1D array instead" in str(err):
-                    raise ValueError(
-                        f"init array must be 2D of shape ({self.n_clusters}, {n_features}). "
-                        "If you want to specify medoid indices, use metric='precomputed' "
-                        "or pass X[indices] as initial centers."
-                    ) from err
-                raise
-            if init_centers.shape != (self.n_clusters, n_features):
-                raise ValueError(f"init array must be of shape ({self.n_clusters}, {n_features})")
-
-            params = self.metric_params if self.metric_params is not None else {}
-            if not issparse(X) and not issparse(init_centers):
-                scipy_metric = _map_scipy_metric(self.metric)
-                try:
-                    D = cdist(init_centers, X, metric=scipy_metric, **params)
-                    current_medoids_indices = np.argmin(D, axis=1)
-                except Exception:
-                    current_medoids_indices, _ = pairwise_distances_argmin_min(
-                        init_centers, X, metric=self.metric, metric_kwargs=params
-                    )
-            else:
-                current_medoids_indices, _ = pairwise_distances_argmin_min(
-                    init_centers, X, metric=self.metric, metric_kwargs=params
-                )
-
-        current_medoids_indices = np.unique(np.array(current_medoids_indices, dtype=int))
-
-        if len(current_medoids_indices) < self.n_clusters:
-            warnings.warn(
-                "Provided init centers map to duplicate points in X. "
-                "Filling duplicates with random points.",
-                UserWarning,
-                stacklevel=2,
-            )
-            remaining = self.n_clusters - len(current_medoids_indices)
-            all_indices = np.arange(n_samples)
-            available = np.setdiff1d(all_indices, current_medoids_indices, assume_unique=True)
-
-            if len(available) < remaining:
-                raise ValueError("Not enough unique points to fill up to n_clusters.")
-
-            fillers = random_state.choice(available, remaining, replace=False)
-            current_medoids_indices = np.concatenate([current_medoids_indices, fillers])
-
-        return np.array(current_medoids_indices, dtype=int)
+        return initialize_from_array(
+            self.init,
+            X,
+            random_state,
+            self.n_clusters,
+            metric=self.metric,
+            metric_params=self.metric_params,
+        )
 
     def __sklearn_tags__(self):
         """Declare estimator capabilities for scikit-learn's check_estimator.
