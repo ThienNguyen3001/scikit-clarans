@@ -239,6 +239,19 @@ Inertia calculation:
 Coordinates with precomputed metrics:
   When ``metric='precomputed'``, the input ``X`` is a distance matrix of shape ``(n_samples, n_samples)``. Because the original feature coordinates are not passed to ``fit``, ``cluster_centers_`` is not defined (hasattr returns ``False``). Use ``medoid_indices_`` to retrieve the row positions of the selected medoids in your original data.
 
+Precomputed inference and best practices:
+  When serving models with ``metric='precomputed'``, ``predict()`` and ``transform()`` accept two matrix shapes:
+
+  * **Full matrix** of shape ``(n_test, n_train)``: Distance matrix from query samples to all training samples.
+  * **Compact matrix** of shape ``(n_test, k)``: Distance matrix from query samples directly to the ``k`` fitted medoids. This reduces distance evaluations and memory consumption by a factor of :math:`n_{\text{train}} / k` (typically 10x to 1000x faster).
+
+  .. warning::
+     **Important considerations when using precomputed inference:**
+
+     1. **Medoid preservation**: Because the model only receives distance matrices during ``fit()``, it does not store the original raw objects. You must retain your original training items and extract the medoids using ``model.medoid_indices_`` in order to compute query distances later.
+     2. **Column alignment**: When passing a compact matrix of shape ``(n_test, k)``, column ``j`` must strictly correspond to medoid ``model.medoid_indices_[j]``. A mismatched column order will cause silent misclassifications. Using a ``pandas.DataFrame`` with matching column names is recommended to guard against accidental column reordering.
+     3. **Alternative for non-vector data**: If your dataset consists of complex domain objects (e.g., DNA sequences, graphs, raw strings), consider passing a custom distance callable (``metric=func``) directly to the estimator instead of precomputing distance matrices. When using a callable metric, ``cluster_centers_`` automatically stores the raw medoid objects, enabling standard ``predict(X_test)`` where distances are computed internally without manual matrix management.
+
 Neighbor attributes and auto-scaling:
   The constructor parameter ``max_neighbors`` accepts an integer or the string ``'auto'``. The fitted attribute ``max_neighbors_`` (with a trailing underscore) always stores the concrete integer limit used during the search.
 
