@@ -4,7 +4,7 @@
 
 <!-- Hàng 1: Phiên bản, Phân phối, Học thuật & Trải nghiệm nhanh -->
 [![PyPI version](https://img.shields.io/pypi/v/scikit-clarans.svg)](https://pypi.org/project/scikit-clarans/)
-[![Python 3.9+](https://img.shields.io/badge/python-3.9+-blue.svg)](https://www.python.org/downloads/)
+[![Python 3.11+](https://img.shields.io/badge/python-3.11+-blue.svg)](https://www.python.org/downloads/)
 [![License](https://img.shields.io/github/license/ThienNguyen3001/scikit-clarans)](LICENSE)
 [![DOI](https://zenodo.org/badge/DOI/10.5281/zenodo.18366801.svg)](https://doi.org/10.5281/zenodo.18366801)
 [![Open In Colab](https://colab.research.google.com/assets/colab-badge.svg)](https://colab.research.google.com/drive/194aBBu0wZotnun25dXqlOrDj3HYHKo-a?usp=sharing)

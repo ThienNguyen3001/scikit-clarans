@@ -12,7 +12,7 @@ name = "scikit-clarans"
 version = "0.3.4"
 description = "A scikit-learn compatible implementation of CLARANS clustering algorithm"
 readme = "README.md"
-requires-python = ">=3.9"
+requires-python = ">=3.11"
 license = {text = "MIT"}
 authors = [
     {name = "Ngọc Thiện Nguyễn", email = "thiennguyen03001@gmail.com"}
@@ -25,11 +25,10 @@ classifiers = [
     "License :: OSI Approved :: MIT License",
     "Operating System :: OS Independent",
     "Programming Language :: Python :: 3",
-    "Programming Language :: Python :: 3.9",
-    "Programming Language :: Python :: 3.10",
     "Programming Language :: Python :: 3.11",
     "Programming Language :: Python :: 3.12",
     "Programming Language :: Python :: 3.13",
+    "Programming Language :: Python :: 3.14",
     "Topic :: Scientific/Engineering",
 ]
 keywords = ["clustering", "sklearn", "scikit-learn", "clarans", "k-medoids"]
@@ -85,8 +84,8 @@ warn_unused_configs = true
 follow_imports = "silent"
 
 [tool.cibuildwheel]
-# Build on CPython 3.9 through 3.13
-build = "cp39-* cp310-* cp311-* cp312-* cp313-*"
+# Build on CPython 3.11 through 3.14
+build = "cp311-* cp312-* cp313-* cp314-*"
 # Skip PyPy and 32-bit architectures
 skip = "pp* *-win32 *-manylinux_i686 *-musllinux_i686"
 
@@ -107,7 +106,7 @@ config-settings = { "setup-args" = "--vsenv" }
 
 [tool.black]
 line-length = 100
-target-version = ["py39", "py310", "py311", "py312", "py313"]
+target-version = ["py311", "py312", "py313", "py314"]
 include = '\.pyi?$'
 exclude = '''
 /(

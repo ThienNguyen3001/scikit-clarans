@@ -67,7 +67,7 @@ Both `CLARANS` and `FastCLARANS` inherit from `BaseEstimator`, `ClusterMixin`, a
 5. Ensure all checks in `clarans/tests/test_common.py` pass via `@parametrize_with_checks`.
 
 ### Code style and quality
-- Format code with `black` (`[tool.black]`: max line length 100, py39-py313 targets).
+- Format code with `black` (`[tool.black]`: max line length 100, py311-py314 targets).
 - Python code must pass `flake8 clarans` (`.flake8`: max line length 100, ignore `E203`).
 - Static types must verify with `mypy clarans`.
 - Pre-commit hooks (`black`, `flake8`, whitespace fixers) configured in `.pre-commit-config.yaml`.
@@ -184,7 +184,7 @@ Run before opening a pull request or tagging a release:
 5. Pre-commit: `pre-commit run --all-files`
 
 ### CI/CD Workflows (`.github/workflows/`)
-1. `test_suite.yml`: Cross-platform test matrix across Ubuntu (Python 3.9–3.13), Windows (3.9, 3.13 with MSVC), and macOS (3.9, 3.13).
+1. `test_suite.yml`: Cross-platform test matrix across Ubuntu (Python 3.11–3.14), Windows (3.11, 3.14 with MSVC), and macOS (3.11, 3.14).
 2. `lint_cov_check.yml`: Code quality checks (`flake8`, `mypy`, `pytest` coverage XML) on Python 3.12.
 3. `docs-build.yml`: Builds Sphinx HTML documentation with `-W --keep-going` on Python 3.12.
 4. `draft-pdf.yml`: Compiles JOSS draft paper PDF on pushes to branch `paper`.
