@@ -16,6 +16,12 @@ Standard :math:`k`-means calculates cluster centers by averaging coordinates in 
 
    \min_{M \subset X, |M|=k} \sum_{i=1}^n \min_{m \in M} d(x_i, m)
 
+.. figure:: auto_examples/robustness/images/sphx_glr_plot_outlier_robustness_001.png
+   :align: center
+   :alt: Outlier robustness: K-Means vs. CLARANS (k-medoids)
+
+   **Outlier resistance**: While K-Means (left) has its centroids pulled away by extreme anomalies due to squared Euclidean loss, CLARANS (right) keeps medoids firmly anchored in dense data clusters. See :ref:`sphx_glr_auto_examples_robustness_plot_outlier_robustness.py` for the complete example.
+
 .. note::
 
    In ``scikit-learn``'s ``KMeans``, ``inertia_`` represents the sum of squared Euclidean distances. In ``scikit-clarans``, ``inertia_`` represents the sum of unsquared distances from each sample to its assigned medoid according to the chosen metric.
@@ -75,6 +81,12 @@ Choosing an estimator
    * - Primary use
      - Baseline and algorithm comparison
      - General clustering workflows and benchmarks
+
+.. figure:: auto_examples/benchmarks/images/sphx_glr_plot_clarans_vs_fastclarans_001.png
+   :align: center
+   :alt: Runtime and inertia comparison between CLARANS and FastCLARANS
+
+   **Performance benchmark**: On synthetic data (:math:`N=1500, k=6`), FastCLARANS is significantly faster than classic CLARANS while achieving comparable clustering cost. See :ref:`sphx_glr_auto_examples_benchmarks_plot_clarans_vs_fastclarans.py`.
 
 .. note::
    Both estimators compute distances dynamically with an :math:`O(n)` memory footprint rather than storing an :math:`O(n^2)` matrix. They run in a single process and typically handle tens of thousands of samples efficiently.
@@ -325,6 +337,12 @@ In addition to the restart summary, this level records:
 * ``eval``: Running count of neighbor evaluations examined when the improving swap was found.
 * ``cost``: New total distance cost after making the swap.
 * ``diff``: Cost change (:math:`\Delta < 0`) produced by the swap.
+
+.. figure:: auto_examples/benchmarks/images/sphx_glr_plot_search_trajectory_001.png
+   :align: center
+   :alt: FastCLARANS search trajectory, evaluation effort, and fitted clusters across restarts
+
+   **Visualizing search trajectory and restarts**: Solution quality across multiple local restarts (``num_local``), search effort tracking (candidate evaluations vs. accepted swaps), and the final fitted cluster partition with medoids marked with :math:`\times`. See :ref:`sphx_glr_auto_examples_benchmarks_plot_search_trajectory.py`.
 
 Search mechanics
 ----------------
