@@ -1,15 +1,15 @@
 User guide
 ==========
 
-``scikit-clarans`` provides estimators for $k$-medoids clustering. This guide covers algorithm selection, parameter tuning, and search mechanics.
+``scikit-clarans`` provides estimators for :math:`k`-medoids clustering. This guide covers algorithm selection, parameter tuning, and search mechanics.
 
 Why use k-medoids?
 ------------------
 
-Standard $k$-means calculates cluster centers by averaging coordinates in Euclidean space, which creates synthetic centroids. In contrast, $k$-medoids restricts cluster centers to actual observations from the dataset:
+Standard :math:`k`-means calculates cluster centers by averaging coordinates in Euclidean space, which creates synthetic centroids. In contrast, :math:`k`-medoids restricts cluster centers to actual observations from the dataset:
 
 * Outlier resistance: Medoids minimize absolute pairwise distances (:math:`\sum d`) rather than squared Euclidean distances (:math:`\sum d^2`), keeping centers stable when the dataset contains extreme values.
-* Custom distance metrics: Supports metrics such as Manhattan distance, cosine dissimilarity, or precomputed distance matrices, whereas standard $k$-means requires Euclidean space.
+* Custom distance metrics: Supports metrics such as Manhattan distance, cosine dissimilarity, or precomputed distance matrices, whereas standard :math:`k`-means requires Euclidean space.
 * Interpretability: Every medoid corresponds to a real record in the input data, such as a patient profile, an exemplary document, or a molecule.
 
 .. math::
