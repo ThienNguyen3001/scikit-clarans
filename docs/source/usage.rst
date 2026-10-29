@@ -292,7 +292,7 @@ Setting ``verbose=1`` (or ``verbose=True``) prints a configuration header, a sum
 
     [CLARANS] n=1000, k=4, metric=euclidean, num_local=3, max_neighbors=250/3984 (6.3%)
         #            Cost  Swaps  Evals   Time(s)
-        1       150.12345*     4     80     0.012s  converged
+        1       150.12345      4     80     0.012s  converged
         2       148.54321*     5    110     0.015s  converged
         3       152.00000      2     65     0.009s  converged
       Best: #2 | Totals: 11 swaps, 255 evals, 0.038s
@@ -302,7 +302,7 @@ The header reports the dataset size (:math:`n`), number of clusters (:math:`k`),
 Table columns:
 
 * ``#``: 1-based index of the restart.
-* ``Cost``: Final clustering inertia (sum of distances) for that restart. An asterisk (``*``) flags an iteration that set a new lowest cost across all completed restarts.
+* ``Cost``: Final clustering inertia (sum of distances) for that restart. An asterisk (``*``) flags the best restart achieving the lowest overall cost across all runs.
 * ``Swaps``: Number of accepted medoid swaps.
 * ``Evals``: Total candidate evaluations tested during the restart.
 * ``Time(s)``: Wall-clock duration of the restart.
