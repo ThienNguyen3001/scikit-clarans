@@ -1,7 +1,7 @@
 r"""
-=============================================================================
-Clustering on Asymmetric Precomputed Distance Matrices (:math:`D \neq D^T`)
-=============================================================================
+======================================================
+Clustering on Asymmetric Precomputed Distance Matrices
+======================================================
 
 This example demonstrates how CLARANS and FastCLARANS cluster directed networks
 and asymmetric dissimilarity matrices (where :math:`D_{ij} \neq D_{ji}`).
