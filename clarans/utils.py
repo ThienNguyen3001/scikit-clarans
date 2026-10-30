@@ -79,10 +79,8 @@ def _map_scipy_metric(metric: str | Callable) -> str | Callable:
 
 
 def check_medoids(
-    medoid_indices: Sequence[int] | np.ndarray | None = None,
+    medoid_indices: Sequence[int] | np.ndarray,
     n_samples: int | None = None,
-    *,
-    medoids: Sequence[int] | np.ndarray | None = None,
 ) -> np.ndarray:
     """Validate and convert medoid indices to a 1D NumPy array of integers.
 
@@ -95,8 +93,6 @@ def check_medoids(
         Total number of samples in the dataset. If provided, ensures that all
         medoid indices satisfy 0 <= idx < n_samples.
 
-    medoids : array-like of shape (n_clusters,), optional
-        Alias for `medoid_indices` for backwards compatibility.
 
     Returns
     -------
@@ -111,12 +107,11 @@ def check_medoids(
     TypeError
         If `medoid_indices` contains non-integer elements.
     """
-    raw = medoid_indices if medoid_indices is not None else medoids
-    if raw is None:
+    if medoid_indices is None:
         raise ValueError("medoid_indices cannot be empty.")
 
     try:
-        arr = np.asarray(raw)
+        arr = np.asarray(medoid_indices)
     except Exception as exc:
         raise ValueError(f"Could not convert medoid_indices to numpy array: {exc}") from exc
 
