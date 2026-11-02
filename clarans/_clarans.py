@@ -12,7 +12,7 @@ from scipy.spatial.distance import cdist
 from scipy.sparse import issparse
 from sklearn.base import BaseEstimator, ClusterMixin, TransformerMixin
 from sklearn.metrics import DistanceMetric, pairwise_distances_argmin_min, pairwise_distances
-from sklearn.metrics.pairwise import PAIRWISE_DISTANCE_FUNCTIONS
+from sklearn.metrics.pairwise import PAIRWISE_DISTANCE_FUNCTIONS, _VALID_METRICS
 from sklearn.utils.validation import check_array, check_is_fitted, check_random_state
 
 try:
@@ -49,38 +49,7 @@ def _finite_kwarg(allow_nan: bool) -> dict[str, Any]:
     return {_FINITE_PARAM: "allow-nan" if allow_nan else True}
 
 
-try:
-    _DM_METRICS = {m for m in DistanceMetric.get_valid_metric_ids() if m != "pyfunc"}
-except (AttributeError, TypeError):
-    _DM_METRICS = {
-        "braycurtis",
-        "canberra",
-        "chebyshev",
-        "cityblock",
-        "correlation",
-        "cosine",
-        "dice",
-        "euclidean",
-        "hamming",
-        "haversine",
-        "infinity",
-        "jaccard",
-        "kulsinski",
-        "l1",
-        "l2",
-        "mahalanobis",
-        "manhattan",
-        "matching",
-        "minkowski",
-        "p",
-        "rogerstanimoto",
-        "russellrao",
-        "seuclidean",
-        "sokalmichener",
-        "sokalsneath",
-        "sqeuclidean",
-        "yule",
-    }
+_DM_METRICS = set(_VALID_METRICS)
 
 _CDIST_EXTRA_METRICS = {"jensenshannon"}
 _EXCLUDED_METRICS = {"kulczynski1", "wminkowski"}
@@ -357,16 +326,6 @@ class CLARANS(ClusterMixin, TransformerMixin, BaseEstimator):
             else:
                 raise ValueError(f"Unknown init method: {self.init!r}")
 
-        return self._initialize_from_array(X, random_state, n_samples, n_features)
-
-    def _initialize_from_array(
-        self,
-        X: np.ndarray | "spmatrix",
-        random_state: np.random.RandomState,
-        n_samples: int,
-        n_features: int,
-    ) -> np.ndarray:
-        """Map user-provided initial medoids or centers array to dataset observation indices."""
         return initialize_from_array(
             self.init,
             X,
@@ -1012,28 +971,13 @@ class CLARANS(ClusterMixin, TransformerMixin, BaseEstimator):
                 accept_sparse=["csr", "csc"],
                 **finite_kw,
             )
-        if hasattr(self, "_validate_data"):
-            return self._validate_data(
-                X,
-                reset=reset,
-                ensure_min_samples=ensure_min_samples,
-                accept_sparse=["csr", "csc"],
-                **finite_kw,
-            )
-        X_arr = check_array(
+        return self._validate_data(
             X,
+            reset=reset,
             ensure_min_samples=ensure_min_samples,
             accept_sparse=["csr", "csc"],
             **finite_kw,
         )
-        if reset:
-            self.n_features_in_ = X_arr.shape[1]
-        elif hasattr(self, "n_features_in_") and X_arr.shape[1] != self.n_features_in_:
-            raise ValueError(
-                f"X has {X_arr.shape[1]} features, but {self.__class__.__name__} is expecting "
-                f"{self.n_features_in_} features as input"
-            )
-        return X_arr
 
     def _validate_params(self) -> None:
         """Validate estimator hyperparameters according to scikit-learn standards."""
