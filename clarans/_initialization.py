@@ -408,10 +408,7 @@ def initialize_from_array(
     """
     n_samples, n_features = X.shape
 
-    try:
-        init_arr = np.asarray(init)
-    except Exception as err:
-        raise ValueError(f"Could not convert init to array: {err}") from err
+    init_arr = np.asarray(init)
 
     if metric == "precomputed":
         if (

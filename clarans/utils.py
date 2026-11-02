@@ -110,10 +110,7 @@ def check_medoids(
     if medoid_indices is None:
         raise ValueError("medoid_indices cannot be empty.")
 
-    try:
-        arr = np.asarray(medoid_indices)
-    except Exception as exc:
-        raise ValueError(f"Could not convert medoid_indices to numpy array: {exc}") from exc
+    arr = np.asarray(medoid_indices)
 
     if arr.ndim != 1:
         raise ValueError(f"medoid_indices must be 1-dimensional, got shape {arr.shape}")
@@ -181,7 +178,5 @@ def calculate_cost(
         except Exception:
             pass
 
-    _, min_dists = pairwise_distances_argmin_min(
-        X, medoids, metric=metric, metric_kwargs=params
-    )
+    _, min_dists = pairwise_distances_argmin_min(X, medoids, metric=metric, metric_kwargs=params)
     return float(np.sum(min_dists))
