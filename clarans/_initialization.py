@@ -169,9 +169,7 @@ def initialize_build(
                 UserWarning,
                 stacklevel=3,
             )
-            D = X.toarray()
-        else:
-            D = np.asarray(X)
+        D = _to_dense(X)
     else:
         D = _compute_pairwise_distances(X, metric=metric, metric_params=metric_params)
 
@@ -428,10 +426,7 @@ def initialize_from_array(
         init_centers = check_array(init, accept_sparse=["csr", "csc"])
         if init_centers.shape != (n_clusters, n_features):
             raise ValueError(f"init array must be of shape ({n_clusters}, {n_features})")
-        if issparse(init_centers):
-            current_medoids_indices = np.asarray(init_centers.argmin(axis=1)).ravel()
-        else:
-            current_medoids_indices = np.argmin(init_centers, axis=1)
+        current_medoids_indices = np.asarray(init_centers.argmin(axis=1)).ravel()
     else:
         try:
             init_centers = check_array(init, accept_sparse=["csr", "csc"])
