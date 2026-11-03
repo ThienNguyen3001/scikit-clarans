@@ -418,7 +418,7 @@ def initialize_from_array(
             and np.issubdtype(init_arr.dtype, np.integer)
         ):
             current_medoids_indices = check_medoids(init_arr, n_samples=n_samples)
-            return np.array(current_medoids_indices, dtype=int)
+            return current_medoids_indices
 
         init_centers = check_array(init, accept_sparse=["csr", "csc"])
         if init_centers.shape != (n_clusters, n_features):
@@ -453,7 +453,7 @@ def initialize_from_array(
                 init_centers, X, metric=metric, metric_kwargs=params
             )
 
-    current_medoids_indices = np.unique(np.array(current_medoids_indices, dtype=int))
+    current_medoids_indices = np.unique(current_medoids_indices)
 
     if len(current_medoids_indices) < n_clusters:
         warnings.warn(
@@ -472,4 +472,4 @@ def initialize_from_array(
         fillers = random_state.choice(available, remaining, replace=False)
         current_medoids_indices = np.concatenate([current_medoids_indices, fillers])
 
-    return np.array(current_medoids_indices, dtype=int)
+    return current_medoids_indices
