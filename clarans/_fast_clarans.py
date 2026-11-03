@@ -251,8 +251,7 @@ class FastCLARANS(CLARANS):
         current_cost: float = float(np.sum(near_dist))
 
         if self.verbose >= 2:
-            r_idx = loc_idx
-            print(f"  Restart {r_idx}/{self.num_local} (init cost: {current_cost:.5f}):")
+            print(f"  Restart {loc_idx}/{self.num_local} (init cost: {current_cost:.5f}):")
 
         non_medoid_mask = np.ones(n_samples, dtype=bool)
         non_medoid_mask[current_medoids_indices] = False

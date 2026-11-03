@@ -1,6 +1,5 @@
 from __future__ import annotations
 
-import inspect
 import time
 import warnings
 from typing import TYPE_CHECKING, Any, Sequence
@@ -35,19 +34,6 @@ from .utils import (
     _warn_cython_unavailable,
     calculate_cost,
 )
-
-# Handle scikit-learn parameter name differences (< 1.6 vs >= 1.6)
-
-_FINITE_PARAM = (
-    "ensure_all_finite"
-    if "ensure_all_finite" in inspect.signature(check_array).parameters
-    else "force_all_finite"
-)
-
-
-def _finite_kwarg(allow_nan: bool) -> dict[str, Any]:
-    return {_FINITE_PARAM: "allow-nan" if allow_nan else True}
-
 
 _DM_METRICS = set(_VALID_METRICS)
 
@@ -636,8 +622,7 @@ class CLARANS(ClusterMixin, TransformerMixin, BaseEstimator):
             second_dist = None
 
         if self.verbose >= 2:
-            r_idx = loc_idx
-            print(f"  Restart {r_idx}/{self.num_local} (init cost: {current_cost:.5f}):")
+            print(f"  Restart {loc_idx}/{self.num_local} (init cost: {current_cost:.5f}):")
 
         # Track non-medoid candidates to avoid picking an existing medoid
         non_medoid_mask = np.ones(n_samples, dtype=bool)
@@ -844,7 +829,7 @@ class CLARANS(ClusterMixin, TransformerMixin, BaseEstimator):
         """Copy 1D result into out buffer if provided and matching, otherwise return res."""
         if res.ndim > 1:
             res = res.ravel()
-        if out is not None and isinstance(out, np.ndarray) and out.shape[0] == res.shape[0]:
+        if out is not None and out.shape[0] == res.shape[0]:
             if out is not res:
                 np.copyto(out, res)
             return out
@@ -961,7 +946,7 @@ class CLARANS(ClusterMixin, TransformerMixin, BaseEstimator):
     ) -> Any:
         """Validate input data across different scikit-learn versions."""
         allow_nan = self.metric == "nan_euclidean"
-        finite_kw = _finite_kwarg(allow_nan)
+        finite_kw = {"ensure_all_finite": "allow-nan" if allow_nan else True}
         if validate_data is not None:
             return validate_data(
                 self,
@@ -985,15 +970,10 @@ class CLARANS(ClusterMixin, TransformerMixin, BaseEstimator):
             raise ValueError(f"n_clusters must be >= 1; got {self.n_clusters}")
         if not _is_valid_int(self.num_local, min_val=1):
             raise ValueError(f"num_local must be >= 1; got {self.num_local}")
-        if self.max_neighbors != "auto":
-            if isinstance(self.max_neighbors, (bool, np.bool_)) or not isinstance(
-                self.max_neighbors, (int, np.integer)
-            ):
-                raise ValueError(
-                    f"max_neighbors must be an integer >= 1 or 'auto'; got {self.max_neighbors!r}"
-                )
-            if self.max_neighbors < 1:
-                raise ValueError(f"max_neighbors must be >= 1; got {self.max_neighbors}")
+        if self.max_neighbors != "auto" and not _is_valid_int(self.max_neighbors, min_val=1):
+            raise ValueError(
+                f"max_neighbors must be an integer >= 1 or 'auto'; got {self.max_neighbors!r}"
+            )
         if self.cost_evaluation not in {"delta", "brute_force"}:
             raise ValueError(
                 f"The 'cost_evaluation' parameter of {self.__class__.__name__} must be a str among "
