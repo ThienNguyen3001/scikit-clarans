@@ -9,6 +9,7 @@ Overview of examples
 --------------------
 
 Cluster geometries:
+  * :doc:`auto_examples/cluster_geometry/plot_cluster_comparison`: Comparison of 13 clustering algorithms across diverse toy datasets.
   * :doc:`auto_examples/cluster_geometry/plot_clusters_blobs`: Medoid identification on isotropic Gaussian clusters.
   * :doc:`auto_examples/cluster_geometry/plot_clusters_moons`: Behavior on non-convex interleaving moons.
   * :doc:`auto_examples/cluster_geometry/plot_clusters_anisotropic`: Performance on elongated, anisotropic cluster shapes.

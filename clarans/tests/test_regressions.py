@@ -110,7 +110,8 @@ class TestBug6Fix_HeuristicDeterministicOrder(unittest.TestCase):
         for k in [3, 5, 10]:
             medoids = initialize_heuristic(X, n_clusters=k, metric="euclidean")
             np.testing.assert_array_equal(
-                medoids, np.sort(medoids),
+                medoids,
+                np.sort(medoids),
                 err_msg=f"k={k}: medoid indices should be sorted",
             )
 
@@ -120,12 +121,12 @@ class TestBug6Fix_HeuristicDeterministicOrder(unittest.TestCase):
         X = rng.randn(200, 4)
 
         results = [
-            tuple(initialize_heuristic(X, n_clusters=8, metric="euclidean"))
-            for _ in range(20)
+            tuple(initialize_heuristic(X, n_clusters=8, metric="euclidean")) for _ in range(20)
         ]
 
         self.assertEqual(
-            len(set(results)), 1,
+            len(set(results)),
+            1,
             "All calls should return identical medoid arrays",
         )
 
@@ -149,6 +150,7 @@ class TestBug11Fix_ArgpartitionPerformance(unittest.TestCase):
     def test_compute_2min_uses_argpartition(self):
         """Fallback path should use O(n*k) argpartition, not O(n*k*log k) argsort."""
         import inspect
+
         source = inspect.getsource(CLARANS._compute_2min)
 
         self.assertIn("argpartition", source, "Should use argpartition")
@@ -171,12 +173,15 @@ class TestBug11Fix_ArgpartitionPerformance(unittest.TestCase):
             sorted_dists = np.sort(dists)
             sorted_indices = np.argsort(dists)
 
-            self.assertEqual(near_idx[i], sorted_indices[0],
-                             f"Sample {i}: wrong nearest medoid index")
-            self.assertAlmostEqual(near_dist[i], sorted_dists[0],
-                                   msg=f"Sample {i}: wrong nearest distance")
-            self.assertAlmostEqual(second_dist[i], sorted_dists[1],
-                                   msg=f"Sample {i}: wrong second distance")
+            self.assertEqual(
+                near_idx[i], sorted_indices[0], f"Sample {i}: wrong nearest medoid index"
+            )
+            self.assertAlmostEqual(
+                near_dist[i], sorted_dists[0], msg=f"Sample {i}: wrong nearest distance"
+            )
+            self.assertAlmostEqual(
+                second_dist[i], sorted_dists[1], msg=f"Sample {i}: wrong second distance"
+            )
 
 
 class TestBug13Fix_ThreadSafeWarning(unittest.TestCase):
@@ -206,7 +211,8 @@ class TestBug13Fix_ThreadSafeWarning(unittest.TestCase):
         self.assertIn("_cython_warning_lock", source, "Should reference the lock")
         flag_checks = source.count("_cython_warning_issued")
         self.assertGreaterEqual(
-            flag_checks, 2,
+            flag_checks,
+            2,
             "Should check _cython_warning_issued at least twice (double-checked locking)",
         )
 
@@ -274,7 +280,8 @@ class TestRegressions(unittest.TestCase):
                 )
                 model.fit(X)
                 self.assertEqual(
-                    len(model.medoid_indices_), 3,
+                    len(model.medoid_indices_),
+                    3,
                     f"{ModelClass.__name__} init={init} failed",
                 )
 
@@ -285,12 +292,15 @@ class TestRegressions(unittest.TestCase):
 class TestAuditBugfixes:
     def test_kmedoids_pp_asymmetric_precomputed_direction(self):
         """Verify k-medoids++ uses column indexing (sample -> medoid) on asymmetric matrix."""
-        D = np.array([
-            [0.0, 0.1, 100.0, 100.0],
-            [100.0, 0.0, 50.0, 50.0],
-            [0.1, 50.0, 0.0, 50.0],
-            [0.1, 50.0, 50.0, 0.0],
-        ], dtype=np.float64)
+        D = np.array(
+            [
+                [0.0, 0.1, 100.0, 100.0],
+                [100.0, 0.0, 50.0, 50.0],
+                [0.1, 50.0, 0.0, 50.0],
+                [0.1, 50.0, 50.0, 0.0],
+            ],
+            dtype=np.float64,
+        )
 
         selected_candidates = []
         for seed in range(50):
@@ -312,9 +322,7 @@ class TestAuditBugfixes:
         init_tuples = ((float(X[0, 0]), float(X[0, 1])), (float(X[1, 0]), float(X[1, 1])))
         m1 = CLARANS(n_clusters=2, init=init_tuples, num_local=1, random_state=42).fit(X)
         assert len(m1.medoid_indices_) == 2
-        m1_fast = FastCLARANS(
-            n_clusters=2, init=init_tuples, num_local=1, random_state=42
-        ).fit(X)
+        m1_fast = FastCLARANS(n_clusters=2, init=init_tuples, num_local=1, random_state=42).fit(X)
         assert len(m1_fast.medoid_indices_) == 2
 
         D = pairwise_distances(X)
@@ -408,11 +416,15 @@ class TestAuditBugfixes:
 
     def test_precomputed_fortran_keeps_cython_active(self):
         """Verify precomputed F-contiguous distance matrix is handled cleanly."""
-        D = np.array([
-            [0.0, 2.0, 3.0],
-            [2.0, 0.0, 1.0],
-            [3.0, 1.0, 0.0],
-        ], dtype=np.float64, order="F")
+        D = np.array(
+            [
+                [0.0, 2.0, 3.0],
+                [2.0, 0.0, 1.0],
+                [3.0, 1.0, 0.0],
+            ],
+            dtype=np.float64,
+            order="F",
+        )
 
         model = CLARANS(n_clusters=2, metric="precomputed", random_state=42)
         model.fit(D)
@@ -448,6 +460,7 @@ class TestAuditBugfixes:
 class TestDeepAuditBugs:
     def test_asymmetric_callable_metric_inertia_consistency(self):
         """CLARANS and FastCLARANS must compute candidate distances as d(sample -> candidate)."""
+
         def asymmetric_metric(x, y):
             diff = x[0] - y[0]
             return diff * 10.0 if diff > 0 else -diff * 1.0
@@ -479,35 +492,47 @@ class TestDeepAuditBugs:
     @pytest.mark.skipif(not HAS_CYTHON, reason="Cython core not available")
     def test_is_matrix_symmetric_infinities(self):
         """Cython is_matrix_symmetric must properly distinguish +inf from -inf."""
-        D_matching_inf = np.array([
-            [0.0, np.inf, 2.0],
-            [np.inf, 0.0, 1.0],
-            [2.0, 1.0, 0.0],
-        ], dtype=np.float64)
+        D_matching_inf = np.array(
+            [
+                [0.0, np.inf, 2.0],
+                [np.inf, 0.0, 1.0],
+                [2.0, 1.0, 0.0],
+            ],
+            dtype=np.float64,
+        )
         assert is_matrix_symmetric(D_matching_inf, 3)
 
-        D_mixed_inf = np.array([
-            [0.0, np.inf, 2.0],
-            [-np.inf, 0.0, 1.0],
-            [2.0, 1.0, 0.0],
-        ], dtype=np.float64)
+        D_mixed_inf = np.array(
+            [
+                [0.0, np.inf, 2.0],
+                [-np.inf, 0.0, 1.0],
+                [2.0, 1.0, 0.0],
+            ],
+            dtype=np.float64,
+        )
         assert not is_matrix_symmetric(D_mixed_inf, 3)
 
-        D_inf_vs_finite = np.array([
-            [0.0, np.inf, 2.0],
-            [1e308, 0.0, 1.0],
-            [2.0, 1.0, 0.0],
-        ], dtype=np.float64)
+        D_inf_vs_finite = np.array(
+            [
+                [0.0, np.inf, 2.0],
+                [1e308, 0.0, 1.0],
+                [2.0, 1.0, 0.0],
+            ],
+            dtype=np.float64,
+        )
         assert not is_matrix_symmetric(D_inf_vs_finite, 3)
 
     @pytest.mark.skipif(not HAS_CYTHON, reason="Cython core not available")
     def test_update_cache_2min_nan_recovery(self):
         """Cython update_cache_2min second-nearest distance must not remain NaN."""
-        subD = np.array([
-            [np.nan, 2.0, 5.0],
-            [3.0, np.nan, 1.0],
-            [4.0, 6.0, np.nan],
-        ], dtype=np.float64)
+        subD = np.array(
+            [
+                [np.nan, 2.0, 5.0],
+                [3.0, np.nan, 1.0],
+                [4.0, 6.0, np.nan],
+            ],
+            dtype=np.float64,
+        )
 
         near_idx, near_dist, second_dist = update_cache_2min(subD, 3, 3)
 
@@ -626,11 +651,13 @@ class TestAlgorithmBugFixesAndEdgeCases(unittest.TestCase):
 
     def test_asymmetric_precomputed_distance_sum(self):
         """Bug E: Precomputed asymmetric distance matrices must sum columns (axis=0)."""
-        D = np.array([
-            [0.0, 10.0, 10.0],
-            [1.0, 0.0, 10.0],
-            [1.0, 10.0, 0.0],
-        ])
+        D = np.array(
+            [
+                [0.0, 10.0, 10.0],
+                [1.0, 0.0, 10.0],
+                [1.0, 10.0, 0.0],
+            ]
+        )
         medoids_h = initialize_heuristic(D, n_clusters=1, metric="precomputed")
         self.assertEqual(medoids_h[0], 0)
 
@@ -945,17 +972,13 @@ class TestInvariant_FastPAM1FormulaEquivalence(unittest.TestCase):
             if np.any(mask_case1):
                 term1 = near_dist[mask_case1] - second_dist[mask_case1]
                 with np.errstate(invalid="ignore"):
-                    total_delta += np.bincount(
-                        near_idx_map[mask_case1], weights=term1, minlength=k
-                    )
+                    total_delta += np.bincount(near_idx_map[mask_case1], weights=term1, minlength=k)
 
             mask_case2 = (d_xc >= near_dist) & (d_xc < second_dist)
             if np.any(mask_case2):
                 term2 = d_xc[mask_case2] - second_dist[mask_case2]
                 with np.errstate(invalid="ignore"):
-                    total_delta += np.bincount(
-                        near_idx_map[mask_case2], weights=term2, minlength=k
-                    )
+                    total_delta += np.bincount(near_idx_map[mask_case2], weights=term2, minlength=k)
 
             py_best_m = int(np.argmin(total_delta))
             py_min_delta = total_delta[py_best_m]

@@ -39,6 +39,7 @@ The algorithms and heuristics implemented in this library originate from the fol
   Schubert, E., & Rousseeuw, P. J. (2021). *Fast and eager k-medoids clustering: O(k) runtime improvement of the PAM, CLARA, and CLARANS algorithms.*
   Information Systems, 101, 101804.
   `doi:10.1016/j.is.2021.101804 <https://doi.org/10.1016/j.is.2021.101804>`_
+  (The original reference implementation in Java is part of the `ELKI open-source framework <https://elki-project.github.io/>`_).
 
 * **Seeding Methods:**
 

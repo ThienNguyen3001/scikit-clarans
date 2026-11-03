@@ -16,7 +16,6 @@ from sklearn.cluster import KMeans
 from sklearn.metrics import silhouette_score
 from clarans import CLARANS, FastCLARANS
 
-
 X, _ = make_blobs(n_samples=500, centers=4, cluster_std=0.60, random_state=42)
 ks = list(range(2, 9))
 methods = {

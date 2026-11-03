@@ -12,7 +12,6 @@ def clarans_delta(
     random_medoid_pos: int,
     n_samples: int,
 ) -> float: ...
-
 def fastpam1_delta(
     near_idx_map: np.ndarray,
     near_dist: np.ndarray,
@@ -22,13 +21,11 @@ def fastpam1_delta(
     n_clusters: int,
     delta_buf: np.ndarray | None = None,
 ) -> tuple[int, float, np.ndarray]: ...
-
 def update_cache_2min(
     subD: np.ndarray,
     n_samples: int,
     n_clusters: int,
 ) -> tuple[np.ndarray, np.ndarray, np.ndarray]: ...
-
 def pam_build_step(
     D: np.ndarray,
     candidate_indices: np.ndarray,
@@ -36,7 +33,6 @@ def pam_build_step(
     n_samples: int,
     n_candidates: int,
 ) -> tuple[int, float]: ...
-
 def kmedoids_pp_trials(
     closest_dist_sq: np.ndarray,
     dists_candidates: np.ndarray,
@@ -46,7 +42,6 @@ def kmedoids_pp_trials(
     n_local_trials: int,
     n_current_medoids: int,
 ) -> tuple[int, float, np.ndarray]: ...
-
 def is_matrix_symmetric(
     D: np.ndarray,
     n_samples: int,

@@ -16,7 +16,6 @@ from sklearn.datasets import make_blobs
 from sklearn.cluster import KMeans
 from clarans import CLARANS, FastCLARANS
 
-
 Ns = [400, 800, 1500, 3000]
 clarans_times = []
 fast_times = []

@@ -36,10 +36,7 @@ def _fallback_fastpam1_delta(
         0.0,
         np.where(d_xc < second_dist, d_xc - near_dist, second_dist - near_dist),
     )
-    delta_arr = (
-        np.bincount(near_idx_map, weights=weights, minlength=n_clusters)
-        + delta_td
-    )
+    delta_arr = np.bincount(near_idx_map, weights=weights, minlength=n_clusters) + delta_td
     best_m = int(np.argmin(delta_arr))
     return best_m, float(delta_arr[best_m])
 
@@ -113,11 +110,18 @@ class FastCLARANS(CLARANS):
           cost, elapsed time, swaps performed, and candidates evaluated).
         - ``>=2``: Additionally prints details on each successful medoid swap.
 
+    n_jobs : int, default=None
+        The number of parallel jobs to run across ``num_local`` local search
+        restarts during ``fit``. ``None`` means 1 unless in a
+        ``joblib.parallel_backend`` context. ``-1`` means using all
+        processors.
+
     Attributes
     ----------
-    cluster_centers_ : {ndarray, sparse matrix} of shape (n_clusters, n_features) or None
-        Coordinates of cluster centers (medoids). If ``metric='precomputed'``,
-        this is ``None``.
+    cluster_centers_ : {ndarray, sparse matrix} of shape (n_clusters, n_features)
+        Coordinates of cluster centers (medoids). Defined only when
+        ``metric != 'precomputed'`` (precomputed distance matrices do not carry
+        feature coordinates; use ``medoid_indices_`` instead).
 
     labels_ : ndarray of shape (n_samples,)
         Labels of each point indicating the nearest medoid.
@@ -133,21 +137,22 @@ class FastCLARANS(CLARANS):
         Effective maximum number of non-improving non-medoid candidates
         sampled per local search before concluding convergence.
 
-    n_neighbors_ : int
+    neighborhood_size_ : int
         Total number of non-medoid candidate points, equal to
         ``n_samples - n_clusters``.
 
     n_iter_ : int
-        Total number of candidate neighbors evaluated across all ``num_local``
-        searches.
+        Number of candidate neighbors evaluated during the best local search
+        restart.
 
     n_swaps_ : int
-        Total number of successful medoid swaps performed across all
-        ``num_local`` searches.
+        Number of successful medoid swaps performed during the best local search
+        restart.
 
     n_features_in_ : int
-        Number of features seen during :term:`fit`. Defined only when
-        ``metric != 'precomputed'``.
+        Number of features seen during :term:`fit`. For ``metric='precomputed'``,
+        this equals the number of training samples (the column dimension of the
+        distance matrix).
 
     Notes
     -----
@@ -166,7 +171,8 @@ class FastCLARANS(CLARANS):
     ----------
     * Schubert, E., & Rousseeuw, P. J. (2021). Fast and eager k-medoids
       clustering: O(k) runtime improvement of the PAM, CLARA, and CLARANS
-      algorithms. Information Systems, 101, 101804.
+      algorithms. Information Systems, 101, 101804. The original reference
+      implementation in Java is part of the ELKI data mining framework.
     * scikit-learn-extra contributors. KMedoids clustering implementation
       and initialization strategies ('k-medoids++', 'heuristic', 'build').
       https://scikit-learn-extra.readthedocs.io/en/stable/generated/sklearn_extra.cluster.KMedoids.html
@@ -183,6 +189,7 @@ class FastCLARANS(CLARANS):
         metric_params: dict[str, Any] | None = None,
         random_state: int | np.random.RandomState | None = None,
         verbose: int = 0,
+        n_jobs: int | None = None,
     ) -> None:
         super().__init__(
             n_clusters=n_clusters,
@@ -194,10 +201,11 @@ class FastCLARANS(CLARANS):
             random_state=random_state,
             cost_evaluation="delta",
             verbose=verbose,
+            n_jobs=n_jobs,
         )
 
     def _init_search_budget(self, n_samples: int) -> None:
-        """Initialize max_neighbors_ and n_neighbors_ search budget for FastCLARANS."""
+        """Initialize max_neighbors_ and neighborhood_size_ search budget for FastCLARANS."""
         if self.max_neighbors == "auto":
             # Sample 2.5% of non-medoid points (Schubert & Rousseeuw, 2021)
             # with a floor of 250 // k to evaluate at least 250 edges per restart.
@@ -209,11 +217,9 @@ class FastCLARANS(CLARANS):
         else:
             self.max_neighbors_ = int(self.max_neighbors)
 
-        self.n_neighbors_ = n_samples - self.n_clusters
+        self.neighborhood_size_ = n_samples - self.n_clusters
 
-    def _allocate_search_buffers(
-        self, X: Any, n_samples: int
-    ) -> dict[str, np.ndarray]:
+    def _allocate_search_buffers(self, X: Any, n_samples: int) -> dict[str, np.ndarray]:
         """Pre-allocate reusable scratch buffers for neighbor evaluations."""
         bufs = super()._allocate_search_buffers(X, n_samples)
         buf_dtype = bufs["d_xc_buf"].dtype
@@ -228,6 +234,7 @@ class FastCLARANS(CLARANS):
         d_xc_buf: np.ndarray | None = None,
         delta_arr_buf: np.ndarray | None = None,
         loc_idx: int = 1,
+        **kwargs: Any,
     ) -> tuple[float, np.ndarray, int, int]:
         """Perform a single local search from initial medoids to a local optimum."""
         n_samples = X.shape[0]
@@ -244,19 +251,14 @@ class FastCLARANS(CLARANS):
         current_cost: float = float(np.sum(near_dist))
 
         if self.verbose >= 2:
-            r_idx = loc_idx
-            print(
-                f"  Restart {r_idx}/{self.num_local} (init cost: {current_cost:.5f}):"
-            )
+            print(f"  Restart {loc_idx}/{self.num_local} (init cost: {current_cost:.5f}):")
 
         non_medoid_mask = np.ones(n_samples, dtype=bool)
         non_medoid_mask[current_medoids_indices] = False
         available_candidates = np.flatnonzero(non_medoid_mask)
 
         # Check whether Cython kernel can be used for this batch
-        can_use_cython = self._can_use_cython(
-            d_xc_buf, near_idx_map, near_dist, second_dist
-        )
+        can_use_cython = self._can_use_cython(d_xc_buf, near_idx_map, near_dist, second_dist)
         delta_buf_arg = (
             delta_arr_buf
             if (
@@ -277,19 +279,13 @@ class FastCLARANS(CLARANS):
                 break
 
             candidate_idx = int(
-                available_candidates[
-                    random_state.randint(0, len(available_candidates))
-                ]
+                available_candidates[random_state.randint(0, len(available_candidates))]
             )
 
             cand_row = (
-                None
-                if self.metric == "precomputed"
-                else X[candidate_idx:candidate_idx + 1]
+                None if self.metric == "precomputed" else X[candidate_idx : candidate_idx + 1]
             )
-            d_xc = self._compute_1_vs_n(
-                cand_row, X, out=d_xc_buf, candidate_idx=candidate_idx
-            )
+            d_xc = self._compute_1_vs_n(cand_row, X, out=d_xc_buf, candidate_idx=candidate_idx)
 
             if self.n_clusters == 1:
                 candidate_cost = float(np.sum(d_xc))

@@ -56,18 +56,18 @@ Both `CLARANS` and `FastCLARANS` inherit from `BaseEstimator`, `ClusterMixin`, a
 3. Name all fitted attributes with a single trailing underscore:
    - `labels_`: Cluster labels for each training sample.
    - `medoid_indices_`: Indices of selected medoids in training data.
-   - `cluster_centers_`: Coordinates of medoids (set to `None` if `metric='precomputed'`).
+   - `cluster_centers_`: Coordinates of medoids (not defined when `metric='precomputed'`).
    - `inertia_`: Total sum of distances from samples to closest medoids.
    - `max_neighbors_`: Effective sampling budget per local search restart.
-   - `n_neighbors_`: Total neighborhood size in search space ($k(n-k)$ for CLARANS, $n-k$ for FastCLARANS).
-   - `n_iter_`: Total candidate neighbors evaluated across all restarts.
-   - `n_swaps_`: Total successful medoid swaps performed.
-   - `n_features_in_`: Number of features seen during `fit()` (dense/sparse mode).
+   - `neighborhood_size_`: Total neighborhood size in search space ($k(n-k)$ for CLARANS, $n-k$ for FastCLARANS).
+   - `n_iter_`: Candidate neighbors evaluated during the best restart.
+   - `n_swaps_`: Successful medoid swaps performed during the best restart.
+   - `n_features_in_`: Number of features seen during `fit()` (equals $n$ when `metric='precomputed'`).
 4. Implement standard estimator methods: `fit(X)`, `predict(X)`, `transform(X)`, `fit_predict(X)`, `fit_transform(X)`, `score(X)`, and `get_feature_names_out(input_features=None)`.
 5. Ensure all checks in `clarans/tests/test_common.py` pass via `@parametrize_with_checks`.
 
 ### Code style and quality
-- Format code with `black` (`[tool.black]`: max line length 100, py39-py313 targets).
+- Format code with `black` (`[tool.black]`: max line length 100, py311-py314 targets).
 - Python code must pass `flake8 clarans` (`.flake8`: max line length 100, ignore `E203`).
 - Static types must verify with `mypy clarans`.
 - Pre-commit hooks (`black`, `flake8`, whitespace fixers) configured in `.pre-commit-config.yaml`.
@@ -184,7 +184,7 @@ Run before opening a pull request or tagging a release:
 5. Pre-commit: `pre-commit run --all-files`
 
 ### CI/CD Workflows (`.github/workflows/`)
-1. `test_suite.yml`: Cross-platform test matrix across Ubuntu (Python 3.9–3.13), Windows (3.9, 3.13 with MSVC), and macOS (3.9, 3.13).
+1. `test_suite.yml`: Cross-platform test matrix across Ubuntu (Python 3.11–3.14), Windows (3.11, 3.14 with MSVC), and macOS (3.11, 3.14).
 2. `lint_cov_check.yml`: Code quality checks (`flake8`, `mypy`, `pytest` coverage XML) on Python 3.12.
 3. `docs-build.yml`: Builds Sphinx HTML documentation with `-W --keep-going` on Python 3.12.
 4. `draft-pdf.yml`: Compiles JOSS draft paper PDF on pushes to branch `paper`.
@@ -244,6 +244,7 @@ pip install --index-url https://test.pypi.org/simple/ --extra-index-url https://
   - `FastCLARANS`: Default `'auto'` sets $\max(1, \lfloor 250 / k \rfloor, \lfloor 0.025(n - k) \rfloor)$ non-medoid candidates (Schubert & Rousseeuw, 2021).
   - `CLARANS`: Default `'auto'` sets $\max(250, \lfloor 0.0125 \cdot k(n - k) \rfloor)$ edge evaluations (Ng & Han, 2002).
   - Avoid small integer constants (like 40), which trigger premature stagnation.
+- `n_jobs`: Number of parallel jobs across `num_local` search restarts (`None` or integer, `-1` uses all processors). Parallelized with `joblib.Parallel(prefer="threads")` exploiting Cython `nogil` blocks with deterministic seed splitting.
 - `cost_evaluation`: Strategy for swap evaluation (`CLARANS` only):
   - `'delta'` (default): FastPAM1-style nearest and second-nearest distance tracking in $O(n \cdot d)$.
   - `'brute_force'`: Recalculates full clustering cost in $O(n \cdot k \cdot d)$ per candidate (classic Ng & Han).
@@ -356,7 +357,7 @@ Publications and citation details:
 - **CLARANS**:
   > Ng, R. T., & Han, J. (2002). *CLARANS: A method for clustering objects for spatial data mining.* IEEE TKDE, 14(5), 1003-1016. [doi:10.1109/TKDE.2002.1033770](https://doi.org/10.1109/TKDE.2002.1033770)
 - **FastCLARANS & FastPAM1**:
-  > Schubert, E., & Rousseeuw, P. J. (2021). *Fast and eager k-medoids clustering: O(k) runtime improvement of the PAM, CLARA, and CLARANS algorithms.* Information Systems, 101, 101804. [doi:10.1016/j.is.2021.101804](https://doi.org/10.1016/j.is.2021.101804)
+  > Schubert, E., & Rousseeuw, P. J. (2021). *Fast and eager k-medoids clustering: O(k) runtime improvement of the PAM, CLARA, and CLARANS algorithms.* Information Systems, 101, 101804. [doi:10.1016/j.is.2021.101804](https://doi.org/10.1016/j.is.2021.101804). The original reference implementation in Java is part of the [ELKI open-source data mining framework](https://elki-project.github.io/).
 - **Library Citation**:
   ```bibtex
   @software{scikit_clarans,

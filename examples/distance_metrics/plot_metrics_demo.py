@@ -18,7 +18,6 @@ from sklearn.datasets import make_blobs
 from clarans import CLARANS
 from clarans.utils import calculate_cost
 
-
 X, _ = make_blobs(n_samples=400, centers=3, n_features=2, random_state=42)
 
 # Inverse covariance matrix for Mahalanobis distance
@@ -42,9 +41,7 @@ for ax, (title, metric, metric_params) in zip(axes, configs):
         random_state=42,
     )
     model.fit(X)
-    cost = calculate_cost(
-        X, model.medoid_indices_, metric=metric, metric_params=metric_params
-    )
+    cost = calculate_cost(X, model.medoid_indices_, metric=metric, metric_params=metric_params)
 
     ax.scatter(X[:, 0], X[:, 1], c=model.labels_, cmap="tab10", s=20, alpha=0.7)
     ax.scatter(

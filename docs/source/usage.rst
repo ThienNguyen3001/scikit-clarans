@@ -1,20 +1,26 @@
 User guide
 ==========
 
-``scikit-clarans`` provides estimators for $k$-medoids clustering. This guide covers algorithm selection, parameter tuning, and search mechanics.
+``scikit-clarans`` provides estimators for :math:`k`-medoids clustering. This guide covers algorithm selection, parameter tuning, and search mechanics.
 
 Why use k-medoids?
 ------------------
 
-Standard $k$-means calculates cluster centers by averaging coordinates in Euclidean space, which creates synthetic centroids. In contrast, $k$-medoids restricts cluster centers to actual observations from the dataset:
+Standard :math:`k`-means calculates cluster centers by averaging coordinates in Euclidean space, which creates synthetic centroids. In contrast, :math:`k`-medoids restricts cluster centers to actual observations from the dataset:
 
 * Outlier resistance: Medoids minimize absolute pairwise distances (:math:`\sum d`) rather than squared Euclidean distances (:math:`\sum d^2`), keeping centers stable when the dataset contains extreme values.
-* Custom distance metrics: Supports metrics such as Manhattan distance, cosine dissimilarity, or precomputed distance matrices, whereas standard $k$-means requires Euclidean space.
+* Custom distance metrics: Supports metrics such as Manhattan distance, cosine dissimilarity, or precomputed distance matrices, whereas standard :math:`k`-means requires Euclidean space.
 * Interpretability: Every medoid corresponds to a real record in the input data, such as a patient profile, an exemplary document, or a molecule.
 
 .. math::
 
    \min_{M \subset X, |M|=k} \sum_{i=1}^n \min_{m \in M} d(x_i, m)
+
+.. figure:: auto_examples/robustness/images/sphx_glr_plot_outlier_robustness_001.png
+   :align: center
+   :alt: Outlier robustness: K-Means vs. CLARANS (k-medoids)
+
+   **Outlier resistance**: While K-Means (left) has its centroids pulled away by extreme anomalies due to squared Euclidean loss, CLARANS (right) keeps medoids firmly anchored in dense data clusters. See :ref:`sphx_glr_auto_examples_robustness_plot_outlier_robustness.py` for the complete example.
 
 .. note::
 
@@ -76,6 +82,12 @@ Choosing an estimator
      - Baseline and algorithm comparison
      - General clustering workflows and benchmarks
 
+.. figure:: auto_examples/benchmarks/images/sphx_glr_plot_clarans_vs_fastclarans_001.png
+   :align: center
+   :alt: Runtime and inertia comparison between CLARANS and FastCLARANS
+
+   **Performance benchmark**: On synthetic data (:math:`N=1500, k=6`), FastCLARANS is significantly faster than classic CLARANS while achieving comparable clustering cost. See :ref:`sphx_glr_auto_examples_benchmarks_plot_clarans_vs_fastclarans.py`.
+
 .. note::
    Both estimators compute distances dynamically with an :math:`O(n)` memory footprint rather than storing an :math:`O(n^2)` matrix. They run in a single process and typically handle tens of thousands of samples efficiently.
 
@@ -133,6 +145,10 @@ Both estimators share core parameters, with ``CLARANS`` providing an additional 
      - Both
      - ``0``
      - Verbosity level (``0`` for silent, ``1`` for per-search progress summary, ``>=2`` for per-swap details).
+   * - ``n_jobs``
+     - Both
+     - ``None``
+     - Number of parallel jobs to run across ``num_local`` restarts during ``fit``. ``None`` means 1 unless in a ``joblib.parallel_backend`` context; ``-1`` uses all available CPU threads.
 
 Tuning guidelines
 ^^^^^^^^^^^^^^^^^
@@ -148,16 +164,26 @@ Initialization strategy (``init``):
   * ``'random'``: Uniform random sampling. Very fast, though it may require increasing ``num_local`` to reach comparable solution quality.
   * ``'build'``: Greedy initialization from classic PAM. Provides good starting points on small datasets, but computes the full pairwise distance matrix (:math:`O(n^2)` time and memory). Avoid for datasets larger than 5,000 samples.
   * ``'heuristic'``: Selects the :math:`k` samples with the smallest sum of distances to all other points (:math:`O(n^2)` time and memory). Avoid for datasets larger than 5,000 samples.
-  * Array-like: User-provided array of initial medoid coordinates or indices.
+  * Array-like: User-provided array of initial medoid coordinates of shape ``(n_clusters, n_features)``, or 1D integer indices of shape ``(n_clusters,)`` when ``metric='precomputed'``.
+
+    * **Coordinate Snapping**: Because medoids must be actual observations from the training dataset :math:`X`, user-provided coordinates are automatically snapped to their nearest unique training sample using the configured distance metric.
+    * **Duplicate Back-filling**: If multiple coordinates snap to the same training sample, ``scikit-clarans`` issues a ``UserWarning`` and automatically back-fills the missing slots with randomly chosen available training points, guaranteeing exactly :math:`k` distinct medoids without breaking downstream pipelines.
 
 Number of restarts (``num_local``):
   For randomized initialization (``'k-medoids++'`` or ``'random'``), increasing ``num_local`` to 3 to 5 helps find better local minima when solutions vary across runs.
   
   .. note::
-     Deterministic initialization methods such as ``'build'``, ``'heuristic'``, or explicit coordinate arrays always produce the same starting points. With deterministic seeding, set ``num_local=1`` to avoid repeated identical searches.
+     Deterministic initialization methods such as ``'build'``, ``'heuristic'``, or explicit coordinate arrays always produce the same starting points. ``scikit-clarans`` pre-computes and caches these initial medoids once before the search loop to avoid redundant :math:`O(n^2)` recalculations across restarts. Set ``num_local=1`` to save computation.
 
 Neighbor sampling (``max_neighbors``):
   The default ``max_neighbors='auto'`` scales with the dataset size according to formulas from the original papers (:math:`\max(250, 1.25\% \times k(n-k))` in CLARANS and :math:`\max(1, \lfloor 250/k \rfloor, 2.5\% \times (n-k))` in FastCLARANS). An explicit integer value (such as ``max_neighbors=200``) is mainly useful when you need a fixed ceiling on search steps for very large inputs.
+
+Parallel execution (``n_jobs``):
+  When ``num_local > 1``, setting ``n_jobs`` (e.g., ``n_jobs=-1`` or ``n_jobs=4``) parallelizes independent local search restarts across worker threads using ``joblib.Parallel(prefer="threads")``.
+
+  * **GIL release & speedup**: Because the core swap evaluation loops run in Cython with ``nogil`` blocks, multithreaded restarts achieve true multicore speedups without inter-process communication (IPC) or data serialization overhead.
+  * **Bit-for-bit reproducibility**: Seeds for each local search are partitioned deterministically from ``random_state`` before parallel dispatch, ensuring identical clustering results regardless of the ``n_jobs`` setting (e.g., ``n_jobs=1`` and ``n_jobs=-1`` yield bit-for-bit identical outputs).
+  * **Zero-overhead sequential fast path**: When ``num_local=1`` or the effective job count is 1, execution avoids worker thread dispatch overhead completely.
 
 Distance metrics and routing
 ^^^^^^^^^^^^^^^^^^^^^^^^^^^^
@@ -192,8 +218,8 @@ After calling ``fit(X)``, both ``CLARANS`` and ``FastCLARANS`` store the cluster
      - Type
      - Description
    * - ``cluster_centers_``
-     - ndarray or None
-     - Coordinates of the selected medoids with shape ``(n_clusters, n_features)``. Evaluates to ``None`` when ``metric='precomputed'``.
+     - {ndarray, sparse matrix}
+     - Coordinates of the selected medoids with shape ``(n_clusters, n_features)``. Defined only when ``metric != 'precomputed'``.
    * - ``medoid_indices_``
      - ndarray
      - Row indices of the selected medoids in the training data ``X`` with shape ``(n_clusters,)``.
@@ -206,18 +232,18 @@ After calling ``fit(X)``, both ``CLARANS`` and ``FastCLARANS`` store the cluster
    * - ``max_neighbors_``
      - int
      - Effective threshold of non-improving neighbor evaluations per restart. Equals the resolved integer value when ``max_neighbors='auto'``.
-   * - ``n_neighbors_``
+   * - ``neighborhood_size_``
      - int
      - Search neighborhood size: :math:`k(n-k)` in ``CLARANS`` (graph transitions) or :math:`n-k` in ``FastCLARANS`` (candidate points).
    * - ``n_iter_``
      - int
-     - Total number of candidate evaluations tested across all ``num_local`` restarts.
+     - Number of candidate evaluations tested during the best local search restart.
    * - ``n_swaps_``
      - int
-     - Total number of accepted medoid swaps across all ``num_local`` restarts.
+     - Number of accepted medoid swaps performed during the best local search restart.
    * - ``n_features_in_``
      - int
-     - Number of input features seen during ``fit``. Undefined when ``metric='precomputed'``.
+     - Number of input features seen during ``fit``. When ``metric='precomputed'``, equals the number of training samples (column dimension).
 
 Attribute details and conventions
 ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
@@ -226,18 +252,31 @@ Inertia calculation:
   ``inertia_`` represents the sum of unsquared distances :math:`\sum_{i=1}^n \min_{m \in M} d(x_i, m)` using the chosen distance metric. Standard ``KMeans`` in scikit-learn computes the sum of squared Euclidean distances (:math:`\sum d^2`). When comparing inertia across estimators or distance functions, account for the difference between linear and squared scale.
 
 Coordinates with precomputed metrics:
-  When ``metric='precomputed'``, the input ``X`` is a distance matrix of shape ``(n_samples, n_samples)``. Because the original feature coordinates are not passed to ``fit``, ``cluster_centers_`` is set to ``None``. Use ``medoid_indices_`` to retrieve the row positions of the selected medoids in your original data.
+  When ``metric='precomputed'``, the input ``X`` is a distance matrix of shape ``(n_samples, n_samples)``. Because the original feature coordinates are not passed to ``fit``, ``cluster_centers_`` is not defined (hasattr returns ``False``). Use ``medoid_indices_`` to retrieve the row positions of the selected medoids in your original data.
+
+Precomputed inference and best practices:
+  When serving models with ``metric='precomputed'``, ``predict()`` and ``transform()`` accept two matrix shapes:
+
+  * **Full matrix** of shape ``(n_test, n_train)``: Distance matrix from query samples to all training samples.
+  * **Compact matrix** of shape ``(n_test, k)``: Distance matrix from query samples directly to the ``k`` fitted medoids. This reduces distance evaluations and memory consumption by a factor of :math:`n_{\text{train}} / k` (typically 10x to 1000x faster).
+
+  .. warning::
+     **Important considerations when using precomputed inference:**
+
+     1. **Medoid preservation**: Because the model only receives distance matrices during ``fit()``, it does not store the original raw objects. You must retain your original training items and extract the medoids using ``model.medoid_indices_`` in order to compute query distances later.
+     2. **Column alignment**: When passing a compact matrix of shape ``(n_test, k)``, column ``j`` must strictly correspond to medoid ``model.medoid_indices_[j]``. A mismatched column order will cause silent misclassifications. Using a ``pandas.DataFrame`` with matching column names is recommended to guard against accidental column reordering.
+     3. **Alternative for non-vector data**: If your dataset consists of complex domain objects (e.g., DNA sequences, graphs, raw strings), consider passing a custom distance callable (``metric=func``) directly to the estimator instead of precomputing distance matrices. When using a callable metric, ``cluster_centers_`` automatically stores the raw medoid objects, enabling standard ``predict(X_test)`` where distances are computed internally without manual matrix management.
 
 Neighbor attributes and auto-scaling:
   The constructor parameter ``max_neighbors`` accepts an integer or the string ``'auto'``. The fitted attribute ``max_neighbors_`` (with a trailing underscore) always stores the concrete integer limit used during the search.
 
-  The total neighborhood size ``n_neighbors_`` differs between estimators because of their search formulation:
+  The total neighborhood size ``neighborhood_size_`` differs between estimators because of their search formulation:
 
-  * In ``CLARANS``, each search step samples a pair of (medoid, non-medoid), so ``n_neighbors_`` equals the number of edges in graph :math:`G_{n,k}`, namely :math:`k(n-k)`.
-  * In ``FastCLARANS``, each step samples a non-medoid candidate point and evaluates all :math:`k` medoid swaps simultaneously, so ``n_neighbors_`` equals :math:`n-k`.
+  * In ``CLARANS``, each search step samples a pair of (medoid, non-medoid), so ``neighborhood_size_`` equals the number of edges in graph :math:`G_{n,k}`, namely :math:`k(n-k)`.
+  * In ``FastCLARANS``, each step samples a non-medoid candidate point and evaluates all :math:`k` medoid swaps simultaneously, so ``neighborhood_size_`` equals :math:`n-k`.
 
 Iteration and swap counters:
-  In scikit-learn clusterers such as ``KMeans``, ``n_iter_`` typically records the iteration count of the best restart. In ``scikit-clarans``, ``n_iter_`` records the cumulative count of candidate evaluations tested across all ``num_local`` restarts. Accepted medoid replacements are tracked separately in ``n_swaps_``.
+  In accordance with scikit-learn clustering conventions (e.g., ``KMeans``, ``KMedoids``), ``n_iter_`` and ``n_swaps_`` record the candidate evaluations and accepted medoid swaps performed during the best local search restart (the run that achieved minimum ``inertia_``).
 
 Monitoring search progress
 --------------------------
@@ -253,7 +292,7 @@ Setting ``verbose=1`` (or ``verbose=True``) prints a configuration header, a sum
 
     [CLARANS] n=1000, k=4, metric=euclidean, num_local=3, max_neighbors=250/3984 (6.3%)
         #            Cost  Swaps  Evals   Time(s)
-        1       150.12345*     4     80     0.012s  converged
+        1       150.12345      4     80     0.012s  converged
         2       148.54321*     5    110     0.015s  converged
         3       152.00000      2     65     0.009s  converged
       Best: #2 | Totals: 11 swaps, 255 evals, 0.038s
@@ -263,7 +302,7 @@ The header reports the dataset size (:math:`n`), number of clusters (:math:`k`),
 Table columns:
 
 * ``#``: 1-based index of the restart.
-* ``Cost``: Final clustering inertia (sum of distances) for that restart. An asterisk (``*``) flags an iteration that set a new lowest cost across all completed restarts.
+* ``Cost``: Final clustering inertia (sum of distances) for that restart. An asterisk (``*``) flags the best restart achieving the lowest overall cost across all runs.
 * ``Swaps``: Number of accepted medoid swaps.
 * ``Evals``: Total candidate evaluations tested during the restart.
 * ``Time(s)``: Wall-clock duration of the restart.
@@ -298,6 +337,12 @@ In addition to the restart summary, this level records:
 * ``eval``: Running count of neighbor evaluations examined when the improving swap was found.
 * ``cost``: New total distance cost after making the swap.
 * ``diff``: Cost change (:math:`\Delta < 0`) produced by the swap.
+
+.. figure:: auto_examples/benchmarks/images/sphx_glr_plot_search_trajectory_001.png
+   :align: center
+   :alt: FastCLARANS search trajectory, evaluation effort, and fitted clusters across restarts
+
+   **Visualizing search trajectory and restarts**: Solution quality across multiple local restarts (``num_local``), search effort tracking (candidate evaluations vs. accepted swaps), and the final fitted cluster partition with medoids marked with :math:`\times`. See :ref:`sphx_glr_auto_examples_benchmarks_plot_search_trajectory.py`.
 
 Search mechanics
 ----------------

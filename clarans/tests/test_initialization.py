@@ -20,6 +20,7 @@ from sklearn.metrics import pairwise_distances
 from clarans import CLARANS
 from clarans._initialization import (
     initialize_build,
+    initialize_from_array,
     initialize_heuristic,
     initialize_k_medoids_plus_plus,
 )
@@ -35,8 +36,11 @@ class TestInitializationFunctions(unittest.TestCase):
         """Random init should produce correct number of unique medoids."""
         for n_clusters in [2, 3, 5]:
             model = CLARANS(
-                n_clusters=n_clusters, init="random", num_local=1,
-                max_neighbors=10, random_state=42,
+                n_clusters=n_clusters,
+                init="random",
+                num_local=1,
+                max_neighbors=10,
+                random_state=42,
             )
             model.fit(self.X)
             self.assertEqual(len(model.medoid_indices_), n_clusters)
@@ -91,9 +95,7 @@ class TestInitializationFunctions(unittest.TestCase):
         """K-medoids++ should return correct number of unique medoids."""
         for n_clusters in [2, 3, 5]:
             rng = np.random.RandomState(42)
-            medoids = initialize_k_medoids_plus_plus(
-                self.X, n_clusters, rng, "euclidean"
-            )
+            medoids = initialize_k_medoids_plus_plus(self.X, n_clusters, rng, "euclidean")
             self.assertEqual(len(medoids), n_clusters)
             self.assertEqual(len(np.unique(medoids)), n_clusters)
 
@@ -105,32 +107,47 @@ class TestInitializationFunctions(unittest.TestCase):
 
     def test_kmedoids_plusplus_handles_zero_distance(self):
         """K-medoids++ should handle identical points gracefully."""
-        X = np.array([
-            [0, 0], [0, 0], [0, 0],
-            [1, 1], [2, 2],
-        ])
+        X = np.array(
+            [
+                [0, 0],
+                [0, 0],
+                [0, 0],
+                [1, 1],
+                [2, 2],
+            ]
+        )
         rng = np.random.RandomState(42)
         medoids = initialize_k_medoids_plus_plus(X, 3, rng, "euclidean")
         self.assertEqual(len(medoids), 3)
         self.assertEqual(len(np.unique(medoids)), 3)
+
+    def test_initialize_from_array_coordinates(self):
+        """initialize_from_array should snap coordinate centers to nearest observations."""
+        rng = np.random.RandomState(42)
+        init_centers = self.X[[5, 15, 25]] + 1e-4
+        medoids = initialize_from_array(init_centers, self.X, rng, 3, "euclidean")
+        np.testing.assert_array_equal(medoids, [5, 15, 25])
+
+    def test_initialize_from_array_precomputed_indices(self):
+        """initialize_from_array should accept 1D integer indices for precomputed metric."""
+        rng = np.random.RandomState(42)
+        D = pairwise_distances(self.X)
+        medoids = initialize_from_array([1, 8, 20], D, rng, 3, metric="precomputed")
+        np.testing.assert_array_equal(medoids, [1, 8, 20])
 
 
 class TestInitializationDeep(unittest.TestCase):
     """Deep tests for initialization functions on precomputed, determinism, and duplicates."""
 
     def setUp(self):
-        self.X, _ = make_blobs(
-            n_samples=60, centers=3, n_features=2, random_state=42
-        )
+        self.X, _ = make_blobs(n_samples=60, centers=3, n_features=2, random_state=42)
         self.D = pairwise_distances(self.X, metric="euclidean")
 
     def test_heuristic_precomputed_matches_dense(self):
         """Heuristic init on precomputed D should match dense euclidean."""
         medoids_dense = initialize_heuristic(self.X, 3, metric="euclidean")
         medoids_precomp = initialize_heuristic(self.D, 3, metric="precomputed")
-        np.testing.assert_array_equal(
-            np.sort(medoids_dense), np.sort(medoids_precomp)
-        )
+        np.testing.assert_array_equal(np.sort(medoids_dense), np.sort(medoids_precomp))
 
     def test_build_precomputed_matches_dense(self):
         """BUILD init on precomputed D should match dense euclidean."""
@@ -141,9 +158,7 @@ class TestInitializationDeep(unittest.TestCase):
     def test_kmedoids_pp_precomputed_returns_valid_indices(self):
         """k-medoids++ on precomputed should return valid unique indices."""
         rng = np.random.RandomState(42)
-        medoids = initialize_k_medoids_plus_plus(
-            self.D, 3, rng, metric="precomputed"
-        )
+        medoids = initialize_k_medoids_plus_plus(self.D, 3, rng, metric="precomputed")
         self.assertEqual(len(medoids), 3)
         self.assertEqual(len(np.unique(medoids)), 3)
         self.assertTrue(np.all(medoids >= 0))
@@ -159,22 +174,24 @@ class TestInitializationDeep(unittest.TestCase):
 
     def test_init_duplicate_centers_warns_and_fills(self):
         """When init centers map to duplicate medoid indices, warn and fill."""
-        init_centers = np.array([
-            self.X[0] + 1e-10,
-            self.X[0] + 2e-10,
-            self.X[10],
-        ])
+        init_centers = np.array(
+            [
+                self.X[0] + 1e-10,
+                self.X[0] + 2e-10,
+                self.X[10],
+            ]
+        )
         with warnings.catch_warnings(record=True) as w:
             warnings.simplefilter("always")
             model = CLARANS(
-                n_clusters=3, num_local=1, max_neighbors=10,
-                init=init_centers, random_state=42,
+                n_clusters=3,
+                num_local=1,
+                max_neighbors=10,
+                init=init_centers,
+                random_state=42,
             )
             model.fit(self.X)
-            dup_warnings = [
-                x for x in w
-                if "duplicate" in str(x.message).lower()
-            ]
+            dup_warnings = [x for x in w if "duplicate" in str(x.message).lower()]
             self.assertGreaterEqual(len(dup_warnings), 1)
             self.assertEqual(len(model.medoid_indices_), 3)
             self.assertEqual(len(np.unique(model.medoid_indices_)), 3)

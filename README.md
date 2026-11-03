@@ -4,7 +4,7 @@
 
 <!-- Hàng 1: Phiên bản, Phân phối, Học thuật & Trải nghiệm nhanh -->
 [![PyPI version](https://img.shields.io/pypi/v/scikit-clarans.svg)](https://pypi.org/project/scikit-clarans/)
-[![Python 3.9+](https://img.shields.io/badge/python-3.9+-blue.svg)](https://www.python.org/downloads/)
+[![Python 3.11+](https://img.shields.io/badge/python-3.11+-blue.svg)](https://www.python.org/downloads/)
 [![License](https://img.shields.io/github/license/ThienNguyen3001/scikit-clarans)](LICENSE)
 [![DOI](https://zenodo.org/badge/DOI/10.5281/zenodo.18366801.svg)](https://doi.org/10.5281/zenodo.18366801)
 [![Open In Colab](https://colab.research.google.com/assets/colab-badge.svg)](https://colab.research.google.com/drive/194aBBu0wZotnun25dXqlOrDj3HYHKo-a?usp=sharing)
@@ -36,6 +36,7 @@ scikit-clarans implements $k$-medoids clustering in Python using the scikit-lear
 
 * Scikit-learn compatibility: Extends `BaseEstimator` and `ClusterMixin` for use in `Pipeline`, `GridSearchCV`, and model evaluation workflows.
 * C acceleration: Core delta computations run in Cython with a pure Python and NumPy fallback.
+* Parallel restarts: Accelerate `num_local` local search restarts using multithreaded `n_jobs` execution over Cython `nogil` blocks with deterministic reproducibility.
 * Distance routing: Automatically routes distance calculations to SciPy `cdist` for dense arrays, scikit-learn `DistanceMetric` for sparse matrices, or `pairwise_distances`.
 * Missing values support: Native clustering of incomplete data (containing `NaN`) via `metric='nan_euclidean'`.
 * Custom callable metrics: Pass user-defined distance functions (`metric=callable`) to cluster domain objects (e.g., GPS coordinates via Haversine, text sequences via Levenshtein).
@@ -138,7 +139,7 @@ The core algorithms implemented in this package originate from:
 * **CLARANS:**
   > Ng, R. T., & Han, J. (2002). *CLARANS: A method for clustering objects for spatial data mining.* IEEE Transactions on Knowledge and Data Engineering, 14(5), 1003-1016. [doi:10.1109/TKDE.2002.1033770](https://doi.org/10.1109/TKDE.2002.1033770)
 * **FastCLARANS & FastPAM1:**
-  > Schubert, E., & Rousseeuw, P. J. (2021). *Fast and eager k-medoids clustering: O(k) runtime improvement of the PAM, CLARA, and CLARANS algorithms.* Information Systems, 101, 101804. [doi:10.1016/j.is.2021.101804](https://doi.org/10.1016/j.is.2021.101804)
+  > Schubert, E., & Rousseeuw, P. J. (2021). *Fast and eager k-medoids clustering: O(k) runtime improvement of the PAM, CLARA, and CLARANS algorithms.* Information Systems, 101, 101804. [doi:10.1016/j.is.2021.101804](https://doi.org/10.1016/j.is.2021.101804). The original reference implementation in Java is part of the [ELKI open-source data mining framework](https://elki-project.github.io/).
 * **Seeding & Initialization:**
   > Initialization strategies (`k-medoids++`, `heuristic`, `build`) are adapted from the [scikit-learn-extra KMedoids](https://scikit-learn-extra.readthedocs.io/en/stable/generated/sklearn_extra.cluster.KMedoids.html) implementation.
 

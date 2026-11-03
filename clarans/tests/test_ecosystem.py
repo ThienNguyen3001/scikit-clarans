@@ -21,7 +21,7 @@ import numpy as np
 from sklearn.base import clone
 from sklearn.datasets import make_blobs
 from sklearn.linear_model import LogisticRegression
-from sklearn.metrics import adjusted_rand_score
+from sklearn.metrics import adjusted_rand_score, pairwise_distances
 from sklearn.model_selection import GridSearchCV
 from sklearn.pipeline import Pipeline
 from sklearn.preprocessing import StandardScaler
@@ -40,10 +40,12 @@ class TestEcosystemIntegration(unittest.TestCase):
     def test_pipeline_scaler_fit_predict(self):
         """Pipeline with StandardScaler followed by CLARANS / FastCLARANS."""
         for model_cls in [CLARANS, FastCLARANS]:
-            pipe = Pipeline([
-                ("scaler", StandardScaler()),
-                ("clustering", model_cls(n_clusters=3, random_state=42)),
-            ])
+            pipe = Pipeline(
+                [
+                    ("scaler", StandardScaler()),
+                    ("clustering", model_cls(n_clusters=3, random_state=42)),
+                ]
+            )
             pipe.fit(self.X)
             preds = pipe.predict(self.X)
             self.assertEqual(preds.shape, (len(self.X),))
@@ -52,10 +54,12 @@ class TestEcosystemIntegration(unittest.TestCase):
     def test_pipeline_feature_extractor_with_classifier(self):
         """Using CLARANS / FastCLARANS transform() as distance features for LogisticRegression."""
         for model_cls in [CLARANS, FastCLARANS]:
-            pipe = Pipeline([
-                ("medoids", model_cls(n_clusters=3, random_state=42)),
-                ("clf", LogisticRegression(random_state=42)),
-            ])
+            pipe = Pipeline(
+                [
+                    ("medoids", model_cls(n_clusters=3, random_state=42)),
+                    ("clf", LogisticRegression(random_state=42)),
+                ]
+            )
             pipe.fit(self.X, self.y)
             score = pipe.score(self.X, self.y)
             self.assertGreater(score, 0.85)
@@ -104,6 +108,24 @@ class TestEcosystemIntegration(unittest.TestCase):
             t1 = m1.fit_transform(self.X)
             t2 = m1.transform(self.X)
             np.testing.assert_allclose(t1, t2)
+
+    def test_pipeline_and_gridsearch_precomputed_n_features_in(self):
+        """Pipeline and GridSearchCV integration with metric='precomputed' sets n_features_in_."""
+        D = pairwise_distances(self.X[:30])
+        for model_cls in [CLARANS, FastCLARANS]:
+            pipe = Pipeline(
+                [("clustering", model_cls(n_clusters=2, metric="precomputed", random_state=42))]
+            )
+            pipe.fit(D)
+            self.assertEqual(pipe.n_features_in_, 30)
+
+            grid = GridSearchCV(
+                model_cls(metric="precomputed", random_state=42),
+                param_grid={"n_clusters": [2, 3]},
+                cv=2,
+            )
+            grid.fit(D)
+            self.assertEqual(grid.n_features_in_, 30)
 
 
 class TestSerialization(unittest.TestCase):
@@ -266,6 +288,7 @@ class TestCustomCallableMetric(unittest.TestCase):
     def test_custom_metric_pipeline(self):
         """Verify custom Python distance callable functions across fit, predict,
         transform, and calculate_cost."""
+
         def custom_cityblock(u, v):
             return float(np.sum(np.abs(u - v)))
 
@@ -284,6 +307,81 @@ class TestCustomCallableMetric(unittest.TestCase):
 
             cost = calculate_cost(X, m.medoid_indices_, custom_cityblock)
             self.assertAlmostEqual(cost, m.inertia_, places=9)
+
+
+class TestNJobsParallelism(unittest.TestCase):
+    """Group 8: Verification of n_jobs parameter in fit restarts."""
+
+    def setUp(self):
+        self.X, _ = make_blobs(
+            n_samples=200, centers=4, n_features=6, cluster_std=0.8, random_state=42
+        )
+        self.X_test, _ = make_blobs(
+            n_samples=50, centers=4, n_features=6, cluster_std=0.8, random_state=99
+        )
+
+    def test_n_jobs_fit_equivalence(self):
+        """Ensure n_jobs=None, 1, 2, and -1 give 100% bit-for-bit identical results."""
+        for model_cls in [CLARANS, FastCLARANS]:
+            base = model_cls(n_clusters=4, num_local=3, random_state=42, n_jobs=None).fit(self.X)
+            base_pred = base.predict(self.X_test)
+            base_trans = base.transform(self.X_test)
+            base_score = base.score(self.X_test)
+
+            for nj in [1, 2, -1]:
+                m = model_cls(n_clusters=4, num_local=3, random_state=42, n_jobs=nj).fit(self.X)
+                # Centers, medoids, inertia and labels must match bit-for-bit
+                np.testing.assert_array_equal(m.medoid_indices_, base.medoid_indices_)
+                np.testing.assert_allclose(m.cluster_centers_, base.cluster_centers_)
+                self.assertAlmostEqual(m.inertia_, base.inertia_, places=9)
+                np.testing.assert_array_equal(m.labels_, base.labels_)
+
+                # Predict, transform, score must match bit-for-bit
+                np.testing.assert_array_equal(m.predict(self.X_test), base_pred)
+                np.testing.assert_allclose(m.transform(self.X_test), base_trans, atol=1e-12)
+                self.assertAlmostEqual(m.score(self.X_test), base_score, places=9)
+
+    def test_n_jobs_validation(self):
+        """Verify invalid n_jobs values raise ValueError."""
+        for model_cls in [CLARANS, FastCLARANS]:
+            # n_jobs=0 is invalid
+            with self.assertRaises(ValueError):
+                model_cls(n_jobs=0).fit(self.X)
+            # boolean values
+            with self.assertRaises(ValueError):
+                model_cls(n_jobs=True).fit(self.X)
+            with self.assertRaises(ValueError):
+                model_cls(n_jobs=False).fit(self.X)
+            # float values
+            with self.assertRaises(ValueError):
+                model_cls(n_jobs=1.5).fit(self.X)
+            # string values
+            with self.assertRaises(ValueError):
+                model_cls(n_jobs="all").fit(self.X)
+
+    def test_n_jobs_clone_and_get_params(self):
+        """Verify clone and get_params properly preserve n_jobs."""
+        for model_cls in [CLARANS, FastCLARANS]:
+            m = model_cls(n_clusters=3, n_jobs=4, random_state=42)
+            self.assertEqual(m.get_params()["n_jobs"], 4)
+            cloned = clone(m)
+            self.assertEqual(cloned.n_jobs, 4)
+            cloned.set_params(n_jobs=-1)
+            self.assertEqual(cloned.n_jobs, -1)
+
+    def test_n_jobs_nested_parallelism_grid_search_cv(self):
+        """Verify nested parallelism when GridSearchCV(n_jobs=2) wraps CLARANS(n_jobs=2)."""
+        param_grid = {"n_clusters": [2, 3]}
+        for model_cls in [CLARANS, FastCLARANS]:
+            grid = GridSearchCV(
+                estimator=model_cls(num_local=2, random_state=42, n_jobs=2),
+                param_grid=param_grid,
+                cv=2,
+                n_jobs=2,
+            )
+            grid.fit(self.X)
+            self.assertIn(grid.best_params_["n_clusters"], [2, 3])
+            self.assertTrue(hasattr(grid.best_estimator_, "medoid_indices_"))
 
 
 if __name__ == "__main__":

@@ -16,7 +16,6 @@ import matplotlib.pyplot as plt
 from sklearn.datasets import make_blobs
 from clarans import CLARANS
 
-
 # Zero out low values to produce a sparse dataset
 X, _ = make_blobs(n_samples=500, centers=3, n_features=20, random_state=42)
 X[np.abs(X) < 1.5] = 0.0
