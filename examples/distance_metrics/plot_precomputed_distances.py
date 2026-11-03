@@ -16,7 +16,6 @@ from sklearn.datasets import make_blobs
 from sklearn.metrics import pairwise_distances
 from clarans import CLARANS, FastCLARANS
 
-
 X, _ = make_blobs(n_samples=180, centers=3, n_features=4, random_state=42)
 # Precompute pairwise Manhattan distances
 D = pairwise_distances(X, metric="manhattan")
@@ -30,13 +29,9 @@ model_fast = FastCLARANS(n_clusters=3, num_local=3, metric="precomputed", random
 model_fast.fit(D)
 
 print(
-    f"CLARANS Medoids:     {model_clarans.medoid_indices_} | "
-    f"Cost: {model_clarans.inertia_:.2f}"
+    f"CLARANS Medoids:     {model_clarans.medoid_indices_} | " f"Cost: {model_clarans.inertia_:.2f}"
 )
-print(
-    f"FastCLARANS Medoids: {model_fast.medoid_indices_} | "
-    f"Cost: {model_fast.inertia_:.2f}"
-)
+print(f"FastCLARANS Medoids: {model_fast.medoid_indices_} | " f"Cost: {model_fast.inertia_:.2f}")
 
 # Distance matrix sorted by cluster assignment
 sort_idx = model_clarans.labels_.argsort()

@@ -21,7 +21,6 @@ from clarans._initialization import (
 )
 from clarans.utils import calculate_cost
 
-
 X, _ = make_blobs(n_samples=500, centers=4, cluster_std=0.70, random_state=42)
 k = 4
 rng = np.random.RandomState(42)

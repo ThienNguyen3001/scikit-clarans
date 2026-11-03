@@ -90,14 +90,22 @@ ax1.grid(True, linestyle="--", alpha=0.5, axis="y")
 for bar in bars1:
     y = bar.get_height()
     ax1.text(
-        bar.get_x() + bar.get_width() / 2, y, f"{y:.2f}s",
-        ha="center", va="bottom", fontsize=9,
+        bar.get_x() + bar.get_width() / 2,
+        y,
+        f"{y:.2f}s",
+        ha="center",
+        va="bottom",
+        fontsize=9,
     )
 for bar in bars2:
     y = bar.get_height()
     ax1.text(
-        bar.get_x() + bar.get_width() / 2, y, f"{y:.2f}s",
-        ha="center", va="bottom", fontsize=9,
+        bar.get_x() + bar.get_width() / 2,
+        y,
+        f"{y:.2f}s",
+        ha="center",
+        va="bottom",
+        fontsize=9,
     )
 
 # Panel 2: Speedup factor
@@ -113,8 +121,12 @@ ax2.grid(True, linestyle="--", alpha=0.5, axis="y")
 for bar in bars_speedup:
     y = bar.get_height()
     ax2.text(
-        bar.get_x() + bar.get_width() / 2, y + 0.05, f"{y:.2f}x",
-        ha="center", va="bottom", fontweight="bold",
+        bar.get_x() + bar.get_width() / 2,
+        y + 0.05,
+        f"{y:.2f}x",
+        ha="center",
+        va="bottom",
+        fontweight="bold",
     )
 
 plt.suptitle(f"CLARANS Cost Evaluation Strategies on N={n_samples}", fontsize=13)
