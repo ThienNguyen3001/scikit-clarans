@@ -6,6 +6,13 @@ Requirements
 
 * Python 3.11 or higher
 
+Install with conda
+------------------
+
+.. code-block:: bash
+
+    conda install -c conda-forge scikit-clarans
+
 Install with pip
 ----------------
 

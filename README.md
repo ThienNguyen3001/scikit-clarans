@@ -4,6 +4,7 @@
 
 <!-- Hàng 1: Phiên bản, Phân phối, Học thuật & Trải nghiệm nhanh -->
 [![PyPI version](https://img.shields.io/pypi/v/scikit-clarans.svg)](https://pypi.org/project/scikit-clarans/)
+[![Conda Version](https://img.shields.io/conda/vn/conda-forge/scikit-clarans.svg)](https://anaconda.org/conda-forge/scikit-clarans)
 [![Python 3.11+](https://img.shields.io/badge/python-3.11+-blue.svg)](https://www.python.org/downloads/)
 [![License](https://img.shields.io/github/license/ThienNguyen3001/scikit-clarans)](LICENSE)
 [![DOI](https://zenodo.org/badge/DOI/10.5281/zenodo.18366801.svg)](https://doi.org/10.5281/zenodo.18366801)
@@ -13,6 +14,7 @@
 [![Test Suite](https://img.shields.io/github/actions/workflow/status/ThienNguyen3001/scikit-clarans/test_suite.yml?branch=main&label=Test%20Suite)](https://github.com/ThienNguyen3001/scikit-clarans/actions/workflows/test_suite.yml)
 [![Quality Check](https://img.shields.io/github/actions/workflow/status/ThienNguyen3001/scikit-clarans/lint_cov_check.yml?branch=main&label=Quality%20Check)](https://github.com/ThienNguyen3001/scikit-clarans/actions/workflows/lint_cov_check.yml)
 [![PyPI Downloads](https://static.pepy.tech/personalized-badge/scikit-clarans?period=total&units=INTERNATIONAL_SYSTEM&left_color=BLACK&right_color=GREEN&left_text=downloads)](https://pepy.tech/projects/scikit-clarans)
+[![Conda Downloads](https://img.shields.io/conda/dn/conda-forge/scikit-clarans.svg)](https://anaconda.org/conda-forge/scikit-clarans)
 [![PRs Welcome](https://img.shields.io/badge/PRs-welcome-brightgreen.svg)](https://github.com/ThienNguyen3001/scikit-clarans/pulls)
 [![GitHub Stars](https://img.shields.io/github/stars/ThienNguyen3001/scikit-clarans?style=social)](https://github.com/ThienNguyen3001/scikit-clarans/stargazers)
 
@@ -45,6 +47,11 @@ scikit-clarans implements $k$-medoids clustering in Python using the scikit-lear
 * Initialization options: Supports `k-medoids++`, `build`, `heuristic`, uniform random sampling, or user-supplied medoid indices.
 
 ## Installation
+
+Install via conda-forge:
+```bash
+conda install -c conda-forge scikit-clarans
+```
 
 Install from PyPI:
 ```bash
