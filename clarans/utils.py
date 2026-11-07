@@ -6,7 +6,7 @@ from typing import TYPE_CHECKING, Any, Callable, Sequence
 import numpy as np
 from scipy.spatial.distance import cdist
 from scipy.sparse import issparse
-from sklearn.metrics import pairwise_distances_argmin_min
+from sklearn.metrics import DistanceMetric, pairwise_distances
 
 if TYPE_CHECKING:
     from scipy.sparse import spmatrix
@@ -19,8 +19,8 @@ except ImportError:
     _core = None  # type: ignore[assignment]
     HAS_CYTHON = False
 
-_cython_warning_lock = threading.Lock()
 _cython_warning_issued = False
+_cython_warning_lock = threading.Lock()
 
 
 class EfficiencyWarning(UserWarning):
@@ -33,6 +33,7 @@ def _warn_cython_unavailable() -> None:
     if not HAS_CYTHON and not _cython_warning_issued:
         with _cython_warning_lock:
             if not _cython_warning_issued:
+                _cython_warning_issued = True
                 warnings.warn(
                     "Compiled Cython extensions (_core) are not available; falling back to "
                     "pure Python/NumPy implementation. Performance will be significantly slower. "
@@ -41,7 +42,6 @@ def _warn_cython_unavailable() -> None:
                     EfficiencyWarning,
                     stacklevel=3,
                 )
-                _cython_warning_issued = True
 
 
 __all__ = [
@@ -59,6 +59,30 @@ _SCIPY_METRIC_MAP = {
     "sokalmichener": "matching",
     "p": "minkowski",
 }
+
+
+def _pairwise_fast(
+    X: Any,
+    Y: Any = None,
+    metric: str | Callable = "euclidean",
+    metric_params: dict[str, Any] | None = None,
+) -> np.ndarray:
+    """Unified 3-tier distance dispatcher: cdist -> DistanceMetric -> pairwise_distances."""
+    params = metric_params if metric_params is not None else {}
+    Y_eff = X if Y is None else Y
+    if not issparse(X) and not issparse(Y_eff) and isinstance(metric, str):
+        mapped = _map_scipy_metric(metric)
+        try:
+            return cdist(X, Y_eff, metric=mapped, **params)
+        except Exception:
+            pass
+    if not (issparse(X) and not isinstance(metric, str)):
+        try:
+            dm = DistanceMetric.get_metric(metric, **params)
+            return dm.pairwise(X) if Y is None else dm.pairwise(X, Y_eff)
+        except Exception:
+            pass
+    return pairwise_distances(X, Y, metric=metric, **params)
 
 
 def _to_dense(arr: Any) -> np.ndarray:
@@ -170,13 +194,5 @@ def calculate_cost(
     medoids = X[medoid_indices]
     params = metric_params if metric_params is not None else {}
 
-    if not issparse(X):
-        scipy_metric = _map_scipy_metric(metric)
-        try:
-            D = cdist(X, medoids, metric=scipy_metric, **params)
-            return float(np.sum(np.min(D, axis=1)))
-        except Exception:
-            pass
-
-    _, min_dists = pairwise_distances_argmin_min(X, medoids, metric=metric, metric_kwargs=params)
-    return float(np.sum(min_dists))
+    D = _pairwise_fast(X, medoids, metric=metric, metric_params=params)
+    return float(np.sum(np.min(D, axis=1)))

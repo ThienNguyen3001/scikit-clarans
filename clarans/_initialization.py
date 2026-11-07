@@ -12,16 +12,10 @@ import warnings
 from typing import Any, Callable
 
 import numpy as np
-from scipy.spatial.distance import cdist
 from scipy.sparse import issparse
-from sklearn.metrics import (
-    DistanceMetric,
-    pairwise_distances,
-    pairwise_distances_argmin_min,
-)
 from sklearn.utils import check_array, check_random_state
 
-from .utils import _core, _map_scipy_metric, _to_dense, check_medoids
+from .utils import _core, _pairwise_fast, _to_dense, check_medoids
 
 
 def _check_init_args(X: Any, n_clusters: int) -> int:
@@ -32,31 +26,7 @@ def _check_init_args(X: Any, n_clusters: int) -> int:
     return n_samples
 
 
-def _compute_pairwise_distances(
-    X: Any,
-    Y: Any = None,
-    metric: str | Callable = "euclidean",
-    metric_params: dict[str, Any] | None = None,
-) -> np.ndarray:
-    """Compute pairwise distances using cdist for dense arrays when possible,
-    falling back to scikit-learn's DistanceMetric and pairwise_distances."""
-    scipy_metric = _map_scipy_metric(metric)
-    params = metric_params if metric_params is not None else {}
-    Y_eff = X if Y is None else Y
-
-    if not issparse(X) and not issparse(Y_eff):
-        try:
-            return cdist(X, Y_eff, metric=scipy_metric, **params)
-        except Exception:
-            pass
-    elif isinstance(scipy_metric, str):
-        try:
-            dm = DistanceMetric.get_metric(scipy_metric, **params)
-            return dm.pairwise(X) if Y is None else dm.pairwise(X, Y_eff)
-        except Exception:
-            pass
-
-    return pairwise_distances(X, Y, metric=scipy_metric, **params)
+_compute_pairwise_distances = _pairwise_fast
 
 
 def initialize_heuristic(
@@ -439,19 +409,8 @@ def initialize_from_array(
             raise ValueError(f"init array must be of shape ({n_clusters}, {n_features})")
 
         params = metric_params if metric_params is not None else {}
-        if not issparse(X) and not issparse(init_centers):
-            scipy_metric = _map_scipy_metric(metric)
-            try:
-                D = cdist(init_centers, X, metric=scipy_metric, **params)
-                current_medoids_indices = np.argmin(D, axis=1)
-            except Exception:
-                current_medoids_indices, _ = pairwise_distances_argmin_min(
-                    init_centers, X, metric=metric, metric_kwargs=params
-                )
-        else:
-            current_medoids_indices, _ = pairwise_distances_argmin_min(
-                init_centers, X, metric=metric, metric_kwargs=params
-            )
+        D = _pairwise_fast(init_centers, X, metric=metric, metric_params=params)
+        current_medoids_indices = np.argmin(D, axis=1)
 
     current_medoids_indices = np.unique(current_medoids_indices)
 
