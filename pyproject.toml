@@ -10,7 +10,7 @@ requires = [
 [project]
 name = "scikit-clarans"
 version = "0.4.1"
-description = "A scikit-learn compatible implementation of CLARANS clustering algorithm"
+description = "Scikit-learn compatible implementation of CLARANS and FastCLARANS for k-medoids clustering"
 readme = "README.md"
 requires-python = ">=3.11"
 license = {text = "MIT"}
