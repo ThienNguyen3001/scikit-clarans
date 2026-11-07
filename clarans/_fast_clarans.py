@@ -8,16 +8,13 @@ benefiting from the O(k) speedup per swap evaluation.
 
 from __future__ import annotations
 
-from typing import TYPE_CHECKING, Any
+from typing import Any
 
 import numpy as np
 from numpy.typing import ArrayLike
 
 from ._clarans import CLARANS
 from .utils import _core
-
-if TYPE_CHECKING:
-    from scipy.sparse import spmatrix
 
 
 def _fallback_fastpam1_delta(
@@ -219,118 +216,54 @@ class FastCLARANS(CLARANS):
 
         self.neighborhood_size_ = n_samples - self.n_clusters
 
-    def _allocate_search_buffers(self, X: Any, n_samples: int) -> dict[str, np.ndarray]:
-        """Pre-allocate reusable scratch buffers for neighbor evaluations."""
-        bufs = super()._allocate_search_buffers(X, n_samples)
-        buf_dtype = bufs["d_xc_buf"].dtype
-        bufs["delta_arr_buf"] = np.zeros(self.n_clusters, dtype=buf_dtype)
-        return bufs
-
-    def _single_local_search(
+    def _sample_candidate(
         self,
-        X: np.ndarray | "spmatrix",
+        available_candidates: np.ndarray,
         random_state: np.random.RandomState,
-        deterministic_medoids: np.ndarray | None,
-        d_xc_buf: np.ndarray | None = None,
-        delta_arr_buf: np.ndarray | None = None,
-        loc_idx: int = 1,
-        **kwargs: Any,
-    ) -> tuple[float, np.ndarray, int, int]:
-        """Perform a single local search from initial medoids to a local optimum."""
-        n_samples = X.shape[0]
-        if deterministic_medoids is not None:
-            current_medoids_indices = deterministic_medoids.copy()
-        else:
-            current_medoids_indices = self._initialize_medoids(X, random_state)
-        current_medoids_indices.sort()
-
-        medoids_dist = self._compute_medoids_distances(X, current_medoids_indices)
-        if not medoids_dist.flags.c_contiguous:
-            medoids_dist = np.ascontiguousarray(medoids_dist)
-        near_idx_map, near_dist, second_dist = self._compute_2min(medoids_dist)
-        current_cost: float = float(np.sum(near_dist))
-
-        if self.verbose >= 2:
-            print(f"  Restart {loc_idx}/{self.num_local} (init cost: {current_cost:.5f}):")
-
-        non_medoid_mask = np.ones(n_samples, dtype=bool)
-        non_medoid_mask[current_medoids_indices] = False
-        available_candidates = np.flatnonzero(non_medoid_mask)
-
-        # Check whether Cython kernel can be used for this batch
-        can_use_cython = self._can_use_cython(d_xc_buf, near_idx_map, near_dist, second_dist)
-        delta_buf_arg = (
-            delta_arr_buf
-            if (
-                can_use_cython
-                and delta_arr_buf is not None
-                and delta_arr_buf.dtype == near_dist.dtype
-            )
-            else None
+    ) -> tuple[int, int | None]:
+        """Sample a non-medoid candidate at random for FastCLARANS."""
+        candidate_idx = int(
+            available_candidates[random_state.randint(0, len(available_candidates))]
         )
+        return candidate_idx, None
 
-        i = 0
-        swap_count = 0
-        eval_count = 0
-
-        while i < self.max_neighbors_:
-            eval_count += 1
-            if available_candidates.size == 0:
-                break
-
-            candidate_idx = int(
-                available_candidates[random_state.randint(0, len(available_candidates))]
+    def _evaluate_candidate_swap(
+        self,
+        candidate_idx: int,
+        d_xc: np.ndarray,
+        near_idx_map: np.ndarray | None,
+        near_dist: np.ndarray | None,
+        second_dist: np.ndarray | None,
+        current_cost: float,
+        can_use_cython: bool,
+        delta_arr_buf: np.ndarray | None,
+        medoid_pos: int | None,
+        n_samples: int,
+        current_medoids_indices: np.ndarray,
+        X: Any,
+    ) -> tuple[int, float]:
+        """Evaluate candidate swap against all k medoids simultaneously via FastPAM1."""
+        if self.n_clusters == 1:
+            candidate_cost = float(np.sum(d_xc))
+            return 0, candidate_cost - current_cost
+        elif can_use_cython:
+            assert near_idx_map is not None
+            assert near_dist is not None
+            assert second_dist is not None
+            best_m, min_delta_val, _ = _core.fastpam1_delta(
+                near_idx_map,
+                near_dist,
+                second_dist,
+                d_xc,
+                n_samples,
+                self.n_clusters,
+                delta_arr_buf,
             )
-
-            cand_row = (
-                None if self.metric == "precomputed" else X[candidate_idx : candidate_idx + 1]
+            return int(best_m), float(min_delta_val)
+        else:
+            assert near_idx_map is not None
+            assert near_dist is not None
+            assert second_dist is not None
+            return _fallback_fastpam1_delta(
+                near_idx_map, near_dist, second_dist, d_xc, self.n_clusters
             )
-            d_xc = self._compute_1_vs_n(cand_row, X, out=d_xc_buf, candidate_idx=candidate_idx)
-
-            if self.n_clusters == 1:
-                candidate_cost = float(np.sum(d_xc))
-                min_delta = candidate_cost - current_cost
-                min_delta_idx = 0
-            elif can_use_cython:
-                best_m, min_delta_val, _ = _core.fastpam1_delta(
-                    near_idx_map,
-                    near_dist,
-                    second_dist,
-                    d_xc,
-                    n_samples,
-                    self.n_clusters,
-                    delta_buf_arg,
-                )
-                min_delta_idx = int(best_m)
-                min_delta = float(min_delta_val)
-            else:
-                min_delta_idx, min_delta = _fallback_fastpam1_delta(
-                    near_idx_map, near_dist, second_dist, d_xc, self.n_clusters
-                )
-
-            delta_tol = self._delta_tolerance(current_cost)
-            if min_delta < delta_tol:
-                old_medoid = current_medoids_indices[min_delta_idx]
-                current_medoids_indices[min_delta_idx] = candidate_idx
-
-                # Update distance matrix column for the swapped medoid
-                medoids_dist[:, min_delta_idx] = d_xc
-                near_idx_map, near_dist, second_dist = self._compute_2min(medoids_dist)
-                current_cost = float(np.sum(near_dist))
-
-                # Update non-medoid pool
-                available_candidates = self._update_candidate_pool(
-                    non_medoid_mask, old_medoid, candidate_idx
-                )
-
-                i = 0
-                swap_count += 1
-                if self.verbose >= 2:
-                    print(
-                        f"      swap {swap_count:3d} | eval {eval_count:5d} | "
-                        f"cost {current_cost:14.5f} | diff {min_delta:12.5f}"
-                    )
-            else:
-                i += 1
-
-        return current_cost, current_medoids_indices, eval_count, swap_count

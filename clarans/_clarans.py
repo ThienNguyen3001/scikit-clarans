@@ -6,11 +6,11 @@ from typing import TYPE_CHECKING, Any, Sequence
 
 import numpy as np
 from numpy.typing import ArrayLike
-from joblib import Parallel, delayed, effective_n_jobs
+from joblib import Parallel, delayed
 from scipy.spatial.distance import cdist
 from scipy.sparse import issparse
 from sklearn.base import BaseEstimator, ClusterMixin, TransformerMixin
-from sklearn.metrics import DistanceMetric, pairwise_distances_argmin_min, pairwise_distances
+from sklearn.metrics import DistanceMetric, pairwise_distances
 from sklearn.metrics.pairwise import PAIRWISE_DISTANCE_FUNCTIONS, _VALID_METRICS
 from sklearn.utils.validation import check_array, check_is_fitted, check_random_state
 
@@ -30,6 +30,7 @@ from .utils import (
     _core,
     _is_valid_int,
     _map_scipy_metric,
+    _pairwise_fast,
     _to_dense,
     _warn_cython_unavailable,
     calculate_cost,
@@ -481,15 +482,10 @@ class CLARANS(ClusterMixin, TransformerMixin, BaseEstimator):
         def _run_single_search_restart(
             loc_idx: int,
             seed: int,
-            preallocated_buffers: dict[str, np.ndarray] | None = None,
         ) -> tuple[float, np.ndarray, int, int, float]:
             loc_start = time.perf_counter()
             worker_rng = np.random.RandomState(seed)
-            bufs = (
-                preallocated_buffers
-                if preallocated_buffers is not None
-                else self._allocate_search_buffers(X, n_samples)
-            )
+            bufs = self._allocate_search_buffers(X, n_samples)
             cost, medoids_idx, eval_cnt, swap_cnt = self._single_local_search(
                 X,
                 worker_rng,
@@ -502,22 +498,10 @@ class CLARANS(ClusterMixin, TransformerMixin, BaseEstimator):
             return cost, medoids_idx, eval_cnt, swap_cnt, loc_time
 
         try:
-            n_jobs_eff = effective_n_jobs(self.n_jobs)
-            if self.num_local == 1 or n_jobs_eff == 1:
-                # Fast sequential path: allocate scratch buffers once and reuse
-                buffers = self._allocate_search_buffers(X, n_samples)
-                results = [
-                    _run_single_search_restart(
-                        loc_idx, seeds[loc_idx], preallocated_buffers=buffers
-                    )
-                    for loc_idx in range(self.num_local)
-                ]
-            else:
-                # Parallel path: run restarts concurrently using lightweight threads
-                results = Parallel(n_jobs=self.n_jobs, prefer="threads")(
-                    delayed(_run_single_search_restart)(loc_idx, seeds[loc_idx])
-                    for loc_idx in range(self.num_local)
-                )
+            results = Parallel(n_jobs=self.n_jobs, prefer="threads")(
+                delayed(_run_single_search_restart)(loc_idx, seeds[loc_idx])
+                for loc_idx in range(self.num_local)
+            )
 
             for loc_idx, (
                 current_cost,
@@ -589,6 +573,68 @@ class CLARANS(ClusterMixin, TransformerMixin, BaseEstimator):
             if hasattr(self, "_precomputed_source"):
                 del self._precomputed_source
 
+    def _sample_candidate(
+        self,
+        available_candidates: np.ndarray,
+        random_state: np.random.RandomState,
+    ) -> tuple[int, int | None]:
+        """Sample a random neighbor edge (medoid_pos, candidate_idx) for CLARANS."""
+        random_medoid_pos = int(random_state.randint(0, self.n_clusters))
+        random_non_medoid_candidate = int(
+            available_candidates[random_state.randint(0, len(available_candidates))]
+        )
+        return random_non_medoid_candidate, random_medoid_pos
+
+    def _evaluate_candidate_swap(
+        self,
+        candidate_idx: int,
+        d_xc: np.ndarray,
+        near_idx_map: np.ndarray | None,
+        near_dist: np.ndarray | None,
+        second_dist: np.ndarray | None,
+        current_cost: float,
+        can_use_cython: bool,
+        delta_arr_buf: np.ndarray | None,
+        medoid_pos: int | None,
+        n_samples: int,
+        current_medoids_indices: np.ndarray,
+        X: Any,
+    ) -> tuple[int, float]:
+        """Evaluate a candidate swap for classic CLARANS (single random edge)."""
+        assert medoid_pos is not None
+        if self.n_clusters == 1:
+            candidate_cost = float(np.sum(d_xc))
+            total_delta = candidate_cost - current_cost
+        elif can_use_cython:
+            assert near_idx_map is not None
+            assert near_dist is not None
+            assert second_dist is not None
+            total_delta = float(
+                _core.clarans_delta(
+                    near_idx_map,
+                    near_dist,
+                    second_dist,
+                    d_xc,
+                    medoid_pos,
+                    n_samples,
+                )
+            )
+        else:
+            assert near_idx_map is not None
+            assert near_dist is not None
+            assert second_dist is not None
+            is_assigned_to_m = near_idx_map == medoid_pos
+            delta_assigned = (
+                np.minimum(second_dist[is_assigned_to_m], d_xc[is_assigned_to_m])
+                - near_dist[is_assigned_to_m]
+            )
+            delta_others = np.minimum(
+                0.0,
+                d_xc[~is_assigned_to_m] - near_dist[~is_assigned_to_m],
+            )
+            total_delta = float(np.sum(delta_assigned) + np.sum(delta_others))
+        return medoid_pos, total_delta
+
     def _single_local_search(
         self,
         X: np.ndarray | "spmatrix",
@@ -597,6 +643,7 @@ class CLARANS(ClusterMixin, TransformerMixin, BaseEstimator):
         d_xc_buf: np.ndarray | None = None,
         delta_arr_buf: np.ndarray | None = None,
         loc_idx: int = 1,
+        **kwargs: Any,
     ) -> tuple[float, np.ndarray, int, int]:
         """Perform a single local search from initial medoids to a local optimum."""
         n_samples = X.shape[0]
@@ -630,6 +677,13 @@ class CLARANS(ClusterMixin, TransformerMixin, BaseEstimator):
         available_candidates = np.flatnonzero(non_medoid_mask)
 
         can_use_cython = self._can_use_cython(d_xc_buf, near_idx_map, near_dist, second_dist)
+        if delta_arr_buf is None:
+            buf_dtype = (
+                d_xc_buf.dtype
+                if (d_xc_buf is not None and hasattr(d_xc_buf, "dtype"))
+                else np.float64
+            )
+            delta_arr_buf = np.zeros(self.n_clusters, dtype=buf_dtype)
 
         i = 0
         swap_count = 0
@@ -637,72 +691,44 @@ class CLARANS(ClusterMixin, TransformerMixin, BaseEstimator):
 
         while i < self.max_neighbors_:
             eval_count += 1
-            random_medoid_pos = int(random_state.randint(0, self.n_clusters))
-
             if available_candidates.size == 0:
                 break
 
-            # Sample a non-medoid candidate at random
-            random_non_medoid_candidate = int(
-                available_candidates[random_state.randint(0, len(available_candidates))]
-            )
+            candidate_idx, medoid_pos = self._sample_candidate(available_candidates, random_state)
 
             if self.cost_evaluation == "delta":
                 cand_row = (
-                    None
-                    if self.metric == "precomputed"
-                    else X[random_non_medoid_candidate : random_non_medoid_candidate + 1]
+                    None if self.metric == "precomputed" else X[candidate_idx : candidate_idx + 1]
                 )
-                d_xc = self._compute_1_vs_n(
-                    cand_row, X, out=d_xc_buf, candidate_idx=random_non_medoid_candidate
-                )
+                d_xc = self._compute_1_vs_n(cand_row, X, out=d_xc_buf, candidate_idx=candidate_idx)
 
-                if self.n_clusters == 1:
-                    candidate_cost = float(np.sum(d_xc))
-                    total_delta = candidate_cost - current_cost
-                elif can_use_cython:
-                    assert near_idx_map is not None
-                    assert near_dist is not None
-                    assert second_dist is not None
-                    total_delta = float(
-                        _core.clarans_delta(
-                            near_idx_map,
-                            near_dist,
-                            second_dist,
-                            d_xc,
-                            random_medoid_pos,
-                            n_samples,
-                        )
-                    )
-                else:
-                    assert near_idx_map is not None
-                    assert near_dist is not None
-                    assert second_dist is not None
-                    is_assigned_to_m = near_idx_map == random_medoid_pos
-                    delta_assigned = (
-                        np.minimum(second_dist[is_assigned_to_m], d_xc[is_assigned_to_m])
-                        - near_dist[is_assigned_to_m]
-                    )
-                    delta_others = np.minimum(
-                        0.0,
-                        d_xc[~is_assigned_to_m] - near_dist[~is_assigned_to_m],
-                    )
-                    total_delta = float(np.sum(delta_assigned) + np.sum(delta_others))
+                swap_medoid_pos, total_delta = self._evaluate_candidate_swap(
+                    candidate_idx,
+                    d_xc,
+                    near_idx_map,
+                    near_dist,
+                    second_dist,
+                    current_cost,
+                    can_use_cython,
+                    delta_arr_buf,
+                    medoid_pos,
+                    n_samples,
+                    current_medoids_indices,
+                    X,
+                )
 
                 delta_tol = self._delta_tolerance(current_cost)
                 if total_delta < delta_tol:
-                    old_medoid = current_medoids_indices[random_medoid_pos]
-                    current_medoids_indices[random_medoid_pos] = random_non_medoid_candidate
+                    old_medoid = current_medoids_indices[swap_medoid_pos]
+                    current_medoids_indices[swap_medoid_pos] = candidate_idx
 
-                    # Update distance matrix column for the swapped medoid
                     assert medoids_dist is not None
-                    medoids_dist[:, random_medoid_pos] = d_xc
+                    medoids_dist[:, swap_medoid_pos] = d_xc
                     near_idx_map, near_dist, second_dist = self._compute_2min(medoids_dist)
                     current_cost = float(np.sum(near_dist))
 
-                    # Update non-medoid pool
                     available_candidates = self._update_candidate_pool(
-                        non_medoid_mask, old_medoid, random_non_medoid_candidate
+                        non_medoid_mask, old_medoid, candidate_idx
                     )
 
                     i = 0
@@ -715,8 +741,9 @@ class CLARANS(ClusterMixin, TransformerMixin, BaseEstimator):
                 else:
                     i += 1
             else:
+                assert medoid_pos is not None
                 neighbor_medoids_indices = current_medoids_indices.copy()
-                neighbor_medoids_indices[random_medoid_pos] = random_non_medoid_candidate
+                neighbor_medoids_indices[medoid_pos] = candidate_idx
 
                 neighbor_cost = calculate_cost(
                     X,
@@ -727,13 +754,13 @@ class CLARANS(ClusterMixin, TransformerMixin, BaseEstimator):
 
                 delta_tol = self._delta_tolerance(current_cost)
                 if neighbor_cost < current_cost + delta_tol:
-                    old_medoid = current_medoids_indices[random_medoid_pos]
+                    old_medoid = current_medoids_indices[medoid_pos]
                     current_medoids_indices = neighbor_medoids_indices
                     delta_cost = neighbor_cost - current_cost
                     current_cost = neighbor_cost
 
                     available_candidates = self._update_candidate_pool(
-                        non_medoid_mask, old_medoid, random_non_medoid_candidate
+                        non_medoid_mask, old_medoid, candidate_idx
                     )
 
                     i = 0
@@ -745,6 +772,8 @@ class CLARANS(ClusterMixin, TransformerMixin, BaseEstimator):
                         )
                 else:
                     i += 1
+
+        return current_cost, current_medoids_indices, eval_count, swap_count
 
         return current_cost, current_medoids_indices, eval_count, swap_count
 
@@ -824,17 +853,6 @@ class CLARANS(ClusterMixin, TransformerMixin, BaseEstimator):
         self._scipy_metric = None
         self._dm_instance = None
 
-    @staticmethod
-    def _populate_out_buffer(res: np.ndarray, out: np.ndarray | None) -> np.ndarray:
-        """Copy 1D result into out buffer if provided and matching, otherwise return res."""
-        if res.ndim > 1:
-            res = res.ravel()
-        if out is not None and out.shape[0] == res.shape[0]:
-            if out is not res:
-                np.copyto(out, res)
-            return out
-        return res
-
     def _compute_1_vs_n(
         self,
         cand_row: Any,
@@ -856,7 +874,11 @@ class CLARANS(ClusterMixin, TransformerMixin, BaseEstimator):
                 )
                 return out
             res = cdist(cand_row, X, metric=self._scipy_metric, **params)[0]
-            return self._populate_out_buffer(res, out)
+            if out is not None and out.shape[0] == res.shape[0]:
+                if out is not res:
+                    np.copyto(out, res)
+                return out
+            return res
         elif engine == "precomputed":
             if candidate_idx is not None:
                 source = getattr(self, "_precomputed_source", X)
@@ -877,15 +899,27 @@ class CLARANS(ClusterMixin, TransformerMixin, BaseEstimator):
                     else X[:, candidate_idx]
                 )
                 res = _to_dense(col_data).ravel()
-                return self._populate_out_buffer(res, out)
+                if out is not None and out.shape[0] == res.shape[0]:
+                    np.copyto(out, res)
+                    return out
+                return res
             res = _to_dense(cand_row).ravel()
-            return self._populate_out_buffer(res, out)
+            if out is not None and out.shape[0] == res.shape[0]:
+                np.copyto(out, res)
+                return out
+            return res
         elif engine == "distance_metric" and self._dm_instance is not None:
             res = self._dm_instance.pairwise(X, cand_row).ravel()
-            return self._populate_out_buffer(res, out)
+            if out is not None and out.shape[0] == res.shape[0]:
+                np.copyto(out, res)
+                return out
+            return res
         else:
             res = pairwise_distances(X, cand_row, metric=self.metric, **params).ravel()
-            return self._populate_out_buffer(res, out)
+            if out is not None and out.shape[0] == res.shape[0]:
+                np.copyto(out, res)
+                return out
+            return res
 
     def _compute_medoids_distances(
         self, X: np.ndarray | "spmatrix", medoids_indices: Sequence[int] | np.ndarray
@@ -893,15 +927,9 @@ class CLARANS(ClusterMixin, TransformerMixin, BaseEstimator):
         """Compute distances from all samples in X to the given medoids."""
         if self.metric == "precomputed":
             return _to_dense(X[:, medoids_indices])
-        medoids = X[medoids_indices]
-        engine = getattr(self, "_dist_engine", "pairwise")
-        params = self.metric_params if self.metric_params is not None else {}
-        if engine == "cdist" and isinstance(X, np.ndarray) and not issparse(X):
-            return cdist(X, medoids, metric=self._scipy_metric, **params)
-        elif engine == "distance_metric" and self._dm_instance is not None:
-            return self._dm_instance.pairwise(X, medoids)
-        else:
-            return pairwise_distances(X, medoids, metric=self.metric, **params)
+        return _pairwise_fast(
+            X, X[medoids_indices], metric=self.metric, metric_params=self.metric_params
+        )
 
     def _compute_2min(self, subD: np.ndarray) -> tuple[np.ndarray, np.ndarray, np.ndarray]:
         """Compute nearest and second-nearest medoid info from subD distance matrix."""
@@ -1047,19 +1075,10 @@ class CLARANS(ClusterMixin, TransformerMixin, BaseEstimator):
 
     def _assign_cluster_labels(self, X: Any) -> np.ndarray:
         """Assign each sample in X to the nearest cluster center."""
-        params = self.metric_params if self.metric_params is not None else {}
-        if not issparse(X) and not issparse(self.cluster_centers_):
-            scipy_metric = _map_scipy_metric(self.metric)
-            try:
-                D = cdist(X, self.cluster_centers_, metric=scipy_metric, **params)
-                return np.argmin(D, axis=1)
-            except Exception:
-                pass
-
-        labels, _ = pairwise_distances_argmin_min(
-            X, self.cluster_centers_, metric=self.metric, metric_kwargs=params
+        D = _pairwise_fast(
+            X, self.cluster_centers_, metric=self.metric, metric_params=self.metric_params
         )
-        return labels
+        return np.argmin(D, axis=1)
 
     def _finalize_fit(
         self,
@@ -1158,14 +1177,7 @@ class CLARANS(ClusterMixin, TransformerMixin, BaseEstimator):
         X = self._validate_data_compat(X, reset=False, ensure_min_samples=1)
 
         params = self.metric_params if self.metric_params is not None else {}
-        if not issparse(X) and not issparse(self.cluster_centers_):
-            scipy_metric = _map_scipy_metric(self.metric)
-            try:
-                return cdist(X, self.cluster_centers_, metric=scipy_metric, **params)
-            except Exception:
-                pass
-
-        return pairwise_distances(X, self.cluster_centers_, metric=self.metric, **params)
+        return _pairwise_fast(X, self.cluster_centers_, metric=self.metric, metric_params=params)
 
     def score(self, X: ArrayLike | "spmatrix", y: Any = None) -> float:
         """Opposite of the total distance of samples to their closest cluster center.
