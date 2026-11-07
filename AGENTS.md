@@ -346,7 +346,7 @@ These safeguards are tested in `test_regressions.py` and `test_robustness.py`:
 
 1. Delta tolerance: Accept swaps only when `total_delta < _delta_tolerance(cost)`, where `_delta_tolerance(cost) = -max(1e-16, 1e-12 * abs(cost))`. This prevents infinite swap loops caused by floating-point rounding when delta is near zero.
 2. Scikit-learn `score(X)`: Returns negative inertia (`-self.inertia_`) so higher values indicate better fits in `GridSearchCV`.
-3. Memory cleanup (`_precomputed_source`): Cleans up `self._precomputed_source` in a `finally` block if `fit()` raises an exception on precomputed matrices.
+3. Precomputed distance memory efficiency: Precomputed distance matrices never attach temporary full-matrix attributes (such as `_precomputed_source`) to `self`. Slices are extracted directly as 1D zero-copy row views (symmetric) or written into caller buffers (asymmetric), ensuring an $O(1)$ memory footprint without risking object instance memory leaks.
 4. Scikit-learn compatibility: Supports both modern `__sklearn_tags__` (scikit-learn >= 1.6) and legacy `_more_tags()`.
 5. Numerical overflow: Verifies costs with `np.isfinite()`. If values exceed float64 limits ($> 10^{160}$) and square Euclidean distances overflow to infinity, raises a `ValueError`.
 6. Thread safety for warnings: Cython fallback warnings (`_warn_cython_unavailable()`) use double-checked locking with `threading.Lock()` to avoid duplicate warnings under multithreading.

@@ -497,81 +497,75 @@ class CLARANS(ClusterMixin, TransformerMixin, BaseEstimator):
             loc_time = time.perf_counter() - loc_start
             return cost, medoids_idx, eval_cnt, swap_cnt, loc_time
 
-        try:
-            results = Parallel(n_jobs=self.n_jobs, prefer="threads")(
-                delayed(_run_single_search_restart)(loc_idx, seeds[loc_idx])
-                for loc_idx in range(self.num_local)
+        results = Parallel(n_jobs=self.n_jobs, prefer="threads")(
+            delayed(_run_single_search_restart)(loc_idx, seeds[loc_idx])
+            for loc_idx in range(self.num_local)
+        )
+
+        for loc_idx, (
+            current_cost,
+            current_medoids_indices,
+            eval_count,
+            swap_count,
+            loc_elapsed,
+        ) in enumerate(results):
+            total_eval_count += eval_count
+            total_swap_count += swap_count
+
+            tol = self._delta_tolerance(current_cost)
+            if (
+                loc_idx == 0
+                or not np.isfinite(best_cost)
+                or (np.isfinite(current_cost) and current_cost < best_cost + tol)
+            ):
+                best_cost = current_cost
+                best_medoids = current_medoids_indices.copy()
+                best_loc_idx = loc_idx
+                best_eval_count = eval_count
+                best_swap_count = swap_count
+
+        if best_medoids is None or not np.isfinite(best_cost):
+            raise ValueError(
+                f"Clustering failed: all local search iterations produced non-finite "
+                f"costs ({best_cost}). Check input data or distance metric."
             )
 
+        self.n_iter_ = best_eval_count
+        self.n_swaps_ = best_swap_count
+
+        if self.verbose:
             for loc_idx, (
                 current_cost,
-                current_medoids_indices,
+                _,
                 eval_count,
                 swap_count,
                 loc_elapsed,
             ) in enumerate(results):
-                total_eval_count += eval_count
-                total_swap_count += swap_count
-
-                tol = self._delta_tolerance(current_cost)
-                if (
-                    loc_idx == 0
-                    or not np.isfinite(best_cost)
-                    or (np.isfinite(current_cost) and current_cost < best_cost + tol)
-                ):
-                    best_cost = current_cost
-                    best_medoids = current_medoids_indices.copy()
-                    best_loc_idx = loc_idx
-                    best_eval_count = eval_count
-                    best_swap_count = swap_count
-
-            if best_medoids is None or not np.isfinite(best_cost):
-                raise ValueError(
-                    f"Clustering failed: all local search iterations produced non-finite "
-                    f"costs ({best_cost}). Check input data or distance metric."
+                stop = (
+                    "exhausted" if (eval_count - swap_count) < self.max_neighbors_ else "converged"
                 )
-
-            self.n_iter_ = best_eval_count
-            self.n_swaps_ = best_swap_count
-
-            if self.verbose:
-                for loc_idx, (
-                    current_cost,
-                    _,
-                    eval_count,
-                    swap_count,
-                    loc_elapsed,
-                ) in enumerate(results):
-                    stop = (
-                        "exhausted"
-                        if (eval_count - swap_count) < self.max_neighbors_
-                        else "converged"
+                star = "*" if loc_idx == best_loc_idx else " "
+                if self.verbose >= 2:
+                    print(
+                        f"    {loc_idx + 1:>2}  {current_cost:>14.5f}{star} "
+                        f" swaps={swap_count}, evals={eval_count}, "
+                        f"{loc_elapsed:.3f}s ({stop})"
                     )
-                    star = "*" if loc_idx == best_loc_idx else " "
-                    if self.verbose >= 2:
-                        print(
-                            f"    {loc_idx + 1:>2}  {current_cost:>14.5f}{star} "
-                            f" swaps={swap_count}, evals={eval_count}, "
-                            f"{loc_elapsed:.3f}s ({stop})"
-                        )
-                    else:
-                        print(
-                            f"    {loc_idx + 1:>1}  {current_cost:>14.5f}{star} "
-                            f"{swap_count:>5}  {eval_count:>5}  "
-                            f"{loc_elapsed:>7.3f}s  {stop}"
-                        )
+                else:
+                    print(
+                        f"    {loc_idx + 1:>1}  {current_cost:>14.5f}{star} "
+                        f"{swap_count:>5}  {eval_count:>5}  "
+                        f"{loc_elapsed:>7.3f}s  {stop}"
+                    )
 
-                total_elapsed = time.perf_counter() - start_fit_time
-                print(
-                    f"  Best: #{best_loc_idx + 1} | "
-                    f"Totals: {total_swap_count} swaps, "
-                    f"{total_eval_count} evals, {total_elapsed:.3f}s"
-                )
+            total_elapsed = time.perf_counter() - start_fit_time
+            print(
+                f"  Best: #{best_loc_idx + 1} | "
+                f"Totals: {total_swap_count} swaps, "
+                f"{total_eval_count} evals, {total_elapsed:.3f}s"
+            )
 
-            return self._finalize_fit(X, best_cost, best_medoids)
-        finally:
-            if hasattr(self, "_precomputed_source"):
-                del self._precomputed_source
+        return self._finalize_fit(X, best_cost, best_medoids)
 
     def _sample_candidate(
         self,
@@ -806,18 +800,8 @@ class CLARANS(ClusterMixin, TransformerMixin, BaseEstimator):
                 else:
                     is_sym = bool(np.allclose(X, X.T, rtol=1e-5, atol=1e-8))
 
-                if is_sym:
-                    self._precomputed_source = (
-                        X
-                        if (isinstance(X, np.ndarray) and X.flags.c_contiguous)
-                        else np.ascontiguousarray(X)
-                    )
-                    self._precomputed_is_sym = True
-                else:
-                    self._precomputed_source = np.ascontiguousarray(X.T)
-                    self._precomputed_is_sym = False
+                self._precomputed_is_sym = bool(is_sym)
             else:
-                self._precomputed_source = X
                 self._precomputed_is_sym = False
             return
 
@@ -881,28 +865,35 @@ class CLARANS(ClusterMixin, TransformerMixin, BaseEstimator):
             return res
         elif engine == "precomputed":
             if candidate_idx is not None:
-                source = getattr(self, "_precomputed_source", X)
-                if isinstance(source, np.ndarray):
-                    row_data = source[candidate_idx]
-                    if (
-                        out is not None
-                        and isinstance(out, np.ndarray)
-                        and out.shape[0] == row_data.shape[0]
-                        and out.dtype != row_data.dtype
-                    ):
-                        np.copyto(out, row_data)
+                if getattr(self, "_precomputed_is_sym", False):
+                    if isinstance(X, np.ndarray):
+                        row_data = X[candidate_idx]
+                        if (
+                            out is not None
+                            and isinstance(out, np.ndarray)
+                            and out.shape[0] == row_data.shape[0]
+                        ):
+                            if out.dtype != row_data.dtype or not row_data.flags.c_contiguous:
+                                np.copyto(out, row_data)
+                                return out
+                        return (
+                            row_data
+                            if row_data.flags.c_contiguous
+                            else np.ascontiguousarray(row_data)
+                        )
+                    col_data = X[candidate_idx]
+                    res = _to_dense(col_data).ravel()
+                    if out is not None and out.shape[0] == res.shape[0]:
+                        np.copyto(out, res)
                         return out
-                    return row_data
-                col_data = (
-                    source[candidate_idx]
-                    if getattr(self, "_precomputed_is_sym", False)
-                    else X[:, candidate_idx]
-                )
-                res = _to_dense(col_data).ravel()
-                if out is not None and out.shape[0] == res.shape[0]:
-                    np.copyto(out, res)
-                    return out
-                return res
+                    return np.ascontiguousarray(res)
+                else:
+                    col_data = X[:, candidate_idx]
+                    res = _to_dense(col_data).ravel()
+                    if out is not None and out.shape[0] == res.shape[0]:
+                        np.copyto(out, res)
+                        return out
+                    return np.ascontiguousarray(res)
             res = _to_dense(cand_row).ravel()
             if out is not None and out.shape[0] == res.shape[0]:
                 np.copyto(out, res)
