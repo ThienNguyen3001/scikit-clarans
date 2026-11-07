@@ -352,6 +352,7 @@ These safeguards are tested in `test_regressions.py` and `test_robustness.py`:
 6. Thread safety for warnings: Cython fallback warnings (`_warn_cython_unavailable()`) use double-checked locking with `threading.Lock()` to avoid duplicate warnings under multithreading.
 7. Precomputed matrix dimension flexibility: `predict()` and `transform()` accept either full test-to-train pairwise distance matrices of shape $(n_{test}, n_{train})$ or subset matrices of shape $(n_{test}, k)$ matching medoids.
 8. Candidate pool management: `_update_candidate_pool` efficiently maintains the boolean mask of available non-medoid candidates after swaps without re-filtering the entire dataset.
+9. Out-buffer contract and memory reuse: `_compute_1_vs_n` supports the NumPy/SciPy `out` buffer contract (`assert result is out`). At $N=50,000$, allocating a new distance array on every candidate evaluation generates ~800 MB of garbage per restart. Pre-allocating `d_xc_buf` and writing directly into it eliminates allocation churn. For `float32` inputs where SciPy `cdist` cannot write directly to non-float64 buffers, copying into the caller's buffer maintains both dtype polymorphism and the zero-allocation contract. Never remove or bypass this mechanism.
 
 ---
 
