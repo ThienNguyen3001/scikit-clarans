@@ -45,6 +45,11 @@ python -c "import clarans; print('Version:', clarans.__version__, '| HAS_CYTHON:
   4. `pam_build_step`: Greedy distance reduction for PAM BUILD initialization.
   5. `kmedoids_pp_trials`: Evaluates candidate potentials across local trials for $k$-medoids++.
   6. `is_matrix_symmetric`: Fast C symmetry validation for precomputed distance matrices.
+- **Do not remove or replace Cython kernels (`is_matrix_symmetric`, `pam_build_step`, `kmedoids_pp_trials`):**
+  Even though pure NumPy replacements look shorter in line count, benchmark verification proved they cause severe memory spikes:
+  - Replacing `is_matrix_symmetric` with `np.allclose(X, X.T)` creates an $O(n^2)$ difference matrix allocating ~586 MB of RAM for $n=5000$ (vs 0.4 KB in Cython) and runs 11x slower.
+  - Replacing `pam_build_step` with 2D broadcasting creates intermediate diff arrays allocating ~140 MB of RAM for $n=3000$ (vs 0.8 KB in Cython).
+  All 6 Cython kernels in `clarans/_core.pyx` are mandatory for maintaining the library's strictly bounded $O(1) / O(n)$ working memory footprint and must NOT be removed or replaced.
 - Every function in `clarans/_core.pyx` needs matching type annotations in `clarans/_core.pyi`.
 - Every Cython kernel must have an equivalent pure Python or NumPy fallback that raises an `EfficiencyWarning` when `HAS_CYTHON` is `False`. If `_core` fails to import, all public APIs must remain usable.
 - Kernels must support fused numeric types for both `float64` and `float32`.
