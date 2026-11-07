@@ -1,4 +1,5 @@
 import unittest
+import warnings
 
 import numpy as np
 from scipy.sparse import issparse
@@ -244,19 +245,41 @@ class TestCLARANS(unittest.TestCase):
         )
 
     def test_max_neighbors_default(self):
-        """Default max_neighbors should be 'auto' and calculated correctly."""
+        """Default max_neighbors should be None and calculated correctly."""
         clarans = CLARANS(n_clusters=3, num_local=1, random_state=42)
-        self.assertEqual(clarans.max_neighbors, "auto")
+        self.assertIsNone(clarans.max_neighbors)
         clarans.fit(self.X)
         expected = max(250, int(0.0125 * 3 * (100 - 3)))
         self.assertEqual(clarans.max_neighbors_, expected)
 
-    def test_max_neighbors_explicit_auto(self):
-        """Explicit max_neighbors='auto' should work identically to default."""
-        clarans = CLARANS(n_clusters=3, num_local=1, max_neighbors="auto", random_state=42)
-        clarans.fit(self.X)
+    def test_max_neighbors_explicit_none(self):
+        """Explicit max_neighbors=None should work without any deprecation warning."""
+        clarans = CLARANS(n_clusters=3, num_local=1, max_neighbors=None, random_state=42)
+        with warnings.catch_warnings(record=True) as w:
+            warnings.simplefilter("always")
+            clarans.fit(self.X)
+            future_warnings = [item for item in w if issubclass(item.category, FutureWarning)]
+            self.assertEqual(len(future_warnings), 0)
         expected = max(250, int(0.0125 * 3 * (100 - 3)))
         self.assertEqual(clarans.max_neighbors_, expected)
+
+    def test_max_neighbors_explicit_auto(self):
+        """Explicit max_neighbors='auto' should raise a FutureWarning and calculate correctly."""
+        clarans = CLARANS(n_clusters=3, num_local=1, max_neighbors="auto", random_state=42)
+        with warnings.catch_warnings(record=True) as w:
+            warnings.simplefilter("always")
+            clarans.fit(self.X)
+            future_warnings = [item for item in w if issubclass(item.category, FutureWarning)]
+            self.assertTrue(any("deprecated" in str(item.message) for item in future_warnings))
+        expected = max(250, int(0.0125 * 3 * (100 - 3)))
+        self.assertEqual(clarans.max_neighbors_, expected)
+
+    def test_max_neighbors_invalid(self):
+        """Invalid max_neighbors should raise ValueError."""
+        for invalid in ["invalid", 0, -5, 3.14]:
+            clarans = CLARANS(n_clusters=3, max_neighbors=invalid, random_state=42)
+            with self.assertRaises(ValueError):
+                clarans.fit(self.X)
 
     def test_max_neighbors_custom(self):
         """Custom max_neighbors should be used when provided."""
@@ -439,8 +462,8 @@ class TestCLARANSValidationAndPrecomputed(unittest.TestCase):
                 CLARANS(num_local=val).fit(self.X)
 
     def test_invalid_max_neighbors(self):
-        """Invalid max_neighbors (<= 0, None, float, bool, or bad str) should raise ValueError."""
-        for val in [0, -1, None, "invalid", 1.5, True, False]:
+        """Invalid max_neighbors (<= 0, float, bool, or bad str) should raise ValueError."""
+        for val in [0, -1, "invalid", 1.5, True, False]:
             with self.assertRaises(ValueError):
                 CLARANS(max_neighbors=val).fit(self.X)
 

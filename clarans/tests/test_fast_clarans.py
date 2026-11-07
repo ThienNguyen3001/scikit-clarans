@@ -1,4 +1,5 @@
 import unittest
+import warnings
 
 import numpy as np
 from sklearn.exceptions import NotFittedError
@@ -154,7 +155,7 @@ class TestFastCLARANS(unittest.TestCase):
             FastCLARANS(n_clusters=0).fit(self.X)
         with self.assertRaises(ValueError):
             FastCLARANS(num_local=0).fit(self.X)
-        for val in [0, -1, None, "invalid", 1.5, True, False]:
+        for val in [0, -1, "invalid", 1.5, True, False]:
             with self.assertRaises(ValueError):
                 FastCLARANS(max_neighbors=val).fit(self.X)
         with self.assertRaises(TypeError):
@@ -274,17 +275,32 @@ class TestFastCLARANS(unittest.TestCase):
         self.assertFalse(hasattr(model, "maxneighbor_"))
 
     def test_max_neighbors_default(self):
-        """Default max_neighbors should be 'auto' and calculated correctly in FastCLARANS."""
+        """Default max_neighbors should be None and calculated correctly in FastCLARANS."""
         model = FastCLARANS(n_clusters=3, num_local=1, random_state=42)
-        self.assertEqual(model.max_neighbors, "auto")
+        self.assertIsNone(model.max_neighbors)
         model.fit(self.X)
         expected = max(1, int(250 / 3), int(0.025 * (100 - 3)))
         self.assertEqual(model.max_neighbors_, expected)
 
+    def test_max_neighbors_explicit_none(self):
+        """Explicit max_neighbors=None should work without any deprecation warning."""
+        model = FastCLARANS(n_clusters=3, num_local=1, max_neighbors=None, random_state=42)
+        with warnings.catch_warnings(record=True) as w:
+            warnings.simplefilter("always")
+            model.fit(self.X)
+            future_warnings = [item for item in w if issubclass(item.category, FutureWarning)]
+            self.assertEqual(len(future_warnings), 0)
+        expected = max(1, int(250 / 3), int(0.025 * (100 - 3)))
+        self.assertEqual(model.max_neighbors_, expected)
+
     def test_max_neighbors_explicit_auto(self):
-        """Explicit max_neighbors='auto' should work identically to default in FastCLARANS."""
+        """Explicit max_neighbors='auto' should raise a FutureWarning and calculate correctly."""
         model = FastCLARANS(n_clusters=3, num_local=1, max_neighbors="auto", random_state=42)
-        model.fit(self.X)
+        with warnings.catch_warnings(record=True) as w:
+            warnings.simplefilter("always")
+            model.fit(self.X)
+            future_warnings = [item for item in w if issubclass(item.category, FutureWarning)]
+            self.assertTrue(any("deprecated" in str(item.message) for item in future_warnings))
         expected = max(1, int(250 / 3), int(0.025 * (100 - 3)))
         self.assertEqual(model.max_neighbors_, expected)
 

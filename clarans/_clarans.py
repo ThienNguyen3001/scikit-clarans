@@ -76,13 +76,15 @@ class CLARANS(ClusterMixin, TransformerMixin, BaseEstimator):
         poor local minima. Increasing this improves solution quality but
         increases runtime.
 
-    max_neighbors : int or 'auto', default='auto'
+    max_neighbors : int, str or None, default=None
         The maximum number of neighbors (random swaps) to examine during
-        each step. If ``'auto'``, it defaults to ``max(250, 1.25% of k*(n-k))``
+        each step. If ``None`` (default), it defaults to ``max(250, 1.25% of k*(n-k))``
         as recommended in the original paper (Ng & Han, 2002). This adaptive
         default balances runtime and solution quality automatically without
         requiring manual tuning. Higher values make the algorithm behave more
         like PAM (checking more neighbors); lower values make it faster.
+        The option ``'auto'`` is deprecated in version 0.4.1 and will be removed
+        in version 0.5.0; use ``None`` instead.
 
         .. note::
             In CLARANS, each neighbor evaluation tests a single randomly chosen
@@ -225,7 +227,7 @@ class CLARANS(ClusterMixin, TransformerMixin, BaseEstimator):
         *,
         n_clusters: int = 8,
         num_local: int = 2,
-        max_neighbors: int | str = "auto",
+        max_neighbors: int | str | None = None,
         init: str | ArrayLike = "k-medoids++",
         metric: str | Any = "euclidean",
         metric_params: dict[str, Any] | None = None,
@@ -344,7 +346,7 @@ class CLARANS(ClusterMixin, TransformerMixin, BaseEstimator):
 
     def _init_search_budget(self, n_samples: int) -> None:
         """Initialize max_neighbors_ and neighborhood_size_ search budget."""
-        if self.max_neighbors == "auto":
+        if self.max_neighbors is None or self.max_neighbors == "auto":
             self.max_neighbors_ = max(
                 250, int(0.0125 * self.n_clusters * (n_samples - self.n_clusters))
             )
@@ -989,9 +991,17 @@ class CLARANS(ClusterMixin, TransformerMixin, BaseEstimator):
             raise ValueError(f"n_clusters must be >= 1; got {self.n_clusters}")
         if not _is_valid_int(self.num_local, min_val=1):
             raise ValueError(f"num_local must be >= 1; got {self.num_local}")
-        if self.max_neighbors != "auto" and not _is_valid_int(self.max_neighbors, min_val=1):
+        if self.max_neighbors == "auto":
+            warnings.warn(
+                "The 'auto' option for max_neighbors is deprecated in version 0.4.1 "
+                "and will be removed in version 0.5.0. Use max_neighbors=None instead.",
+                FutureWarning,
+                stacklevel=2,
+            )
+        elif self.max_neighbors is not None and not _is_valid_int(self.max_neighbors, min_val=1):
             raise ValueError(
-                f"max_neighbors must be an integer >= 1 or 'auto'; got {self.max_neighbors!r}"
+                f"max_neighbors must be an integer >= 1, 'auto' (deprecated), or None; "
+                f"got {self.max_neighbors!r}"
             )
         if self.cost_evaluation not in {"delta", "brute_force"}:
             raise ValueError(

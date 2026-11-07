@@ -52,13 +52,15 @@ class FastCLARANS(CLARANS):
         increase the chance of finding a better minimum at the cost of
         additional runtime.
 
-    max_neighbors : int or 'auto', default='auto'
+    max_neighbors : int, str or None, default=None
         The maximum number of non-medoid candidates to sample per local
-        search. If ``'auto'``, defaults to ``max(1, int(250 / k), int(0.025 * (n - k)))``
+        search. If ``None`` (default), defaults to ``max(1, int(250 / k), int(0.025 * (n - k)))``
         combining the 2.5% non-medoid sample recommended by Schubert & Rousseeuw
         (2021) with a proportional floor equivalent to 250 edge evaluations
         (Ng & Han, 2002). This adaptive default automatically scales with dataset
         size without requiring manual tuning.
+        The option ``'auto'`` is deprecated in version 0.4.1 and will be removed
+        in version 0.5.0; use ``None`` instead.
 
 
         .. note::
@@ -77,7 +79,7 @@ class FastCLARANS(CLARANS):
             many more improving swaps and continuing to optimize deeper.
 
             For fair comparison and optimal performance, keep the default
-            ``'auto'``, which provides equivalent search budgets and ensures
+            ``None``, which provides equivalent search budgets and ensures
             FastCLARANS is both significantly faster and achieves lower inertia.
 
 
@@ -180,7 +182,7 @@ class FastCLARANS(CLARANS):
         *,
         n_clusters: int = 8,
         num_local: int = 2,
-        max_neighbors: int | str = "auto",
+        max_neighbors: int | str | None = None,
         init: str | ArrayLike = "k-medoids++",
         metric: str | Any = "euclidean",
         metric_params: dict[str, Any] | None = None,
@@ -203,7 +205,7 @@ class FastCLARANS(CLARANS):
 
     def _init_search_budget(self, n_samples: int) -> None:
         """Initialize max_neighbors_ and neighborhood_size_ search budget for FastCLARANS."""
-        if self.max_neighbors == "auto":
+        if self.max_neighbors is None or self.max_neighbors == "auto":
             # Sample 2.5% of non-medoid points (Schubert & Rousseeuw, 2021)
             # with a floor of 250 // k to evaluate at least 250 edges per restart.
             self.max_neighbors_ = max(

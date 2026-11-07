@@ -246,8 +246,8 @@ pip install --index-url https://test.pypi.org/simple/ --extra-index-url https://
 - `n_clusters`: Number of clusters ($k$).
 - `num_local`: Number of local search restarts (typically 2 to 5).
 - `max_neighbors`: Neighbor sampling budget per local search:
-  - `FastCLARANS`: Default `'auto'` sets $\max(1, \lfloor 250 / k \rfloor, \lfloor 0.025(n - k) \rfloor)$ non-medoid candidates (Schubert & Rousseeuw, 2021).
-  - `CLARANS`: Default `'auto'` sets $\max(250, \lfloor 0.0125 \cdot k(n - k) \rfloor)$ edge evaluations (Ng & Han, 2002).
+  - `FastCLARANS`: Default `None` (formerly `'auto'`, deprecated in 0.4.1, to be removed in 0.5.0) sets $\max(1, \lfloor 250 / k \rfloor, \lfloor 0.025(n - k) \rfloor)$ non-medoid candidates (Schubert & Rousseeuw, 2021).
+  - `CLARANS`: Default `None` (formerly `'auto'`, deprecated in 0.4.1, to be removed in 0.5.0) sets $\max(250, \lfloor 0.0125 \cdot k(n - k) \rfloor)$ edge evaluations (Ng & Han, 2002).
   - Avoid small integer constants (like 40), which trigger premature stagnation.
 - `n_jobs`: Number of parallel jobs across `num_local` search restarts (`None` or integer, `-1` uses all processors). Parallelized with `joblib.Parallel(prefer="threads")` exploiting Cython `nogil` blocks with deterministic seed splitting.
 - `cost_evaluation`: Strategy for swap evaluation (`CLARANS` only):
