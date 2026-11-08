@@ -231,18 +231,15 @@ class FastCLARANS(CLARANS):
 
     def _evaluate_candidate_swap(
         self,
-        candidate_idx: int,
         d_xc: np.ndarray,
         near_idx_map: np.ndarray | None,
         near_dist: np.ndarray | None,
         second_dist: np.ndarray | None,
         current_cost: float,
         can_use_cython: bool,
-        delta_arr_buf: np.ndarray | None,
-        medoid_pos: int | None,
         n_samples: int,
-        current_medoids_indices: np.ndarray,
-        X: Any,
+        medoid_pos: int | None = None,
+        delta_arr_buf: np.ndarray | None = None,
     ) -> tuple[int, float]:
         """Evaluate candidate swap against all k medoids simultaneously via FastPAM1."""
         if self.n_clusters == 1:

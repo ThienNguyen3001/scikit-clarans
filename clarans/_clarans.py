@@ -583,18 +583,15 @@ class CLARANS(ClusterMixin, TransformerMixin, BaseEstimator):
 
     def _evaluate_candidate_swap(
         self,
-        candidate_idx: int,
         d_xc: np.ndarray,
         near_idx_map: np.ndarray | None,
         near_dist: np.ndarray | None,
         second_dist: np.ndarray | None,
         current_cost: float,
         can_use_cython: bool,
-        delta_arr_buf: np.ndarray | None,
-        medoid_pos: int | None,
         n_samples: int,
-        current_medoids_indices: np.ndarray,
-        X: Any,
+        medoid_pos: int | None = None,
+        delta_arr_buf: np.ndarray | None = None,
     ) -> tuple[int, float]:
         """Evaluate a candidate swap for classic CLARANS (single random edge)."""
         assert medoid_pos is not None
@@ -699,18 +696,15 @@ class CLARANS(ClusterMixin, TransformerMixin, BaseEstimator):
                 d_xc = self._compute_1_vs_n(cand_row, X, out=d_xc_buf, candidate_idx=candidate_idx)
 
                 swap_medoid_pos, total_delta = self._evaluate_candidate_swap(
-                    candidate_idx,
                     d_xc,
                     near_idx_map,
                     near_dist,
                     second_dist,
                     current_cost,
                     can_use_cython,
-                    delta_arr_buf,
-                    medoid_pos,
                     n_samples,
-                    current_medoids_indices,
-                    X,
+                    medoid_pos,
+                    delta_arr_buf,
                 )
 
                 delta_tol = self._delta_tolerance(current_cost)
@@ -768,8 +762,6 @@ class CLARANS(ClusterMixin, TransformerMixin, BaseEstimator):
                         )
                 else:
                     i += 1
-
-        return current_cost, current_medoids_indices, eval_count, swap_count
 
         return current_cost, current_medoids_indices, eval_count, swap_count
 
@@ -860,11 +852,6 @@ class CLARANS(ClusterMixin, TransformerMixin, BaseEstimator):
                 )
                 return out
             res = cdist(cand_row, X, metric=self._scipy_metric, **params)[0]
-            if out is not None and out.shape[0] == res.shape[0]:
-                if out is not res:
-                    np.copyto(out, res)
-                return out
-            return res
         elif engine == "precomputed":
             if candidate_idx is not None:
                 if getattr(self, "_precomputed_is_sym", False):
@@ -885,34 +872,21 @@ class CLARANS(ClusterMixin, TransformerMixin, BaseEstimator):
                         )
                     col_data = X[candidate_idx]
                     res = _to_dense(col_data).ravel()
-                    if out is not None and out.shape[0] == res.shape[0]:
-                        np.copyto(out, res)
-                        return out
-                    return np.ascontiguousarray(res)
                 else:
                     col_data = X[:, candidate_idx]
                     res = _to_dense(col_data).ravel()
-                    if out is not None and out.shape[0] == res.shape[0]:
-                        np.copyto(out, res)
-                        return out
-                    return np.ascontiguousarray(res)
-            res = _to_dense(cand_row).ravel()
-            if out is not None and out.shape[0] == res.shape[0]:
-                np.copyto(out, res)
-                return out
-            return res
+            else:
+                res = _to_dense(cand_row).ravel()
         elif engine == "distance_metric" and self._dm_instance is not None:
             res = self._dm_instance.pairwise(X, cand_row).ravel()
-            if out is not None and out.shape[0] == res.shape[0]:
-                np.copyto(out, res)
-                return out
-            return res
         else:
             res = pairwise_distances(X, cand_row, metric=self.metric, **params).ravel()
-            if out is not None and out.shape[0] == res.shape[0]:
+
+        if out is not None and out.shape[0] == res.shape[0]:
+            if out is not res:
                 np.copyto(out, res)
-                return out
-            return res
+            return out
+        return res if res.flags.c_contiguous else np.ascontiguousarray(res)
 
     def _compute_medoids_distances(
         self, X: np.ndarray | "spmatrix", medoids_indices: Sequence[int] | np.ndarray

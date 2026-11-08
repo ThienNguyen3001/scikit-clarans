@@ -183,6 +183,21 @@ def initialize_build(
     return np.array(medoids, dtype=int)
 
 
+def _sample_distinct_candidate(
+    rng: np.random.RandomState,
+    n_samples: int,
+    current_medoids: np.ndarray,
+) -> int:
+    """Sample a random sample index not in current_medoids in O(1) expected memory and time."""
+    medoids_set = set(current_medoids)
+    for _ in range(100):
+        cand = int(rng.randint(0, n_samples))
+        if cand not in medoids_set:
+            return cand
+    remaining = np.setdiff1d(np.arange(n_samples), current_medoids)
+    return int(rng.choice(remaining))
+
+
 def initialize_k_medoids_plus_plus(
     X: Any,
     n_clusters: int,
@@ -256,9 +271,7 @@ def initialize_k_medoids_plus_plus(
 
     for c in range(1, n_clusters):
         if current_pot <= 1e-16:
-            remaining = np.setdiff1d(np.arange(n_samples), medoid_indices[:c])
-            chosen_candidate = int(rng.choice(remaining))
-            medoid_indices[c] = chosen_candidate
+            medoid_indices[c] = _sample_distinct_candidate(rng, n_samples, medoid_indices[:c])
             continue
 
         rand_vals = rng.random_sample(n_local_trials) * current_pot
@@ -323,8 +336,7 @@ def initialize_k_medoids_plus_plus(
                     best_dist_sq = new_dist_sq
 
         if best_candidate is None:
-            remaining = np.setdiff1d(np.arange(n_samples), medoid_indices[:c])
-            best_candidate = int(rng.choice(remaining))
+            best_candidate = _sample_distinct_candidate(rng, n_samples, medoid_indices[:c])
             if metric == "precomputed":
                 row_dist = _to_dense(X[:, best_candidate]).ravel()
             else:
