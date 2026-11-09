@@ -116,3 +116,12 @@ exclude = '''
   | dist
 )/
 '''
+
+[tool.coverage.run]
+source = ["clarans"]
+omit = [
+    "clarans/tests/*",
+]
+
+[tool.coverage.report]
+show_missing = true

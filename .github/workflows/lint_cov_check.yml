@@ -41,3 +41,10 @@ jobs:
       - name: Run Tests with Coverage
         run: |
           python -m pytest --cov=clarans --cov-report=term --cov-report=xml
+
+      - name: Upload coverage reports to Codecov
+        uses: codecov/codecov-action@v5
+        with:
+          token: ${{ secrets.CODECOV_TOKEN }}
+          files: ./coverage.xml
+          fail_ci_if_error: false
