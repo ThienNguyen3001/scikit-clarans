@@ -76,7 +76,7 @@ def _pairwise_fast(
             return cdist(X, Y_eff, metric=mapped, **params)
         except Exception:
             pass
-    if not (issparse(X) and not isinstance(metric, str)):
+    if not issparse(X) or isinstance(metric, str):
         try:
             dm = DistanceMetric.get_metric(metric, **params)
             return dm.pairwise(X) if Y is None else dm.pairwise(X, Y_eff)
@@ -90,11 +90,11 @@ def _to_dense(arr: Any) -> np.ndarray:
     return arr.toarray() if hasattr(arr, "toarray") else np.asarray(arr)
 
 
-def _is_valid_int(val: Any, min_val: int = 1, allow_bool: bool = False) -> bool:
+def _is_valid_int(val: Any, min_val: int | None = 1, allow_bool: bool = False) -> bool:
     """Check if value is a valid integer >= min_val and optionally allow booleans."""
     if isinstance(val, (bool, np.bool_)):
-        return bool(allow_bool and val >= min_val)
-    return bool(isinstance(val, (int, np.integer)) and val >= min_val)
+        return bool(allow_bool and (min_val is None or val >= min_val))
+    return bool(isinstance(val, (int, np.integer)) and (min_val is None or val >= min_val))
 
 
 def _map_scipy_metric(metric: str | Callable) -> str | Callable:
@@ -192,7 +192,5 @@ def calculate_cost(
         return float(np.sum(np.min(dist_sub, axis=1)))
 
     medoids = X[medoid_indices]
-    params = metric_params if metric_params is not None else {}
-
-    D = _pairwise_fast(X, medoids, metric=metric, metric_params=params)
+    D = _pairwise_fast(X, medoids, metric=metric, metric_params=metric_params)
     return float(np.sum(np.min(D, axis=1)))
