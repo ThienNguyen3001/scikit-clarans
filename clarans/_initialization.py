@@ -26,9 +26,6 @@ def _check_init_args(X: Any, n_clusters: int) -> int:
     return n_samples
 
 
-_compute_pairwise_distances = _pairwise_fast
-
-
 def initialize_heuristic(
     X: Any,
     n_clusters: int,
@@ -74,7 +71,7 @@ def initialize_heuristic(
     if metric == "precomputed":
         D = X
     else:
-        D = _compute_pairwise_distances(X, metric=metric, metric_params=metric_params)
+        D = _pairwise_fast(X, metric=metric, metric_params=metric_params)
 
     dist_sums = np.asarray(D.sum(axis=0)).ravel()
     current_medoids_indices = np.argpartition(dist_sums, n_clusters - 1)[:n_clusters]
@@ -126,7 +123,7 @@ def initialize_build(
     """
     n_samples = _check_init_args(X, n_clusters)
 
-    medoids = []
+    medoid_indices = np.empty(n_clusters, dtype=int)
 
     if metric == "precomputed":
         if hasattr(X, "toarray"):
@@ -141,11 +138,11 @@ def initialize_build(
             )
         D = _to_dense(X)
     else:
-        D = _compute_pairwise_distances(X, metric=metric, metric_params=metric_params)
+        D = _pairwise_fast(X, metric=metric, metric_params=metric_params)
 
     dist_sums = np.asarray(D.sum(axis=0)).ravel()
     first_medoid = int(np.argmin(dist_sums))
-    medoids.append(first_medoid)
+    medoid_indices[0] = first_medoid
 
     use_cython_build = (
         _core is not None
@@ -162,7 +159,7 @@ def initialize_build(
         else D[:, first_medoid]
     )
 
-    for _ in range(1, n_clusters):
+    for c in range(1, n_clusters):
         candidate_indices = np.flatnonzero(~is_medoid)
         if use_cython_build:
             cand_c = np.ascontiguousarray(candidate_indices, dtype=np.intp)
@@ -176,11 +173,11 @@ def initialize_build(
             gains = np.sum(np.maximum(diffs, 0), axis=0)
             best_candidate = int(candidate_indices[np.argmax(gains)])
 
-        medoids.append(best_candidate)
+        medoid_indices[c] = best_candidate
         is_medoid[best_candidate] = True
         dist_to_nearest = np.minimum(dist_to_nearest, D[:, best_candidate])
 
-    return np.array(medoids, dtype=int)
+    return medoid_indices
 
 
 def _sample_distinct_candidate(
@@ -259,7 +256,7 @@ def initialize_k_medoids_plus_plus(
         closest = _to_dense(X[:, first_medoid]).ravel()
     else:
         first_row = X[first_medoid : first_medoid + 1]
-        closest = _compute_pairwise_distances(
+        closest = _pairwise_fast(
             X,
             first_row,
             metric=metric,
@@ -286,9 +283,7 @@ def initialize_k_medoids_plus_plus(
             dists_candidates = np.ascontiguousarray((cols_dense.T) ** 2)
         else:
             candidates_X = X[candidate_ids]
-            cand_dists = _compute_pairwise_distances(
-                X, candidates_X, metric=metric, metric_params=metric_params
-            )
+            cand_dists = _pairwise_fast(X, candidates_X, metric=metric, metric_params=metric_params)
             dists_candidates = np.ascontiguousarray((cand_dists.T) ** 2)
 
         best_candidate = None
@@ -341,7 +336,7 @@ def initialize_k_medoids_plus_plus(
                 row_dist = _to_dense(X[:, best_candidate]).ravel()
             else:
                 cand_row = X[best_candidate : best_candidate + 1]
-                row_dist = _compute_pairwise_distances(
+                row_dist = _pairwise_fast(
                     X, cand_row, metric=metric, metric_params=metric_params
                 ).ravel()
             best_dist_sq = np.minimum(closest_dist_sq, row_dist**2)
