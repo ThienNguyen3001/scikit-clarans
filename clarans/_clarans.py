@@ -6,7 +6,7 @@ from typing import TYPE_CHECKING, Any, Sequence
 
 import numpy as np
 from numpy.typing import ArrayLike
-from joblib import Parallel, delayed
+from joblib import Parallel, delayed, effective_n_jobs
 from scipy.spatial.distance import cdist
 from scipy.sparse import issparse
 from sklearn.base import BaseEstimator, ClusterMixin, TransformerMixin
@@ -480,10 +480,15 @@ class CLARANS(ClusterMixin, TransformerMixin, BaseEstimator):
         def _run_single_search_restart(
             loc_idx: int,
             seed: int,
+            preallocated_buffer: np.ndarray | None = None,
         ) -> tuple[float, np.ndarray, int, int, float]:
             loc_start = time.perf_counter()
             worker_rng = np.random.RandomState(seed)
-            d_xc_buf = self._allocate_search_buffers(X, n_samples)
+            d_xc_buf = (
+                preallocated_buffer
+                if preallocated_buffer is not None
+                else self._allocate_search_buffers(X, n_samples)
+            )
             cost, medoids_idx, eval_cnt, swap_cnt = self._single_local_search(
                 X,
                 worker_rng,
@@ -494,10 +499,20 @@ class CLARANS(ClusterMixin, TransformerMixin, BaseEstimator):
             loc_time = time.perf_counter() - loc_start
             return cost, medoids_idx, eval_cnt, swap_cnt, loc_time
 
-        results = Parallel(n_jobs=self.n_jobs, prefer="threads")(
-            delayed(_run_single_search_restart)(loc_idx, seeds[loc_idx])
-            for loc_idx in range(self.num_local)
-        )
+        n_jobs_eff = effective_n_jobs(self.n_jobs)
+        if self.num_local == 1 or n_jobs_eff == 1:
+            # Fast sequential path: allocate scratch buffer once and reuse across restarts
+            d_xc_buf = self._allocate_search_buffers(X, n_samples)
+            results = [
+                _run_single_search_restart(loc_idx, seeds[loc_idx], preallocated_buffer=d_xc_buf)
+                for loc_idx in range(self.num_local)
+            ]
+        else:
+            # Parallel path: run restarts concurrently using lightweight threads
+            results = Parallel(n_jobs=self.n_jobs, prefer="threads")(
+                delayed(_run_single_search_restart)(loc_idx, seeds[loc_idx])
+                for loc_idx in range(self.num_local)
+            )
 
         for loc_idx, (
             current_cost,
