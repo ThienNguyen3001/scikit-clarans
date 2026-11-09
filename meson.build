@@ -11,7 +11,6 @@ project(
 )
 
 py = import('python').find_installation(pure: false)
-cc = meson.get_compiler('c')
 
 # NumPy C API include directory
 incdir_numpy = run_command(py,
