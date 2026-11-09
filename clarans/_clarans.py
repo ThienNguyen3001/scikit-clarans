@@ -36,17 +36,13 @@ from .utils import (
     calculate_cost,
 )
 
-_DM_METRICS = set(_VALID_METRICS)
-
-_CDIST_EXTRA_METRICS = {"jensenshannon"}
 _EXCLUDED_METRICS = {"kulczynski1", "wminkowski"}
 
 _ALL_VALID_METRICS = frozenset(
     (
         set(PAIRWISE_DISTANCE_FUNCTIONS.keys())
-        | _DM_METRICS
-        | _CDIST_EXTRA_METRICS
-        | {"precomputed"}
+        | set(_VALID_METRICS)
+        | {"jensenshannon", "precomputed"}
         | set(_SCIPY_METRIC_MAP.keys())
     )
     - _EXCLUDED_METRICS
@@ -355,14 +351,14 @@ class CLARANS(ClusterMixin, TransformerMixin, BaseEstimator):
 
         self.neighborhood_size_ = self.n_clusters * (n_samples - self.n_clusters)
 
-    def _allocate_search_buffers(self, X: Any, n_samples: int) -> dict[str, np.ndarray]:
+    def _allocate_search_buffers(self, X: Any, n_samples: int) -> np.ndarray:
         """Pre-allocate reusable scratch buffers for neighbor evaluations."""
         buf_dtype = (
             np.float32
             if (self.metric == "precomputed" and getattr(X, "dtype", None) == np.float32)
             else np.float64
         )
-        return {"d_xc_buf": np.empty(n_samples, dtype=buf_dtype)}
+        return np.empty(n_samples, dtype=buf_dtype)
 
     @staticmethod
     def _delta_tolerance(cost: float) -> float:
@@ -487,13 +483,12 @@ class CLARANS(ClusterMixin, TransformerMixin, BaseEstimator):
         ) -> tuple[float, np.ndarray, int, int, float]:
             loc_start = time.perf_counter()
             worker_rng = np.random.RandomState(seed)
-            bufs = self._allocate_search_buffers(X, n_samples)
+            d_xc_buf = self._allocate_search_buffers(X, n_samples)
             cost, medoids_idx, eval_cnt, swap_cnt = self._single_local_search(
                 X,
                 worker_rng,
                 deterministic_medoids,
-                d_xc_buf=bufs["d_xc_buf"],
-                delta_arr_buf=bufs.get("delta_arr_buf"),
+                d_xc_buf=d_xc_buf,
                 loc_idx=loc_idx + 1,
             )
             loc_time = time.perf_counter() - loc_start
@@ -815,7 +810,7 @@ class CLARANS(ClusterMixin, TransformerMixin, BaseEstimator):
 
         # Sparse arrays with string metric or dense arrays with custom metrics: DistanceMetric.
         # Note: PyFuncDistance in DistanceMetric does not support sparse matrices (returns -999.0).
-        if not (issparse(X) and not isinstance(self.metric, str)):
+        if not issparse(X) or isinstance(self.metric, str):
             try:
                 self._dm_instance = DistanceMetric.get_metric(self.metric, **params)
                 test_dist = self._dm_instance.pairwise(X[:1], X[:1])
@@ -990,9 +985,7 @@ class CLARANS(ClusterMixin, TransformerMixin, BaseEstimator):
             )
 
         if self.n_jobs is not None:
-            if isinstance(self.n_jobs, (bool, np.bool_)) or not isinstance(
-                self.n_jobs, (int, np.integer)
-            ):
+            if not _is_valid_int(self.n_jobs, min_val=None):
                 raise ValueError(
                     f"The 'n_jobs' parameter of {self.__class__.__name__} "
                     f"must be an integer or None. Got {self.n_jobs!r} instead."
@@ -1116,8 +1109,8 @@ class CLARANS(ClusterMixin, TransformerMixin, BaseEstimator):
 
         Notes
         -----
-        This method uses ``pairwise_distances_argmin_min`` from scikit-learn
-        to assign each sample to the nearest medoid.
+        This method computes distances to fitted medoids using the configured
+        distance engine and assigns each sample to the nearest medoid via ``argmin``.
         """
         check_is_fitted(self)
 
