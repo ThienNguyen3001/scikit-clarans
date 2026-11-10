@@ -140,5 +140,36 @@ def remove_gallery_nested_toctree(app, docname, source):
         )
 
 
+def adjust_github_link(app, pagename, templatename, context, doctree):
+    """Map Sphinx-Gallery generated pages to their real source files in Git.
+
+    Generated example pages live under auto_examples/ as .rst files during build,
+    which do not exist in the Git repository and lead to 404 on GitHub.
+    This hook redirects the 'Edit on GitHub' links for:
+    - Example scripts (plot_*.rst -> examples/.../plot_*.py)
+    - Gallery index (auto_examples/index.rst -> examples/README.rst)
+    - Disables the button on purely auto-generated timing/category index pages.
+    """
+    norm_page = pagename.replace("\\", "/")
+    if norm_page.startswith("auto_examples/"):
+        if norm_page.split("/")[-1].startswith("plot_"):
+            py_page = norm_page.replace("auto_examples/", "examples/", 1) + ".py"
+            if context.get("meta") is None:
+                context["meta"] = {}
+            context["meta"][
+                "github_url"
+            ] = f"https://github.com/ThienNguyen3001/scikit-clarans/blob/main/{py_page}"
+        elif norm_page == "auto_examples/index":
+            if context.get("meta") is None:
+                context["meta"] = {}
+            context["meta"][
+                "github_url"
+            ] = "https://github.com/ThienNguyen3001/scikit-clarans/blob/main/examples/README.rst"
+        else:
+            context["display_github"] = False
+            context["display_vcs_links"] = False
+
+
 def setup(app):
     app.connect("source-read", remove_gallery_nested_toctree)
+    app.connect("html-page-context", adjust_github_link)
