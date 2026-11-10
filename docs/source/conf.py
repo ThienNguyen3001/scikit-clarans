@@ -100,15 +100,14 @@ html_theme_options = {
     "includehidden": True,
     "titles_only": True,
 }
+html_context = {
+    "display_github": True,
+    "github_user": "ThienNguyen3001",
+    "github_repo": "scikit-clarans",
+    "github_version": "main",
+    "conf_py_path": "/docs/source/",
+}
 html_static_path = ["_static"]
-
-html_css_files = [
-    "github-link.css",
-]
-
-html_js_files = [
-    "github-link.js",
-]
 
 html_sidebars = {
     "**": [
