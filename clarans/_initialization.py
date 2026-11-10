@@ -12,16 +12,10 @@ import warnings
 from typing import Any, Callable
 
 import numpy as np
-from scipy.spatial.distance import cdist
 from scipy.sparse import issparse
-from sklearn.metrics import (
-    DistanceMetric,
-    pairwise_distances,
-    pairwise_distances_argmin_min,
-)
 from sklearn.utils import check_array, check_random_state
 
-from .utils import _core, _map_scipy_metric, _to_dense, check_medoids
+from .utils import _core, _pairwise_fast, _to_dense, check_medoids
 
 
 def _check_init_args(X: Any, n_clusters: int) -> int:
@@ -30,33 +24,6 @@ def _check_init_args(X: Any, n_clusters: int) -> int:
     if n_clusters >= n_samples:
         raise ValueError(f"n_clusters must be less than n_samples ({n_samples}); got {n_clusters}")
     return n_samples
-
-
-def _compute_pairwise_distances(
-    X: Any,
-    Y: Any = None,
-    metric: str | Callable = "euclidean",
-    metric_params: dict[str, Any] | None = None,
-) -> np.ndarray:
-    """Compute pairwise distances using cdist for dense arrays when possible,
-    falling back to scikit-learn's DistanceMetric and pairwise_distances."""
-    scipy_metric = _map_scipy_metric(metric)
-    params = metric_params if metric_params is not None else {}
-    Y_eff = X if Y is None else Y
-
-    if not issparse(X) and not issparse(Y_eff):
-        try:
-            return cdist(X, Y_eff, metric=scipy_metric, **params)
-        except Exception:
-            pass
-    elif isinstance(scipy_metric, str):
-        try:
-            dm = DistanceMetric.get_metric(scipy_metric, **params)
-            return dm.pairwise(X) if Y is None else dm.pairwise(X, Y_eff)
-        except Exception:
-            pass
-
-    return pairwise_distances(X, Y, metric=scipy_metric, **params)
 
 
 def initialize_heuristic(
@@ -104,7 +71,7 @@ def initialize_heuristic(
     if metric == "precomputed":
         D = X
     else:
-        D = _compute_pairwise_distances(X, metric=metric, metric_params=metric_params)
+        D = _pairwise_fast(X, metric=metric, metric_params=metric_params)
 
     dist_sums = np.asarray(D.sum(axis=0)).ravel()
     current_medoids_indices = np.argpartition(dist_sums, n_clusters - 1)[:n_clusters]
@@ -156,7 +123,7 @@ def initialize_build(
     """
     n_samples = _check_init_args(X, n_clusters)
 
-    medoids = []
+    medoid_indices = np.empty(n_clusters, dtype=int)
 
     if metric == "precomputed":
         if hasattr(X, "toarray"):
@@ -171,11 +138,11 @@ def initialize_build(
             )
         D = _to_dense(X)
     else:
-        D = _compute_pairwise_distances(X, metric=metric, metric_params=metric_params)
+        D = _pairwise_fast(X, metric=metric, metric_params=metric_params)
 
     dist_sums = np.asarray(D.sum(axis=0)).ravel()
     first_medoid = int(np.argmin(dist_sums))
-    medoids.append(first_medoid)
+    medoid_indices[0] = first_medoid
 
     use_cython_build = (
         _core is not None
@@ -192,7 +159,7 @@ def initialize_build(
         else D[:, first_medoid]
     )
 
-    for _ in range(1, n_clusters):
+    for c in range(1, n_clusters):
         candidate_indices = np.flatnonzero(~is_medoid)
         if use_cython_build:
             cand_c = np.ascontiguousarray(candidate_indices, dtype=np.intp)
@@ -206,11 +173,26 @@ def initialize_build(
             gains = np.sum(np.maximum(diffs, 0), axis=0)
             best_candidate = int(candidate_indices[np.argmax(gains)])
 
-        medoids.append(best_candidate)
+        medoid_indices[c] = best_candidate
         is_medoid[best_candidate] = True
         dist_to_nearest = np.minimum(dist_to_nearest, D[:, best_candidate])
 
-    return np.array(medoids, dtype=int)
+    return medoid_indices
+
+
+def _sample_distinct_candidate(
+    rng: np.random.RandomState,
+    n_samples: int,
+    current_medoids: np.ndarray,
+) -> int:
+    """Sample a random sample index not in current_medoids in O(1) expected memory and time."""
+    medoids_set = set(current_medoids)
+    for _ in range(100):
+        cand = int(rng.randint(0, n_samples))
+        if cand not in medoids_set:
+            return cand
+    remaining = np.setdiff1d(np.arange(n_samples), current_medoids)
+    return int(rng.choice(remaining))
 
 
 def initialize_k_medoids_plus_plus(
@@ -274,7 +256,7 @@ def initialize_k_medoids_plus_plus(
         closest = _to_dense(X[:, first_medoid]).ravel()
     else:
         first_row = X[first_medoid : first_medoid + 1]
-        closest = _compute_pairwise_distances(
+        closest = _pairwise_fast(
             X,
             first_row,
             metric=metric,
@@ -286,9 +268,7 @@ def initialize_k_medoids_plus_plus(
 
     for c in range(1, n_clusters):
         if current_pot <= 1e-16:
-            remaining = np.setdiff1d(np.arange(n_samples), medoid_indices[:c])
-            chosen_candidate = int(rng.choice(remaining))
-            medoid_indices[c] = chosen_candidate
+            medoid_indices[c] = _sample_distinct_candidate(rng, n_samples, medoid_indices[:c])
             continue
 
         rand_vals = rng.random_sample(n_local_trials) * current_pot
@@ -303,9 +283,7 @@ def initialize_k_medoids_plus_plus(
             dists_candidates = np.ascontiguousarray((cols_dense.T) ** 2)
         else:
             candidates_X = X[candidate_ids]
-            cand_dists = _compute_pairwise_distances(
-                X, candidates_X, metric=metric, metric_params=metric_params
-            )
+            cand_dists = _pairwise_fast(X, candidates_X, metric=metric, metric_params=metric_params)
             dists_candidates = np.ascontiguousarray((cand_dists.T) ** 2)
 
         best_candidate = None
@@ -353,13 +331,12 @@ def initialize_k_medoids_plus_plus(
                     best_dist_sq = new_dist_sq
 
         if best_candidate is None:
-            remaining = np.setdiff1d(np.arange(n_samples), medoid_indices[:c])
-            best_candidate = int(rng.choice(remaining))
+            best_candidate = _sample_distinct_candidate(rng, n_samples, medoid_indices[:c])
             if metric == "precomputed":
                 row_dist = _to_dense(X[:, best_candidate]).ravel()
             else:
                 cand_row = X[best_candidate : best_candidate + 1]
-                row_dist = _compute_pairwise_distances(
+                row_dist = _pairwise_fast(
                     X, cand_row, metric=metric, metric_params=metric_params
                 ).ravel()
             best_dist_sq = np.minimum(closest_dist_sq, row_dist**2)
@@ -439,19 +416,8 @@ def initialize_from_array(
             raise ValueError(f"init array must be of shape ({n_clusters}, {n_features})")
 
         params = metric_params if metric_params is not None else {}
-        if not issparse(X) and not issparse(init_centers):
-            scipy_metric = _map_scipy_metric(metric)
-            try:
-                D = cdist(init_centers, X, metric=scipy_metric, **params)
-                current_medoids_indices = np.argmin(D, axis=1)
-            except Exception:
-                current_medoids_indices, _ = pairwise_distances_argmin_min(
-                    init_centers, X, metric=metric, metric_kwargs=params
-                )
-        else:
-            current_medoids_indices, _ = pairwise_distances_argmin_min(
-                init_centers, X, metric=metric, metric_kwargs=params
-            )
+        D = _pairwise_fast(init_centers, X, metric=metric, metric_params=params)
+        current_medoids_indices = np.argmin(D, axis=1)
 
     current_medoids_indices = np.unique(current_medoids_indices)
 

@@ -1,7 +1,7 @@
 project(
   'scikit-clarans',
   'c', 'cython',
-  version: '0.4.0',
+  version: '0.4.1',
   license: 'MIT',
   meson_version: '>= 1.1.0',
   default_options: [
@@ -11,7 +11,6 @@ project(
 )
 
 py = import('python').find_installation(pure: false)
-cc = meson.get_compiler('c')
 
 # NumPy C API include directory
 incdir_numpy = run_command(py,

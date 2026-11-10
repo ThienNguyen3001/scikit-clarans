@@ -48,7 +48,7 @@ if HAS_CYTHON and _core is not None:
 # Section 1: Historical Bug Fixes (Bugs #4, #6, #10, #11, #13, Regressions)
 # ============================================================================
 class TestBug4Fix_MemoryLeakCleanup(unittest.TestCase):
-    """Verify that _precomputed_source is properly cleaned up when fit() fails."""
+    """Verify that model does not leak temporary precomputed matrices after fit()."""
 
     def test_clarans_precomputed_cleanup_on_failure(self):
         """CLARANS: _precomputed_source must NOT leak after fit failure."""
@@ -65,7 +65,7 @@ class TestBug4Fix_MemoryLeakCleanup(unittest.TestCase):
 
         self.assertFalse(
             hasattr(model, "_precomputed_source"),
-            "_precomputed_source should be cleaned up after fit failure",
+            "_precomputed_source should not exist on model after fit failure",
         )
 
     def test_fastclarans_precomputed_cleanup_on_failure(self):
@@ -83,11 +83,11 @@ class TestBug4Fix_MemoryLeakCleanup(unittest.TestCase):
 
         self.assertFalse(
             hasattr(model, "_precomputed_source"),
-            "_precomputed_source should be cleaned up after fit failure",
+            "_precomputed_source should not exist on model after fit failure",
         )
 
     def test_successful_fit_precomputed_source_is_cleaned_up(self):
-        """After successful fit, _precomputed_source must be cleaned up."""
+        """After successful fit, _precomputed_source must not exist on model."""
         rng = np.random.RandomState(42)
         D = pairwise_distances(rng.randn(20, 3))
         for cls in [CLARANS, FastCLARANS]:
@@ -95,8 +95,20 @@ class TestBug4Fix_MemoryLeakCleanup(unittest.TestCase):
             model.fit(D)
             self.assertFalse(
                 hasattr(model, "_precomputed_source"),
-                f"{cls.__name__}: _precomputed_source must be deleted after fit",
+                f"{cls.__name__}: _precomputed_source must not exist on model after fit",
             )
+
+    def test_asymmetric_precomputed_matrix_does_not_attach_temporary_state(self):
+        """Asymmetric precomputed matrix fits without attaching temporary source matrices."""
+        rng = np.random.RandomState(42)
+        D_asym = rng.uniform(0.1, 10.0, size=(25, 25))
+        np.fill_diagonal(D_asym, 0.0)
+
+        for cls in [CLARANS, FastCLARANS]:
+            model = cls(n_clusters=3, metric="precomputed", random_state=42, num_local=1)
+            model.fit(D_asym)
+            self.assertFalse(hasattr(model, "_precomputed_source"))
+            self.assertEqual(len(model.medoid_indices_), 3)
 
 
 class TestBug6Fix_HeuristicDeterministicOrder(unittest.TestCase):
@@ -201,20 +213,41 @@ class TestBug13Fix_ThreadSafeWarning(unittest.TestCase):
             "_cython_warning_lock should be a Lock instance",
         )
 
-    def test_double_checked_locking_pattern(self):
-        """Source should use double-checked locking pattern."""
-        import inspect
-        from clarans.utils import _warn_cython_unavailable
+    def test_warning_issued_exactly_once_under_concurrent_threads(self):
+        """Under concurrent multithreaded execution, warning is issued exactly once."""
+        import warnings
+        from unittest.mock import patch
+        import clarans.utils as utils
 
-        source = inspect.getsource(_warn_cython_unavailable)
+        with (
+            patch.object(utils, "HAS_CYTHON", False),
+            patch.object(utils, "_cython_warning_issued", False),
+        ):
+            with warnings.catch_warnings(record=True) as captured:
+                warnings.simplefilter("always")
+                barrier = threading.Barrier(20)
 
-        self.assertIn("_cython_warning_lock", source, "Should reference the lock")
-        flag_checks = source.count("_cython_warning_issued")
-        self.assertGreaterEqual(
-            flag_checks,
-            2,
-            "Should check _cython_warning_issued at least twice (double-checked locking)",
-        )
+                def worker():
+                    barrier.wait()  # Synchronize all 20 threads to fire simultaneously
+                    utils._warn_cython_unavailable()
+
+                threads = [threading.Thread(target=worker) for _ in range(20)]
+                for t in threads:
+                    t.start()
+                for t in threads:
+                    t.join()
+
+                efficiency_warnings = [
+                    w for w in captured if issubclass(w.category, utils.EfficiencyWarning)
+                ]
+                self.assertEqual(
+                    len(efficiency_warnings),
+                    1,
+                    (
+                        f"Expected exactly 1 EfficiencyWarning across 20 threads, "
+                        f"got {len(efficiency_warnings)}"
+                    ),
+                )
 
 
 class TestRegressions(unittest.TestCase):

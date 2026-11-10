@@ -123,8 +123,8 @@ Both estimators share core parameters, with ``CLARANS`` providing an additional 
      - Number of local searches (random restarts). Higher values explore more local minima.
    * - ``max_neighbors``
      - Both
-     - ``'auto'``
-     - Maximum non-improving neighbors to check per search. Defaults to :math:`\max(250, 1.25\% \times k(n-k))` in CLARANS and :math:`\max(1, \lfloor 250/k \rfloor, 2.5\% \times (n-k))` in FastCLARANS.
+     - ``None``
+     - Maximum non-improving neighbors to check per search. Defaults to ``None`` (adaptive formula: :math:`\max(250, 1.25\% \times k(n-k))` in CLARANS and :math:`\max(1, \lfloor 250/k \rfloor, 2.5\% \times (n-k))` in FastCLARANS). Note that ``'auto'`` is deprecated in 0.4.1 and will be removed in 0.5.0.
    * - ``init``
      - Both
      - ``'k-medoids++'``
@@ -176,7 +176,7 @@ Number of restarts (``num_local``):
      Deterministic initialization methods such as ``'build'``, ``'heuristic'``, or explicit coordinate arrays always produce the same starting points. ``scikit-clarans`` pre-computes and caches these initial medoids once before the search loop to avoid redundant :math:`O(n^2)` recalculations across restarts. Set ``num_local=1`` to save computation.
 
 Neighbor sampling (``max_neighbors``):
-  The default ``max_neighbors='auto'`` scales with the dataset size according to formulas from the original papers (:math:`\max(250, 1.25\% \times k(n-k))` in CLARANS and :math:`\max(1, \lfloor 250/k \rfloor, 2.5\% \times (n-k))` in FastCLARANS). An explicit integer value (such as ``max_neighbors=200``) is mainly useful when you need a fixed ceiling on search steps for very large inputs.
+  The default ``max_neighbors=None`` (formerly ``'auto'``, deprecated in version 0.4.1 and to be removed in 0.5.0) scales with the dataset size according to formulas from the original papers (:math:`\max(250, 1.25\% \times k(n-k))` in CLARANS and :math:`\max(1, \lfloor 250/k \rfloor, 2.5\% \times (n-k))` in FastCLARANS). An explicit integer value (such as ``max_neighbors=200``) is mainly useful when you need a fixed ceiling on search steps for very large inputs.
 
 Parallel execution (``n_jobs``):
   When ``num_local > 1``, setting ``n_jobs`` (e.g., ``n_jobs=-1`` or ``n_jobs=4``) parallelizes independent local search restarts across worker threads using ``joblib.Parallel(prefer="threads")``.
@@ -231,7 +231,7 @@ After calling ``fit(X)``, both ``CLARANS`` and ``FastCLARANS`` store the cluster
      - Sum of distances from each point to its assigned medoid according to the chosen metric.
    * - ``max_neighbors_``
      - int
-     - Effective threshold of non-improving neighbor evaluations per restart. Equals the resolved integer value when ``max_neighbors='auto'``.
+     - Effective threshold of non-improving neighbor evaluations per restart. Equals the resolved integer value when ``max_neighbors=None`` (or deprecated ``'auto'``).
    * - ``neighborhood_size_``
      - int
      - Search neighborhood size: :math:`k(n-k)` in ``CLARANS`` (graph transitions) or :math:`n-k` in ``FastCLARANS`` (candidate points).
@@ -268,7 +268,7 @@ Precomputed inference and best practices:
      3. **Alternative for non-vector data**: If your dataset consists of complex domain objects (e.g., DNA sequences, graphs, raw strings), consider passing a custom distance callable (``metric=func``) directly to the estimator instead of precomputing distance matrices. When using a callable metric, ``cluster_centers_`` automatically stores the raw medoid objects, enabling standard ``predict(X_test)`` where distances are computed internally without manual matrix management.
 
 Neighbor attributes and auto-scaling:
-  The constructor parameter ``max_neighbors`` accepts an integer or the string ``'auto'``. The fitted attribute ``max_neighbors_`` (with a trailing underscore) always stores the concrete integer limit used during the search.
+  The constructor parameter ``max_neighbors`` accepts an integer or ``None`` (or deprecated ``'auto'``). The fitted attribute ``max_neighbors_`` (with a trailing underscore) always stores the concrete integer limit used during the search.
 
   The total neighborhood size ``neighborhood_size_`` differs between estimators because of their search formulation:
 

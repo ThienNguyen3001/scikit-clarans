@@ -45,6 +45,11 @@ python -c "import clarans; print('Version:', clarans.__version__, '| HAS_CYTHON:
   4. `pam_build_step`: Greedy distance reduction for PAM BUILD initialization.
   5. `kmedoids_pp_trials`: Evaluates candidate potentials across local trials for $k$-medoids++.
   6. `is_matrix_symmetric`: Fast C symmetry validation for precomputed distance matrices.
+- **Do not remove or replace Cython kernels (`is_matrix_symmetric`, `pam_build_step`, `kmedoids_pp_trials`):**
+  Even though pure NumPy replacements look shorter in line count, benchmark verification proved they cause severe memory spikes:
+  - Replacing `is_matrix_symmetric` with `np.allclose(X, X.T)` creates an $O(n^2)$ difference matrix allocating ~586 MB of RAM for $n=5000$ (vs 0.4 KB in Cython) and runs 11x slower.
+  - Replacing `pam_build_step` with 2D broadcasting creates intermediate diff arrays allocating ~140 MB of RAM for $n=3000$ (vs 0.8 KB in Cython).
+  All 6 Cython kernels in `clarans/_core.pyx` are mandatory for maintaining the library's strictly bounded $O(1) / O(n)$ working memory footprint and must NOT be removed or replaced.
 - Every function in `clarans/_core.pyx` needs matching type annotations in `clarans/_core.pyi`.
 - Every Cython kernel must have an equivalent pure Python or NumPy fallback that raises an `EfficiencyWarning` when `HAS_CYTHON` is `False`. If `_core` fails to import, all public APIs must remain usable.
 - Kernels must support fused numeric types for both `float64` and `float32`.
@@ -184,7 +189,7 @@ Run before opening a pull request or tagging a release:
 5. Pre-commit: `pre-commit run --all-files`
 
 ### CI/CD Workflows (`.github/workflows/`)
-1. `test_suite.yml`: Cross-platform test matrix across Ubuntu (Python 3.11–3.14), Windows (3.11, 3.14 with MSVC), and macOS (3.11, 3.14).
+1. `test_suite.yml`: Cross-platform test matrix across Ubuntu (Python 3.11–3.15), Windows (3.11, 3.15 with MSVC), and macOS (3.11, 3.15).
 2. `lint_cov_check.yml`: Code quality checks (`flake8`, `mypy`, `pytest` coverage XML) on Python 3.12.
 3. `docs-build.yml`: Builds Sphinx HTML documentation with `-W --keep-going` on Python 3.12.
 4. `draft-pdf.yml`: Compiles JOSS draft paper PDF on pushes to branch `paper`.
@@ -241,8 +246,8 @@ pip install --index-url https://test.pypi.org/simple/ --extra-index-url https://
 - `n_clusters`: Number of clusters ($k$).
 - `num_local`: Number of local search restarts (typically 2 to 5).
 - `max_neighbors`: Neighbor sampling budget per local search:
-  - `FastCLARANS`: Default `'auto'` sets $\max(1, \lfloor 250 / k \rfloor, \lfloor 0.025(n - k) \rfloor)$ non-medoid candidates (Schubert & Rousseeuw, 2021).
-  - `CLARANS`: Default `'auto'` sets $\max(250, \lfloor 0.0125 \cdot k(n - k) \rfloor)$ edge evaluations (Ng & Han, 2002).
+  - `FastCLARANS`: Default `None` (formerly `'auto'`, deprecated in 0.4.1, to be removed in 0.5.0) sets $\max(1, \lfloor 250 / k \rfloor, \lfloor 0.025(n - k) \rfloor)$ non-medoid candidates (Schubert & Rousseeuw, 2021).
+  - `CLARANS`: Default `None` (formerly `'auto'`, deprecated in 0.4.1, to be removed in 0.5.0) sets $\max(250, \lfloor 0.0125 \cdot k(n - k) \rfloor)$ edge evaluations (Ng & Han, 2002).
   - Avoid small integer constants (like 40), which trigger premature stagnation.
 - `n_jobs`: Number of parallel jobs across `num_local` search restarts (`None` or integer, `-1` uses all processors). Parallelized with `joblib.Parallel(prefer="threads")` exploiting Cython `nogil` blocks with deterministic seed splitting.
 - `cost_evaluation`: Strategy for swap evaluation (`CLARANS` only):
@@ -341,12 +346,13 @@ These safeguards are tested in `test_regressions.py` and `test_robustness.py`:
 
 1. Delta tolerance: Accept swaps only when `total_delta < _delta_tolerance(cost)`, where `_delta_tolerance(cost) = -max(1e-16, 1e-12 * abs(cost))`. This prevents infinite swap loops caused by floating-point rounding when delta is near zero.
 2. Scikit-learn `score(X)`: Returns negative inertia (`-self.inertia_`) so higher values indicate better fits in `GridSearchCV`.
-3. Memory cleanup (`_precomputed_source`): Cleans up `self._precomputed_source` in a `finally` block if `fit()` raises an exception on precomputed matrices.
+3. Precomputed distance memory efficiency: Precomputed distance matrices never attach temporary full-matrix attributes (such as `_precomputed_source`) to `self`. Slices are extracted directly as 1D zero-copy row views (symmetric) or written into caller buffers (asymmetric), ensuring an $O(1)$ memory footprint without risking object instance memory leaks.
 4. Scikit-learn compatibility: Supports both modern `__sklearn_tags__` (scikit-learn >= 1.6) and legacy `_more_tags()`.
 5. Numerical overflow: Verifies costs with `np.isfinite()`. If values exceed float64 limits ($> 10^{160}$) and square Euclidean distances overflow to infinity, raises a `ValueError`.
 6. Thread safety for warnings: Cython fallback warnings (`_warn_cython_unavailable()`) use double-checked locking with `threading.Lock()` to avoid duplicate warnings under multithreading.
 7. Precomputed matrix dimension flexibility: `predict()` and `transform()` accept either full test-to-train pairwise distance matrices of shape $(n_{test}, n_{train})$ or subset matrices of shape $(n_{test}, k)$ matching medoids.
 8. Candidate pool management: `_update_candidate_pool` efficiently maintains the boolean mask of available non-medoid candidates after swaps without re-filtering the entire dataset.
+9. Out-buffer contract and memory reuse: `_compute_1_vs_n` supports the NumPy/SciPy `out` buffer contract (`assert result is out`). At $N=50,000$, allocating a new distance array on every candidate evaluation generates ~800 MB of garbage per restart. Pre-allocating `d_xc_buf` and writing directly into it eliminates allocation churn. For `float32` inputs where SciPy `cdist` cannot write directly to non-float64 buffers, copying into the caller's buffer maintains both dtype polymorphism and the zero-allocation contract. Never remove or bypass this mechanism.
 
 ---
 
