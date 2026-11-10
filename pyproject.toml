@@ -29,6 +29,7 @@ classifiers = [
     "Programming Language :: Python :: 3.12",
     "Programming Language :: Python :: 3.13",
     "Programming Language :: Python :: 3.14",
+    "Programming Language :: Python :: 3.15",
     "Topic :: Scientific/Engineering",
 ]
 keywords = ["clustering", "sklearn", "scikit-learn", "clarans", "k-medoids"]
@@ -83,8 +84,8 @@ warn_unused_configs = true
 follow_imports = "silent"
 
 [tool.cibuildwheel]
-# Build on CPython 3.11 through 3.14
-build = "cp311-* cp312-* cp313-* cp314-*"
+# Build on CPython 3.11 through 3.15
+build = "cp311-* cp312-* cp313-* cp314-* cp315-*"
 # Skip PyPy and 32-bit architectures
 skip = "pp* *-win32 *-manylinux_i686 *-musllinux_i686"
 

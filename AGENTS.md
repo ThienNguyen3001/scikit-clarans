@@ -189,7 +189,7 @@ Run before opening a pull request or tagging a release:
 5. Pre-commit: `pre-commit run --all-files`
 
 ### CI/CD Workflows (`.github/workflows/`)
-1. `test_suite.yml`: Cross-platform test matrix across Ubuntu (Python 3.11–3.14), Windows (3.11, 3.14 with MSVC), and macOS (3.11, 3.14).
+1. `test_suite.yml`: Cross-platform test matrix across Ubuntu (Python 3.11–3.15), Windows (3.11, 3.15 with MSVC), and macOS (3.11, 3.15).
 2. `lint_cov_check.yml`: Code quality checks (`flake8`, `mypy`, `pytest` coverage XML) on Python 3.12.
 3. `docs-build.yml`: Builds Sphinx HTML documentation with `-W --keep-going` on Python 3.12.
 4. `draft-pdf.yml`: Compiles JOSS draft paper PDF on pushes to branch `paper`.
