@@ -21,6 +21,8 @@ from clarans._initialization import (
 )
 from clarans.utils import calculate_cost
 
+plt.rcParams.update({"axes.edgecolor": "#cccccc", "axes.linewidth": 0.8})
+
 X, _ = make_blobs(n_samples=500, centers=4, cluster_std=0.70, random_state=42)
 k = 4
 rng = np.random.RandomState(42)
@@ -55,9 +57,6 @@ for ax, letter, (name, medoid_idx) in zip(axes, letters, inits):
     ax.set_title(f"{letter} {name} (Cost: {initial_cost:.1f})", pad=6, fontsize=10)
     ax.set_xticks([])
     ax.set_yticks([])
-    for spine in ax.spines.values():
-        spine.set_color("#cccccc")
-        spine.set_linewidth(0.8)
     ax.legend(loc="upper right", frameon=False, fontsize=8.5)
 
 plt.tight_layout()

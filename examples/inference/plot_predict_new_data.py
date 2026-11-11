@@ -15,6 +15,8 @@ import matplotlib.pyplot as plt
 from sklearn.datasets import make_blobs
 from clarans import CLARANS
 
+plt.rcParams.update({"axes.edgecolor": "#cccccc", "axes.linewidth": 0.8})
+
 X_train, _ = make_blobs(n_samples=400, centers=3, n_features=2, random_state=42)
 model = CLARANS(n_clusters=3, init="k-medoids++", random_state=42)
 model.fit(X_train)
@@ -65,10 +67,6 @@ ax.scatter(
     label="Medoids",
     zorder=10,
 )
-
-for spine in ax.spines.values():
-    spine.set_color("#cccccc")
-    spine.set_linewidth(0.8)
 
 ax.set_xticks([])
 ax.set_yticks([])

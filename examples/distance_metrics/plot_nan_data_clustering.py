@@ -32,6 +32,8 @@ from sklearn.datasets import make_blobs
 from sklearn.metrics import adjusted_rand_score
 from clarans import CLARANS, FastCLARANS
 
+plt.rcParams.update({"axes.edgecolor": "#cccccc", "axes.linewidth": 0.8})
+
 COLORS = ["#2b5c8f", "#d95f02", "#7570b3"]
 
 
@@ -95,9 +97,6 @@ ax_a.set_title(
 )
 ax_a.set_xticks([])
 ax_a.set_yticks([])
-for spine in ax_a.spines.values():
-    spine.set_color("#cccccc")
-    spine.set_linewidth(0.8)
 ax_a.legend(loc="upper right", frameon=False, fontsize=9)
 
 # Subplot (b): Missing Data with nan_euclidean
@@ -170,9 +169,6 @@ ax_b.set_title(
 )
 ax_b.set_xticks([])
 ax_b.set_yticks([])
-for spine in ax_b.spines.values():
-    spine.set_color("#cccccc")
-    spine.set_linewidth(0.8)
 ax_b.legend(loc="upper right", frameon=False, fontsize=8.5)
 
 plt.suptitle(

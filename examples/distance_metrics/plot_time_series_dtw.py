@@ -32,6 +32,8 @@ import numpy as np
 from sklearn.manifold import MDS
 from clarans import FastCLARANS
 
+plt.rcParams.update({"axes.edgecolor": "#cccccc", "axes.linewidth": 0.8})
+
 COLORS = ["#2b5c8f", "#d95f02", "#1b9e77"]
 
 
@@ -145,9 +147,6 @@ ax_a.legend(
     edgecolor="#e0e0e0",
     fontsize=8.5,
 )
-for spine in ax_a.spines.values():
-    spine.set_color("#cccccc")
-    spine.set_linewidth(0.8)
 
 # Panel (b): The destructive interference problem of pointwise averaging vs. Medoid
 ax_b = axes[1]
@@ -189,9 +188,6 @@ ax_b.legend(
     edgecolor="#e0e0e0",
     fontsize=8.5,
 )
-for spine in ax_b.spines.values():
-    spine.set_color("#cccccc")
-    spine.set_linewidth(0.8)
 
 # Panel (c): 2D MDS semantic space of DTW distances
 ax_c = axes[2]
@@ -235,9 +231,6 @@ ax_c.legend(
     edgecolor="#e0e0e0",
     fontsize=8.5,
 )
-for spine in ax_c.spines.values():
-    spine.set_color("#cccccc")
-    spine.set_linewidth(0.8)
 
 plt.tight_layout()
 plt.show()

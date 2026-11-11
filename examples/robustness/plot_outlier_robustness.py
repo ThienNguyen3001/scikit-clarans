@@ -16,6 +16,8 @@ import matplotlib.pyplot as plt
 from sklearn.cluster import KMeans
 from clarans import CLARANS
 
+plt.rcParams.update({"axes.edgecolor": "#cccccc", "axes.linewidth": 0.8})
+
 rng = np.random.RandomState(42)
 
 # Two dense Gaussian clusters
@@ -62,9 +64,6 @@ axes[0].scatter(
 axes[0].set_title("(a) K-Means (Centroid displaced by outliers)", fontsize=10.5, pad=8)
 axes[0].set_xticks([])
 axes[0].set_yticks([])
-for spine in axes[0].spines.values():
-    spine.set_color("#cccccc")
-    spine.set_linewidth(0.8)
 axes[0].legend(loc="lower right", frameon=False, fontsize=9)
 
 # (b) CLARANS
@@ -99,9 +98,6 @@ axes[1].scatter(
 axes[1].set_title("(b) CLARANS (Medoid robust in dense core)", fontsize=10.5, pad=8)
 axes[1].set_xticks([])
 axes[1].set_yticks([])
-for spine in axes[1].spines.values():
-    spine.set_color("#cccccc")
-    spine.set_linewidth(0.8)
 axes[1].legend(loc="lower right", frameon=False, fontsize=9)
 
 plt.tight_layout()

@@ -34,6 +34,8 @@ import numpy as np
 from sklearn.datasets import make_blobs
 from clarans import FastCLARANS
 
+plt.rcParams.update({"axes.edgecolor": "#cccccc", "axes.linewidth": 0.8})
+
 COLORS = ["#2b5c8f", "#d95f02", "#7570b3"]
 
 
@@ -129,9 +131,6 @@ ax_a.scatter(
 ax_a.set_title("(a) Outlier Detection via Medoid Distance", fontsize=10.5, pad=8)
 ax_a.set_xticks([])
 ax_a.set_yticks([])
-for spine in ax_a.spines.values():
-    spine.set_color("#cccccc")
-    spine.set_linewidth(0.8)
 ax_a.legend(
     loc="upper right",
     frameon=True,
@@ -167,9 +166,6 @@ ax_b.axvline(
 ax_b.set_title("(b) Anomaly Score Distribution", fontsize=10.5, pad=8)
 ax_b.set_xlabel("Anomaly Score (Distance to Nearest Medoid)", fontsize=9.0)
 ax_b.set_ylabel("Sample Count", fontsize=9.0)
-for spine in ax_b.spines.values():
-    spine.set_color("#cccccc")
-    spine.set_linewidth(0.8)
 ax_b.legend(loc="upper right", frameon=False, fontsize=8.5)
 
 plt.suptitle(

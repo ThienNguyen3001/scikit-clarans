@@ -36,6 +36,8 @@ import matplotlib.pyplot as plt
 import numpy as np
 from clarans import FastCLARANS
 
+plt.rcParams.update({"axes.edgecolor": "#cccccc", "axes.linewidth": 0.8})
+
 EARTH_RADIUS_KM = 6371.0
 
 
@@ -128,9 +130,6 @@ ax.set_title(
 )
 ax.set_xticks([])
 ax.set_yticks([])
-for spine in ax.spines.values():
-    spine.set_color("#cccccc")
-    spine.set_linewidth(0.8)
 
 handles, _ = scatter_pts.legend_elements()
 handles.append(hub_star)

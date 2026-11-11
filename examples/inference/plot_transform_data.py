@@ -14,6 +14,8 @@ import matplotlib.pyplot as plt
 from sklearn.datasets import make_blobs
 from clarans import CLARANS
 
+plt.rcParams.update({"axes.edgecolor": "#cccccc", "axes.linewidth": 0.8})
+
 X, _ = make_blobs(n_samples=250, centers=3, n_features=4, random_state=42)
 
 model = CLARANS(n_clusters=3, random_state=42)
@@ -35,10 +37,6 @@ scatter = ax.scatter(
     alpha=0.65,
     edgecolors="none",
 )
-
-for spine in ax.spines.values():
-    spine.set_color("#cccccc")
-    spine.set_linewidth(0.8)
 
 ax.set_xlabel("Distance to Medoid 0", fontsize=9.5)
 ax.set_ylabel("Distance to Medoid 1", fontsize=9.5)

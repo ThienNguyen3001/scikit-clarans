@@ -25,6 +25,8 @@ from sklearn.datasets import make_blobs
 from sklearn.cluster import KMeans
 from clarans import CLARANS, FastCLARANS
 
+plt.rcParams.update({"axes.edgecolor": "#cccccc", "axes.linewidth": 0.8})
+
 X, _ = make_blobs(n_samples=600, centers=3, cluster_std=0.70, random_state=42)
 
 # Use metric='sqeuclidean' so all three estimators minimize squared Euclidean distance
@@ -79,9 +81,6 @@ for ax, (name, model, marker, label_name) in zip(axes, models):
     ax.set_title(name, fontsize=11, pad=8)
     ax.set_xticks([])
     ax.set_yticks([])
-    for spine in ax.spines.values():
-        spine.set_color("#cccccc")
-        spine.set_linewidth(0.8)
 
     ax.text(
         0.95,

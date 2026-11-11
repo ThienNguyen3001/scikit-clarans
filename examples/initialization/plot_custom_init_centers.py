@@ -16,6 +16,8 @@ import matplotlib.pyplot as plt
 from sklearn.datasets import make_blobs
 from clarans import CLARANS
 
+plt.rcParams.update({"axes.edgecolor": "#cccccc", "axes.linewidth": 0.8})
+
 X, _ = make_blobs(n_samples=300, centers=3, n_features=2, random_state=42)
 
 # Initial seed coordinates
@@ -62,9 +64,6 @@ ax.scatter(
 
 ax.set_xticks([])
 ax.set_yticks([])
-for spine in ax.spines.values():
-    spine.set_color("#cccccc")
-    spine.set_linewidth(0.8)
 
 ax.set_title("CLARANS with User-Provided Initial Seeds", fontsize=11, pad=8)
 ax.legend(

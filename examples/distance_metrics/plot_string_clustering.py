@@ -24,6 +24,8 @@ import numpy as np
 from sklearn.manifold import MDS
 from clarans import FastCLARANS
 
+plt.rcParams.update({"axes.edgecolor": "#cccccc", "axes.linewidth": 0.8})
+
 COLORS = ["#2b5c8f", "#d95f02", "#1b9e77"]
 
 
@@ -144,9 +146,6 @@ for i, word in enumerate(words):
 ax_a.set_title("(a) 2D MDS Projection of Levenshtein Distances", fontsize=10.5, pad=8)
 ax_a.set_xticks([])
 ax_a.set_yticks([])
-for spine in ax_a.spines.values():
-    spine.set_color("#cccccc")
-    spine.set_linewidth(0.8)
 handles, _ = scatter_a.legend_elements()
 handles.append(med_star)
 cluster_labels = [f"Cluster {k + 1} ('{words[model.medoid_indices_[k]]}')" for k in range(3)] + [

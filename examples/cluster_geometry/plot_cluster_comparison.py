@@ -32,6 +32,8 @@ from sklearn.preprocessing import StandardScaler
 
 from clarans import CLARANS, FastCLARANS
 
+plt.rcParams.update({"axes.edgecolor": "#cccccc", "axes.linewidth": 0.8})
+
 # Generate synthetic datasets with distinct geometries
 n_samples = 500
 seed = 30
@@ -326,9 +328,6 @@ for i_dataset, (dataset, algo_params) in enumerate(datasets_list):
             ax2.set_ylim(-2.5, 2.5)
             ax2.set_xticks(())
             ax2.set_yticks(())
-            for spine in ax2.spines.values():
-                spine.set_color("#cccccc")
-                spine.set_linewidth(0.8)
 
             ax2.text(
                 0.97,

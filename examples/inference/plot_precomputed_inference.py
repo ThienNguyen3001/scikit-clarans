@@ -39,6 +39,8 @@ from sklearn.datasets import make_blobs
 from sklearn.metrics import pairwise_distances
 from clarans import FastCLARANS
 
+plt.rcParams.update({"axes.edgecolor": "#cccccc", "axes.linewidth": 0.8})
+
 # 1. Generate training and query test data
 rng = np.random.RandomState(42)
 n_train = 800
@@ -106,10 +108,6 @@ ax_a.bar_label(
     padding=4,
 )
 
-for spine in ax_a.spines.values():
-    spine.set_color("#cccccc")
-    spine.set_linewidth(0.8)
-
 # Panel (b): Query Sample Distances to Assigned Medoid
 ax_b = axes[1]
 # transform(D_test_compact) returns (n_test, k) distance array directly
@@ -135,9 +133,6 @@ ax_b.set_title(
 )
 ax_b.set_xlabel("Query Sample Index", fontsize=9.0)
 ax_b.set_ylabel("Distance to Nearest Medoid", fontsize=9.0)
-for spine in ax_b.spines.values():
-    spine.set_color("#cccccc")
-    spine.set_linewidth(0.8)
 ax_b.set_ylim(bottom=min_dists.min() - 1.5, top=min_dists.max() + 4.5)
 ax_b.legend(
     loc="upper right",

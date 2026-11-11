@@ -14,6 +14,8 @@ import matplotlib.pyplot as plt
 from sklearn.datasets import make_blobs
 from clarans import CLARANS
 
+plt.rcParams.update({"axes.edgecolor": "#cccccc", "axes.linewidth": 0.8})
+
 X, _ = make_blobs(n_samples=500, centers=4, cluster_std=0.60, random_state=42)
 model = CLARANS(n_clusters=4, num_local=5, random_state=42)
 model.fit(X)
@@ -43,9 +45,6 @@ ax.scatter(
 ax.set_title("CLARANS on Synthetic Blobs ($k=4$)", fontsize=11, pad=8)
 ax.set_xticks([])
 ax.set_yticks([])
-for spine in ax.spines.values():
-    spine.set_color("#cccccc")
-    spine.set_linewidth(0.8)
 
 ax.legend(loc="upper right", frameon=False, fontsize=9)
 plt.tight_layout()
