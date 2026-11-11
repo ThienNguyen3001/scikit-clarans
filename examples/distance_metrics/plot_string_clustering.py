@@ -18,6 +18,7 @@ words in their cluster.
 # Authors: Ngọc Thiện Nguyễn <thiennguyen03001@gmail.com>
 # License: MIT
 
+import inspect
 import matplotlib.pyplot as plt
 import numpy as np
 from sklearn.manifold import MDS
@@ -88,13 +89,13 @@ for k, med_idx in enumerate(model.medoid_indices_):
     print(f"Cluster {k + 1} (Medoid: '{words[med_idx]}'): {members}")
 
 # 4. Project pairwise distances into 2D via Multidimensional Scaling (MDS)
-mds = MDS(
-    n_components=2,
-    dissimilarity="precomputed",
-    init="random",
-    random_state=42,
-    normalized_stress="auto",
-)
+mds_kwargs = {"n_components": 2, "random_state": 42, "normalized_stress": "auto"}
+if "metric_mds" in inspect.signature(MDS).parameters:
+    mds_kwargs["metric"] = "precomputed"
+    mds_kwargs["init"] = "random"
+else:
+    mds_kwargs["dissimilarity"] = "precomputed"
+mds = MDS(**mds_kwargs)
 coords_2d = mds.fit_transform(D)
 
 # 5. Visualization
