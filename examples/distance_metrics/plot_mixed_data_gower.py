@@ -35,7 +35,6 @@ individual with valid discrete choices and exact continuous numbers.
 # Authors: Ngọc Thiện Nguyễn <thiennguyen03001@gmail.com>
 # License: MIT
 
-import inspect
 import matplotlib.pyplot as plt
 import numpy as np
 from sklearn.manifold import MDS
@@ -122,13 +121,13 @@ for k, idx in enumerate(model.medoid_indices_):
     )
 
 # 4. Project Gower distance matrix into 2D via Multidimensional Scaling (MDS)
-mds_kwargs = {"n_components": 2, "random_state": 42, "normalized_stress": "auto"}
-if "metric_mds" in inspect.signature(MDS).parameters:
-    mds_kwargs["metric"] = "precomputed"
-    mds_kwargs["init"] = "random"
-else:
-    mds_kwargs["dissimilarity"] = "precomputed"
-mds = MDS(**mds_kwargs)
+mds = MDS(
+    n_components=2,
+    metric="precomputed",
+    init="random",
+    random_state=42,
+    normalized_stress="auto",
+)
 coords_2d = mds.fit_transform(D_gower)
 
 # 5. Visualization

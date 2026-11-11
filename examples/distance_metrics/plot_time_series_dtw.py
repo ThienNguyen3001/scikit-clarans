@@ -26,7 +26,6 @@ true peak height, period, and physical characteristics of the signal.
 # Authors: Ngọc Thiện Nguyễn <thiennguyen03001@gmail.com>
 # License: MIT
 
-import inspect
 import matplotlib.pyplot as plt
 import numpy as np
 from sklearn.manifold import MDS
@@ -106,13 +105,13 @@ medoids = model.medoid_indices_
 print(f"Optimal Medoid Indices: {medoids}")
 
 # 4. Project pairwise DTW distances into 2D using Multidimensional Scaling (MDS)
-mds_kwargs = {"n_components": 2, "random_state": 42, "normalized_stress": "auto"}
-if "metric_mds" in inspect.signature(MDS).parameters:
-    mds_kwargs["metric"] = "precomputed"
-    mds_kwargs["init"] = "random"
-else:
-    mds_kwargs["dissimilarity"] = "precomputed"
-mds = MDS(**mds_kwargs)
+mds = MDS(
+    n_components=2,
+    metric="precomputed",
+    init="random",
+    random_state=42,
+    normalized_stress="auto",
+)
 coords_2d = mds.fit_transform(D_dtw)
 
 # 5. Visualization
