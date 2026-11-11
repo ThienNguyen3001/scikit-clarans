@@ -15,7 +15,6 @@ import numpy as np
 import matplotlib.pyplot as plt
 from sklearn.datasets import make_blobs
 from clarans import CLARANS
-from clarans.utils import calculate_cost
 
 X, _ = make_blobs(n_samples=500, centers=4, cluster_std=0.60, random_state=42)
 num_locals = [1, 2, 5]
@@ -30,7 +29,7 @@ for i, nl in enumerate(num_locals):
         model = CLARANS(n_clusters=4, num_local=nl, max_neighbors=mn, random_state=42)
         model.fit(X)
         time_grid[i, j] = time.perf_counter() - t0
-        cost_grid[i, j] = calculate_cost(X, model.medoid_indices_)
+        cost_grid[i, j] = model.inertia_
 
 fig, axes = plt.subplots(1, 2, figsize=(11.5, 4.2))
 
