@@ -64,3 +64,7 @@ Before you submit a pull request, check that it meets these guidelines:
 ## Code Style
 
 Please try to follow PEP 8 guidelines.
+
+## Code of Conduct
+
+This project is governed by the Contributor Covenant [Code of Conduct](CODE_OF_CONDUCT.md). By participating, you are expected to uphold this code.

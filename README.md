@@ -123,7 +123,7 @@ Full API documentation and guides are available at https://scikit-clarans.readth
 
 ## Contributing
 
-Contributions and bug reports are welcome. See [CONTRIBUTING.md](CONTRIBUTING.md) for development setup and testing instructions.
+Contributions and bug reports are welcome. See [CONTRIBUTING.md](CONTRIBUTING.md) for development setup and testing instructions. All contributors are expected to adhere to the [Code of Conduct](CODE_OF_CONDUCT.md).
 
 ## Citation
 
