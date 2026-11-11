@@ -44,29 +44,13 @@ colors = ["#4c72b0", "#55a868"]
 bars1 = ax1.bar(algorithms, runtimes, color=colors, width=0.5)
 ax1.set_ylabel("Runtime (seconds)")
 ax1.set_title("Runtime Comparison (Lower is Faster)")
-for bar in bars1:
-    yval = bar.get_height()
-    ax1.text(
-        bar.get_x() + bar.get_width() / 2.0,
-        yval + 0.01 * max(runtimes),
-        f"{yval:.3f}s",
-        ha="center",
-        va="bottom",
-    )
+ax1.bar_label(bars1, fmt="%.3fs", padding=3)
 
 # Inertia
 bars2 = ax2.bar(algorithms, inertias, color=colors, width=0.5)
 ax2.set_ylabel("Inertia (Total Cost)")
 ax2.set_title("Inertia Quality Comparison (Lower is Better)")
-for bar in bars2:
-    yval = bar.get_height()
-    ax2.text(
-        bar.get_x() + bar.get_width() / 2.0,
-        yval + 0.01 * max(inertias),
-        f"{yval:.1f}",
-        ha="center",
-        va="bottom",
-    )
+ax2.bar_label(bars2, fmt="%.1f", padding=3)
 
 plt.suptitle(f"CLARANS vs. FastCLARANS on N={n_samples}, K={n_clusters}", fontsize=13)
 plt.tight_layout()

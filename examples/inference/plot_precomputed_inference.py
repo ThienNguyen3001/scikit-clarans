@@ -98,19 +98,13 @@ ax_a.set_title(
     fontsize=10.5,
     pad=8,
 )
-
-for bar in bars:
-    height = bar.get_height()
-    ax_a.annotate(
-        f"{height:,} entries",
-        xy=(bar.get_x() + bar.get_width() / 2, height),
-        xytext=(0, 4),
-        textcoords="offset points",
-        ha="center",
-        va="bottom",
-        fontsize=9.0,
-        fontweight="bold",
-    )
+ax_a.bar_label(
+    bars,
+    fmt=lambda x: f"{int(x):,} entries",
+    fontsize=9.0,
+    fontweight="bold",
+    padding=4,
+)
 
 for spine in ax_a.spines.values():
     spine.set_color("#cccccc")

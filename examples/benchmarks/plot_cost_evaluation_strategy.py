@@ -86,27 +86,8 @@ ax1.set_xticks(x)
 ax1.set_xticklabels([f"k={k}" for k in k_values])
 ax1.legend()
 ax1.grid(True, linestyle="--", alpha=0.5, axis="y")
-
-for bar in bars1:
-    y = bar.get_height()
-    ax1.text(
-        bar.get_x() + bar.get_width() / 2,
-        y,
-        f"{y:.2f}s",
-        ha="center",
-        va="bottom",
-        fontsize=9,
-    )
-for bar in bars2:
-    y = bar.get_height()
-    ax1.text(
-        bar.get_x() + bar.get_width() / 2,
-        y,
-        f"{y:.2f}s",
-        ha="center",
-        va="bottom",
-        fontsize=9,
-    )
+ax1.bar_label(bars1, fmt="%.2fs", fontsize=9, padding=3)
+ax1.bar_label(bars2, fmt="%.2fs", fontsize=9, padding=3)
 
 # Panel 2: Speedup factor
 bars_speedup = ax2.bar(x, speedups, width=0.45, color="#55a868")
@@ -117,17 +98,7 @@ ax2.set_title("Delta Caching Speedup")
 ax2.set_xticks(x)
 ax2.set_xticklabels([f"k={k}" for k in k_values])
 ax2.grid(True, linestyle="--", alpha=0.5, axis="y")
-
-for bar in bars_speedup:
-    y = bar.get_height()
-    ax2.text(
-        bar.get_x() + bar.get_width() / 2,
-        y + 0.05,
-        f"{y:.2f}x",
-        ha="center",
-        va="bottom",
-        fontweight="bold",
-    )
+ax2.bar_label(bars_speedup, fmt="%.2fx", fontweight="bold", padding=3)
 
 plt.suptitle(f"CLARANS Cost Evaluation Strategies on N={n_samples}", fontsize=13)
 plt.tight_layout()
