@@ -84,11 +84,13 @@ for ax, (name, model, marker, label_name) in zip(axes, models):
         spine.set_linewidth(0.8)
 
     ax.text(
-        0.05,
+        0.95,
         0.05,
         stat_str,
         transform=ax.transAxes,
         fontsize=8.5,
+        ha="right",
+        va="bottom",
         color="#333333",
         bbox=dict(
             boxstyle="round,pad=0.25",
