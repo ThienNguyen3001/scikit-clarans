@@ -29,33 +29,30 @@ X_query = rng.uniform(
 query_preds = model.predict(X_query)
 
 fig, ax = plt.subplots(figsize=(8.2, 5))
-colors = ["#2b5c8f", "#d95f02", "#7570b3"]
 
 # Training data
-for k in range(3):
-    mask = model.labels_ == k
-    ax.scatter(
-        X_train[mask, 0],
-        X_train[mask, 1],
-        c=colors[k],
-        s=20,
-        alpha=0.45,
-        label=f"Train Cluster {k}",
-    )
+ax.scatter(
+    X_train[:, 0],
+    X_train[:, 1],
+    c=model.labels_,
+    cmap="tab10",
+    s=20,
+    alpha=0.45,
+    label="Train Data",
+)
 
 # Predicted query points
-for k in range(3):
-    mask = query_preds == k
-    ax.scatter(
-        X_query[mask, 0],
-        X_query[mask, 1],
-        c=colors[k],
-        marker="s",
-        s=70,
-        edgecolors="black",
-        linewidths=1.2,
-        label=f"Predicted Query (Cluster {k})",
-    )
+ax.scatter(
+    X_query[:, 0],
+    X_query[:, 1],
+    c=query_preds,
+    cmap="tab10",
+    marker="s",
+    s=70,
+    edgecolors="black",
+    linewidths=1.2,
+    label="Predicted Query",
+)
 
 # Medoids
 ax.scatter(

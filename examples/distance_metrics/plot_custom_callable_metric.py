@@ -37,7 +37,6 @@ import numpy as np
 from clarans import FastCLARANS
 
 EARTH_RADIUS_KM = 6371.0
-COLORS = ["#2b5c8f", "#d95f02", "#7570b3", "#1b9e77"]
 
 
 def haversine_distance(u: np.ndarray, v: np.ndarray) -> float:
@@ -85,20 +84,18 @@ print(f"Total Network Haversine Cost:  {model.inertia_:,.1f} km")
 # 3. Visualization
 fig, ax = plt.subplots(figsize=(7.5, 6.0))
 
-for k in range(4):
-    mask = model.labels_ == k
-    ax.scatter(
-        X[mask, 1],
-        X[mask, 0],
-        c=COLORS[k],
-        s=30,
-        alpha=0.7,
-        edgecolors="none",
-        label=f"Region {k + 1}",
-    )
+scatter_pts = ax.scatter(
+    X[:, 1],
+    X[:, 0],
+    c=model.labels_,
+    cmap="tab10",
+    s=30,
+    alpha=0.7,
+    edgecolors="none",
+)
 
 medoids = model.cluster_centers_
-ax.scatter(
+hub_star = ax.scatter(
     medoids[:, 1],
     medoids[:, 0],
     marker="*",
@@ -111,12 +108,13 @@ ax.scatter(
 )
 
 # Connect delivery points to their assigned regional hub with faint lines
+cmap = plt.cm.tab10
 for i in range(len(X)):
     hub = medoids[model.labels_[i]]
     ax.plot(
         [X[i, 1], hub[1]],
         [X[i, 0], hub[0]],
-        color=COLORS[model.labels_[i]],
+        color=cmap(model.labels_[i]),
         alpha=0.12,
         linewidth=0.8,
         zorder=1,
@@ -134,6 +132,16 @@ for spine in ax.spines.values():
     spine.set_color("#cccccc")
     spine.set_linewidth(0.8)
 
-ax.legend(loc="upper right", frameon=True, facecolor="white", edgecolor="#cccccc", fontsize=8.5)
+handles, _ = scatter_pts.legend_elements()
+handles.append(hub_star)
+ax.legend(
+    handles,
+    [f"Region {k + 1}" for k in range(4)] + ["Selected Logistics Hubs"],
+    loc="upper right",
+    frameon=True,
+    facecolor="white",
+    edgecolor="#cccccc",
+    fontsize=8.5,
+)
 plt.tight_layout()
 plt.show()

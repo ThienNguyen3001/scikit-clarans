@@ -16,9 +16,6 @@ import matplotlib.pyplot as plt
 from sklearn.cluster import KMeans
 from clarans import CLARANS
 
-COLORS = ["#2b5c8f", "#d95f02"]
-
-
 rng = np.random.RandomState(42)
 
 # Two dense Gaussian clusters
@@ -34,16 +31,15 @@ cl = CLARANS(n_clusters=2, num_local=5, random_state=42).fit(X)
 fig, axes = plt.subplots(1, 2, figsize=(10.5, 4.0))
 
 # (a) K-Means
-for k in range(2):
-    mask = km.labels_[:-12] == k
-    axes[0].scatter(
-        X[:-12][mask, 0],
-        X[:-12][mask, 1],
-        c=COLORS[k],
-        s=18,
-        alpha=0.65,
-        edgecolors="none",
-    )
+axes[0].scatter(
+    X[:-12, 0],
+    X[:-12, 1],
+    c=km.labels_[:-12],
+    cmap="tab10",
+    s=18,
+    alpha=0.65,
+    edgecolors="none",
+)
 axes[0].scatter(
     X[-12:, 0],
     X[-12:, 1],
@@ -72,16 +68,15 @@ for spine in axes[0].spines.values():
 axes[0].legend(loc="lower right", frameon=False, fontsize=9)
 
 # (b) CLARANS
-for k in range(2):
-    mask = cl.labels_[:-12] == k
-    axes[1].scatter(
-        X[:-12][mask, 0],
-        X[:-12][mask, 1],
-        c=COLORS[k],
-        s=18,
-        alpha=0.65,
-        edgecolors="none",
-    )
+axes[1].scatter(
+    X[:-12, 0],
+    X[:-12, 1],
+    c=cl.labels_[:-12],
+    cmap="tab10",
+    s=18,
+    alpha=0.65,
+    edgecolors="none",
+)
 axes[1].scatter(
     X[-12:, 0],
     X[-12:, 1],

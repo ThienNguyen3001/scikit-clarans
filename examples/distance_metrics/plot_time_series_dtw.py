@@ -195,20 +195,18 @@ for spine in ax_b.spines.values():
 
 # Panel (c): 2D MDS semantic space of DTW distances
 ax_c = axes[2]
-for k in range(3):
-    mask = model.labels_ == k
-    ax_c.scatter(
-        coords_2d[mask, 0],
-        coords_2d[mask, 1],
-        c=COLORS[k],
-        s=45,
-        alpha=0.7,
-        edgecolors="none",
-        label=f"Cluster {k + 1}",
-    )
+scatter_c = ax_c.scatter(
+    coords_2d[:, 0],
+    coords_2d[:, 1],
+    c=model.labels_,
+    cmap="tab10",
+    s=45,
+    alpha=0.7,
+    edgecolors="none",
+)
 
 med_coords = coords_2d[model.medoid_indices_]
-ax_c.scatter(
+med_star = ax_c.scatter(
     med_coords[:, 0],
     med_coords[:, 1],
     marker="*",
@@ -224,7 +222,11 @@ ax_c.set_title("2D Projection of DTW Distance Space", fontsize=11, pad=8)
 ax_c.set_xticks([])
 ax_c.set_yticks([])
 ax_c.set_ylim(-6.8, 5.8)
+handles, _ = scatter_c.legend_elements()
+handles.append(med_star)
 ax_c.legend(
+    handles,
+    [f"Cluster {k + 1}" for k in range(3)] + ["Medoids"],
     loc="upper center",
     ncol=2,
     frameon=True,

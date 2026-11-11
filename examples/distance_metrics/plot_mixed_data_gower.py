@@ -174,20 +174,18 @@ for spine in ax_a.spines.values():
 
 # Panel (b): 2D MDS semantic space of Gower distances
 ax_b = axes[1]
-for k in range(3):
-    mask = model.labels_ == k
-    ax_b.scatter(
-        coords_2d[mask, 0],
-        coords_2d[mask, 1],
-        c=COLORS[k],
-        s=45,
-        alpha=0.7,
-        edgecolors="none",
-        label=f"Segment {k + 1}",
-    )
+scatter_b = ax_b.scatter(
+    coords_2d[:, 0],
+    coords_2d[:, 1],
+    c=model.labels_,
+    cmap="tab10",
+    s=45,
+    alpha=0.7,
+    edgecolors="none",
+)
 
 med_coords = coords_2d[model.medoid_indices_]
-ax_b.scatter(
+med_star = ax_b.scatter(
     med_coords[:, 0],
     med_coords[:, 1],
     marker="*",
@@ -203,7 +201,11 @@ ax_b.set_title("2D Projection of Gower Metric Space", fontsize=11, pad=8)
 ax_b.set_xticks([])
 ax_b.set_yticks([])
 ax_b.set_ylim(-0.45, 0.55)
+handles, _ = scatter_b.legend_elements()
+handles.append(med_star)
 ax_b.legend(
+    handles,
+    [f"Segment {k + 1}" for k in range(3)] + ["Medoid Personas"],
     loc="upper center",
     ncol=2,
     frameon=True,

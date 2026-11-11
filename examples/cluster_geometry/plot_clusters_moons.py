@@ -14,17 +14,20 @@ import matplotlib.pyplot as plt
 from sklearn.datasets import make_moons
 from clarans import CLARANS
 
-COLORS = ["#2b5c8f", "#d95f02"]
-
-
 X, _ = make_moons(n_samples=500, noise=0.06, random_state=42)
 model = CLARANS(n_clusters=2, num_local=5, random_state=42)
 model.fit(X)
 
 fig, ax = plt.subplots(figsize=(6.0, 4.5))
-for k in range(2):
-    mask = model.labels_ == k
-    ax.scatter(X[mask, 0], X[mask, 1], c=COLORS[k], s=25, alpha=0.65, edgecolors="none")
+ax.scatter(
+    X[:, 0],
+    X[:, 1],
+    c=model.labels_,
+    cmap="tab10",
+    s=25,
+    alpha=0.65,
+    edgecolors="none",
+)
 
 centers = model.cluster_centers_
 ax.scatter(

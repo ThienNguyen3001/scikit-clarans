@@ -26,18 +26,15 @@ print(f"Transformed shape: {X_trans.shape}")
 
 # Distances to the first two medoids
 fig, ax = plt.subplots(figsize=(6.5, 4.8))
-colors = ["#2b5c8f", "#d95f02", "#7570b3"]
-for k in range(3):
-    mask = model.labels_ == k
-    ax.scatter(
-        X_trans[mask, 0],
-        X_trans[mask, 1],
-        c=colors[k],
-        s=25,
-        alpha=0.65,
-        edgecolors="none",
-        label=f"Cluster {k + 1}",
-    )
+scatter = ax.scatter(
+    X_trans[:, 0],
+    X_trans[:, 1],
+    c=model.labels_,
+    cmap="tab10",
+    s=25,
+    alpha=0.65,
+    edgecolors="none",
+)
 
 for spine in ax.spines.values():
     spine.set_color("#cccccc")
@@ -46,7 +43,10 @@ for spine in ax.spines.values():
 ax.set_xlabel("Distance to Medoid 0", fontsize=9.5)
 ax.set_ylabel("Distance to Medoid 1", fontsize=9.5)
 ax.set_title("Transformed Feature Space: Distance to Medoids", fontsize=11, pad=8)
+handles, _ = scatter.legend_elements()
 ax.legend(
+    handles,
+    [f"Cluster {k + 1}" for k in range(3)],
     loc="upper right",
     frameon=True,
     facecolor="white",

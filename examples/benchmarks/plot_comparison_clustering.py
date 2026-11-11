@@ -25,9 +25,6 @@ from sklearn.datasets import make_blobs
 from sklearn.cluster import KMeans
 from clarans import CLARANS, FastCLARANS
 
-COLORS = ["#2b5c8f", "#d95f02", "#7570b3"]
-
-
 X, _ = make_blobs(n_samples=600, centers=3, cluster_std=0.70, random_state=42)
 
 # Use metric='sqeuclidean' so all three estimators minimize squared Euclidean distance
@@ -54,9 +51,15 @@ for ax, (name, model, marker, label_name) in zip(axes, models):
     model.fit(X)
     elapsed = time.perf_counter() - t0
 
-    for k in range(3):
-        mask = model.labels_ == k
-        ax.scatter(X[mask, 0], X[mask, 1], c=COLORS[k], s=18, alpha=0.65, edgecolors="none")
+    ax.scatter(
+        X[:, 0],
+        X[:, 1],
+        c=model.labels_,
+        cmap="tab10",
+        s=18,
+        alpha=0.65,
+        edgecolors="none",
+    )
 
     centers = getattr(model, "cluster_centers_", None)
     if centers is not None:

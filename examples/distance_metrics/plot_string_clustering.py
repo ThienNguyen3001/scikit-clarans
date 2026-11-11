@@ -102,21 +102,19 @@ fig, axes = plt.subplots(1, 2, figsize=(12.0, 5.2))
 
 # Panel (a): 2D MDS semantic space with text annotations
 ax_a = axes[0]
-for k in range(3):
-    mask = model.labels_ == k
-    ax_a.scatter(
-        coords_2d[mask, 0],
-        coords_2d[mask, 1],
-        c=COLORS[k],
-        s=70,
-        alpha=0.65,
-        edgecolors="none",
-        label=f"Cluster {k + 1} ('{words[model.medoid_indices_[k]]}')",
-    )
+scatter_a = ax_a.scatter(
+    coords_2d[:, 0],
+    coords_2d[:, 1],
+    c=model.labels_,
+    cmap="tab10",
+    s=70,
+    alpha=0.65,
+    edgecolors="none",
+)
 
 # Highlight medoid words with gold stars
 med_coords = coords_2d[model.medoid_indices_]
-ax_a.scatter(
+med_star = ax_a.scatter(
     med_coords[:, 0],
     med_coords[:, 1],
     marker="*",
@@ -148,7 +146,14 @@ ax_a.set_yticks([])
 for spine in ax_a.spines.values():
     spine.set_color("#cccccc")
     spine.set_linewidth(0.8)
+handles, _ = scatter_a.legend_elements()
+handles.append(med_star)
+cluster_labels = [f"Cluster {k + 1} ('{words[model.medoid_indices_[k]]}')" for k in range(3)] + [
+    "Medoid Words"
+]
 ax_a.legend(
+    handles,
+    cluster_labels,
     loc="upper center",
     bbox_to_anchor=(0.5, -0.05),
     ncol=2,

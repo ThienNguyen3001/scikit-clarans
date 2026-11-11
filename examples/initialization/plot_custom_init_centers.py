@@ -25,18 +25,15 @@ model = CLARANS(n_clusters=3, init=user_seeds, num_local=1, random_state=42)
 model.fit(X)
 
 fig, ax = plt.subplots(figsize=(6.5, 4.8))
-colors = ["#2b5c8f", "#d95f02", "#7570b3"]
-for k in range(3):
-    mask = model.labels_ == k
-    ax.scatter(
-        X[mask, 0],
-        X[mask, 1],
-        c=colors[k],
-        s=25,
-        alpha=0.6,
-        edgecolors="none",
-        label=f"Cluster {k + 1}",
-    )
+ax.scatter(
+    X[:, 0],
+    X[:, 1],
+    c=model.labels_,
+    cmap="tab10",
+    s=25,
+    alpha=0.6,
+    edgecolors="none",
+)
 
 # Seed coordinates
 ax.scatter(
