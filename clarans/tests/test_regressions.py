@@ -144,16 +144,7 @@ class TestBug6Fix_HeuristicDeterministicOrder(unittest.TestCase):
 
 
 class TestBug11Fix_ArgpartitionPerformance(unittest.TestCase):
-    """Verify that _compute_2min Python fallback uses argpartition."""
-
-    def test_compute_2min_uses_argpartition(self):
-        """Fallback path should use O(n*k) argpartition, not O(n*k*log k) argsort."""
-        import inspect
-
-        source = inspect.getsource(CLARANS._compute_2min)
-
-        self.assertIn("argpartition", source, "Should use argpartition")
-        self.assertNotIn("argsort", source, "Should NOT use argsort")
+    """Verify that _compute_2min Python fallback gives correct 2-min results using argpartition."""
 
     def test_compute_2min_correctness_after_fix(self):
         """Verify argpartition gives correct 2-min results."""

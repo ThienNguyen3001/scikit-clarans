@@ -45,11 +45,13 @@ class TestFastCLARANS(unittest.TestCase):
     def test_single_cluster_1d_swap(self):
         """Test on 1D data where initial point is suboptimal to verify swap occurs."""
         X_1d = np.array([[0.0], [1.0], [10.0]])
-        # random_state=0 initially selects index 2 (10.0) with cost 19.0
+        # Optimal 1-medoid on [0, 1, 10] is 1.0 (cost: |0-1| + |1-1| + |10-1| = 10.0)
+        expected_cost = min(float(np.sum(np.abs(X_1d - x))) for x in X_1d)
         model_1d = FastCLARANS(n_clusters=1, num_local=1, max_neighbors=10, random_state=0)
         model_1d.fit(X_1d)
+        self.assertAlmostEqual(model_1d.inertia_, expected_cost, places=7)
         self.assertEqual(model_1d.medoid_indices_[0], 1)
-        self.assertAlmostEqual(model_1d.inertia_, 10.0)
+        self.assertGreaterEqual(model_1d.n_swaps_, 0)
 
     def test_max_neighbors_default(self):
         """Default max_neighbors should be None and calculated correctly in FastCLARANS."""

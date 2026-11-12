@@ -8,6 +8,7 @@ from sklearn.base import clone
 from sklearn.exceptions import NotFittedError
 from sklearn.datasets import make_blobs
 from sklearn.metrics import (
+    adjusted_rand_score,
     pairwise_distances,
     pairwise_distances_argmin_min,
     silhouette_score,
@@ -237,10 +238,17 @@ class TestCLARANS(unittest.TestCase):
         self.X, self.y = make_blobs(n_samples=100, centers=3, n_features=2, random_state=42)
 
     def test_convergence(self):
-        clarans = CLARANS(n_clusters=3, num_local=10, max_neighbors=100, random_state=42)
+        clarans = CLARANS(n_clusters=3, num_local=5, max_neighbors=100, random_state=42)
         clarans.fit(self.X)
         score = silhouette_score(self.X, clarans.labels_)
-        self.assertGreater(score, -0.1, f"Silhouette score too low: {score}")
+        ari = adjusted_rand_score(self.y, clarans.labels_)
+        self.assertGreater(score, 0.5, f"Silhouette score too low: {score}")
+        self.assertGreater(ari, 0.80, f"ARI score too low: {ari}")
+        self.assertLess(
+            clarans.inertia_,
+            calculate_cost(self.X, [0], metric="euclidean"),
+            "3-cluster cost should be significantly lower than 1-medoid baseline",
+        )
 
     def test_metrics(self):
         """Test different metrics."""
