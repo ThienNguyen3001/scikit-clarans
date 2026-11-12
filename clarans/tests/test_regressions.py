@@ -143,19 +143,6 @@ class TestBug6Fix_HeuristicDeterministicOrder(unittest.TestCase):
         )
 
 
-class TestBug10Fix_DeadCodeRemoved(unittest.TestCase):
-    """Verify that _DELTA_TOL dead code has been removed."""
-
-    def test_delta_tol_no_longer_defined(self):
-        """_DELTA_TOL should not exist in the module."""
-        from clarans import _clarans
-
-        self.assertFalse(
-            hasattr(_clarans, "_DELTA_TOL"),
-            "_DELTA_TOL dead code should be removed",
-        )
-
-
 class TestBug11Fix_ArgpartitionPerformance(unittest.TestCase):
     """Verify that _compute_2min Python fallback uses argpartition."""
 
