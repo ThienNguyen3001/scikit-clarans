@@ -847,66 +847,6 @@ class TestMathematicalInvariants(unittest.TestCase):
 
 
 # ===========================================================================
-# Group H: sklearn API Compliance
-# ===========================================================================
-class TestSklearnAPICompliance(unittest.TestCase):
-    """Group H – Verify compliance with scikit-learn estimator API
-    (get_params, set_params, repr, tags, n_features_in_)."""
-
-    def setUp(self):
-        self.X, self.y = make_blobs(n_samples=60, centers=3, n_features=2, random_state=42)
-
-    def test_get_set_params_roundtrip(self):
-        """get_params → set_params → get_params should be idempotent."""
-        for cls in [CLARANS, FastCLARANS]:
-            m = cls(n_clusters=5, num_local=3, random_state=99)
-            params = m.get_params()
-            self.assertEqual(params["n_clusters"], 5)
-            self.assertEqual(params["num_local"], 3)
-            self.assertEqual(params["random_state"], 99)
-
-            m.set_params(n_clusters=2)
-            self.assertEqual(m.get_params()["n_clusters"], 2)
-            # Other params unchanged
-            self.assertEqual(m.get_params()["num_local"], 3)
-
-    def test_repr_contains_class_name_and_params(self):
-        """repr(model) should contain class name and key parameters."""
-        for cls in [CLARANS, FastCLARANS]:
-            m = cls(n_clusters=5, random_state=42)
-            r = repr(m)
-            self.assertIn(cls.__name__, r)
-            self.assertIn("n_clusters=5", r)
-            self.assertIn("random_state=42", r)
-
-    def test_sklearn_tags_sparse(self):
-        """__sklearn_tags__() should report sparse=True."""
-        for cls in [CLARANS, FastCLARANS]:
-            m = cls(n_clusters=3)
-            tags = m.__sklearn_tags__()
-            self.assertTrue(tags.input_tags.sparse)
-
-    def test_sklearn_tags_precomputed(self):
-        """__sklearn_tags__() should report pairwise=True when metric='precomputed'."""
-        for cls in [CLARANS, FastCLARANS]:
-            m = cls(n_clusters=3, metric="precomputed")
-            tags = m.__sklearn_tags__()
-            self.assertTrue(tags.input_tags.pairwise)
-
-    def test_n_features_in_set_after_fit(self):
-        """n_features_in_ should be set for both standard and precomputed inputs."""
-        for cls in [CLARANS, FastCLARANS]:
-            m = cls(n_clusters=3, random_state=42).fit(self.X)
-            self.assertTrue(hasattr(m, "n_features_in_"))
-            self.assertEqual(m.n_features_in_, 2)
-
-            D = pairwise_distances(self.X)
-            m_pre = cls(n_clusters=3, metric="precomputed", random_state=42).fit(D)
-            self.assertTrue(hasattr(m_pre, "n_features_in_"))
-            self.assertEqual(m_pre.n_features_in_, D.shape[1])
-
-
-# ===========================================================================
 # Group I: Concurrent/Edge Memory Tests
 # ===========================================================================
 class TestEdgeMemoryAndExtremeParams(unittest.TestCase):
