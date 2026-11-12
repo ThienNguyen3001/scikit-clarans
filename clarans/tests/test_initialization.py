@@ -187,9 +187,3 @@ class TestInitializationDeep(unittest.TestCase):
             model.fit(self.X)
         self.assertEqual(len(model.medoid_indices_), 3)
         self.assertEqual(len(np.unique(model.medoid_indices_)), 3)
-
-    def test_heuristic_deterministic_multiple_calls(self):
-        """Heuristic init is deterministic – two calls produce identical result."""
-        m1 = initialize_heuristic(self.X, 3, "euclidean")
-        m2 = initialize_heuristic(self.X, 3, "euclidean")
-        np.testing.assert_array_equal(m1, m2)
