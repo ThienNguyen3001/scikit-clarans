@@ -6,13 +6,21 @@ Guidelines, architecture rules, and workflows for working on `scikit-clarans`.
 
 ## 1. Environment and build setup
 
+### Python and dependency requirements
+- **Python version**: `scikit-clarans` requires Python >= 3.11 (`requires-python = ">=3.11"` in `pyproject.toml`).
+- **Build dependencies**: `meson-python>=0.15.0`, `ninja`, `Cython>=3.0`, and `numpy>=2.0.0`.
+- **Developer tools**: `pip install -e ".[dev]"` installs test and linting libraries (`pytest`, `flake8`, `black`, `mypy`). Standalone packaging and release tools are not bundled in `.[dev]`; developers should install them manually:
+  ```bash
+  pip install pre-commit build twine
+  ```
+
 ### Virtual environment
 Activate the repository virtual environment before running Python commands:
 - **Windows (PowerShell)**: `& .venv\Scripts\Activate.ps1`
 - **Linux / macOS (Bash)**: `source .venv/bin/activate`
 
 ### Ninja PATH on Windows
-`scikit-clarans` uses `meson-python` with `ninja` for Cython compilation. In editable development mode (`pip install -e ".[dev]"`), imports run through `_scikit_clarans_editable_loader.py`, which invokes `ninja` on the fly to recompile modified C extensions.
+`scikit-clarans` uses `meson-python` with `ninja` for Cython compilation. In editable development mode (`pip install -e ".[dev]"`), imports run through `_scikit_clarans_editable_loader.py` (located in `.venv/Lib/site-packages/`), which invokes `ninja` on the fly to recompile modified C extensions.
 
 Do not call `.venv\Scripts\python.exe` or `.venv\Scripts\pytest.exe` directly without activating the virtual environment or prepending `.venv\Scripts` to `PATH`. Otherwise, the system fails to locate `ninja` and raises:
 `FileNotFoundError: [WinError 2] The system cannot find the file specified`
@@ -20,7 +28,7 @@ Do not call `.venv\Scripts\python.exe` or `.venv\Scripts\pytest.exe` directly wi
 ### Editable installation
 Use `--no-build-isolation` to avoid reinstalling dependencies on every build:
 ```bash
-pip install meson-python ninja cython numpy
+pip install meson-python ninja "cython>=3.0" "numpy>=2.0.0"
 pip install -e ".[dev]" --no-build-isolation
 ```
 
@@ -51,7 +59,14 @@ python -c "import clarans; print('Version:', clarans.__version__, '| HAS_CYTHON:
   - Replacing `pam_build_step` with 2D broadcasting creates intermediate diff arrays allocating ~140 MB of RAM for $n=3000$ (vs 0.8 KB in Cython).
   All 6 Cython kernels in `clarans/_core.pyx` are mandatory for maintaining the library's strictly bounded $O(1) / O(n)$ working memory footprint and must NOT be removed or replaced.
 - Every function in `clarans/_core.pyx` needs matching type annotations in `clarans/_core.pyi`.
-- Every Cython kernel must have an equivalent pure Python or NumPy fallback that raises an `EfficiencyWarning` when `HAS_CYTHON` is `False`. If `_core` fails to import, all public APIs must remain usable.
+- Every Cython kernel has an equivalent pure Python or NumPy fallback embedded directly in the calling modules:
+  1. `clarans_delta`: inline vectorized NumPy implementation in `clarans/_clarans.py:625`.
+  2. `fastpam1_delta`: `_fallback_fastpam1_delta` in `clarans/_fast_clarans.py:20`.
+  3. `update_cache_2min`: inline `np.argpartition` fallback in `clarans/_clarans.py:928`.
+  4. `pam_build_step`: inline NumPy broadcasting fallback in `clarans/_initialization.py:170`.
+  5. `kmedoids_pp_trials`: inline Python fallback in `clarans/_initialization.py:320`.
+  6. `is_matrix_symmetric`: `np.allclose(X, X.T, rtol=1e-5, atol=1e-8)` fallback in `clarans/_clarans.py:803`.
+  When `HAS_CYTHON` is `False`, `_warn_cython_unavailable()` in `clarans/utils.py` raises an `EfficiencyWarning` once per session via thread-safe double-checked locking at the start of `fit()`. If `_core` fails to import, all public APIs remain fully usable.
 - Kernels must support fused numeric types for both `float64` and `float32`.
 
 ### Scikit-learn estimator requirements
@@ -61,19 +76,21 @@ Both `CLARANS` and `FastCLARANS` inherit from `BaseEstimator`, `ClusterMixin`, a
 3. Name all fitted attributes with a single trailing underscore:
    - `labels_`: Cluster labels for each training sample.
    - `medoid_indices_`: Indices of selected medoids in training data.
-   - `cluster_centers_`: Coordinates of medoids (not defined when `metric='precomputed'`).
+   - `cluster_centers_`: Coordinates of medoids (not defined / deleted via `del self.cluster_centers_` when `metric='precomputed'`).
    - `inertia_`: Total sum of distances from samples to closest medoids.
    - `max_neighbors_`: Effective sampling budget per local search restart.
    - `neighborhood_size_`: Total neighborhood size in search space ($k(n-k)$ for CLARANS, $n-k$ for FastCLARANS).
    - `n_iter_`: Candidate neighbors evaluated during the best restart.
    - `n_swaps_`: Successful medoid swaps performed during the best restart.
    - `n_features_in_`: Number of features seen during `fit()` (equals $n$ when `metric='precomputed'`).
+   - `feature_names_in_`: Feature names seen during `fit()` (defined when input data contains feature names, e.g. pandas DataFrame).
 4. Implement standard estimator methods: `fit(X)`, `predict(X)`, `transform(X)`, `fit_predict(X)`, `fit_transform(X)`, `score(X)`, and `get_feature_names_out(input_features=None)`.
-5. Ensure all checks in `clarans/tests/test_common.py` pass via `@parametrize_with_checks`.
+5. Implement scikit-learn tags declaring estimator capabilities via both modern `__sklearn_tags__()` (scikit-learn >= 1.6) and legacy `_more_tags()`: `sparse = True`, `allow_nan = (metric == 'nan_euclidean')`, and `pairwise = (metric == 'precomputed')`.
+6. Ensure all checks in `clarans/tests/test_common.py` pass via `@parametrize_with_checks`.
 
 ### Code style and quality
 - Format code with `black` (`[tool.black]`: max line length 100, py311-py314 targets).
-- Python code must pass `flake8 clarans` (`.flake8`: max line length 100, ignore `E203`).
+- Python code must pass `flake8 clarans` (`.flake8`: max line length 100, `extend-ignore = E203`).
 - Static types must verify with `mypy clarans`.
 - Pre-commit hooks (`black`, `flake8`, whitespace fixers) configured in `.pre-commit-config.yaml`.
 
@@ -94,8 +111,10 @@ When writing or modifying files in `clarans/_core.pyx`:
        double
        float
    ```
-4. Use 1D C-contiguous typed memoryviews (`const floating[::1]`, `const intp_t[::1]`). Mark read-only inputs `const`.
-5. Support optional pre-allocated working buffers (such as `floating[::1] delta_buf = None` in `fastpam1_delta`) to avoid repeated heap allocations in hot loops.
+4. Use 1D and 2D C-contiguous typed memoryviews (`const floating[::1]`, `const intp_t[::1]`, and `const floating[:, ::1]` for pairwise distance matrices like `subD`, `D`, and `dists_candidates`). Mark read-only inputs `const`.
+5. Support optional pre-allocated working buffers (such as `floating[::1] delta_buf = None` in `fastpam1_delta`) to avoid repeated heap allocations in hot loops:
+   - Always validate buffer shape outside `nogil` (e.g. `if delta_buf.shape[0] < n_clusters:` or `!= k` raise `ValueError`).
+   - Zero or reset buffer contents inside `with nogil:` (e.g. `for i in range(n_clusters): delta_arr[i] = 0.0`) to ensure clean state across repeated candidate evaluations without reallocation.
 6. Keep type stubs in `clarans/_core.pyi` synchronized with `clarans/_core.pyx`.
 
 ---
@@ -115,7 +134,7 @@ pytest clarans/tests/test_core.py
 & .venv\Scripts\Activate.ps1
 # 1. Test Cython kernels against NumPy reference (float64 and float32)
 pytest clarans/tests/test_core.py -v
-# 2. Test Scikit-Learn estimator compliance (100+ checks)
+# 2. Test Scikit-Learn estimator compliance (100 checks: 98 passed, 2 skipped)
 pytest clarans/tests/test_common.py
 # 3. Full test suite with coverage
 pytest --cov=clarans --cov-report=term-missing clarans/tests/
@@ -148,18 +167,22 @@ sphinx-build -b html docs/source docs/build/html -W --keep-going
 ### Benchmark (`/benchmark`)
 ```powershell
 & .venv\Scripts\Activate.ps1
-# 1. Gallery benchmarks
+# 1. Gallery benchmarks (examples/benchmarks/)
 python examples/benchmarks/plot_clarans_vs_fastclarans.py
 python examples/benchmarks/plot_runtime_scaling.py
 python examples/benchmarks/plot_cost_evaluation_strategy.py
+python examples/benchmarks/plot_comparison_clustering.py
+python examples/benchmarks/plot_parameter_sensitivity.py
+python examples/benchmarks/plot_search_trajectory.py
 
-# 2. Interactive and telemetry benchmarks
+# 2. Interactive and telemetry benchmarks (benchmarks/)
 # - benchmarks/benchmark_clarans_colab.ipynb (Large-scale Colab benchmarking)
-# - unsupervised-anomaly-detection.ipynb (Unsupervised anomaly detection on Numenta NAB sensor telemetry)
+# - benchmarks/benchmark_n_jobs_colab.ipynb (Multi-core parallel scalability benchmarking)
+# Note: Anomaly detection is implemented as a gallery script in examples/robustness/plot_anomaly_detection.py
 ```
 
 ### Examples (`/examples`)
-Run all 28 gallery scripts with headless `MPLBACKEND=Agg`:
+Run all 29 gallery scripts across 6 categories (`cluster_geometry`: 4, `distance_metrics`: 10, `initialization`: 3, `inference`: 4, `robustness`: 2, `benchmarks`: 6) with headless `MPLBACKEND=Agg`:
 ```powershell
 & .venv\Scripts\Activate.ps1
 $env:MPLBACKEND = "Agg"
@@ -183,10 +206,15 @@ The `paper/` directory contains manuscript files for the *Journal of Open Source
 ### Pre-flight checks (`/preflight`)
 Run before opening a pull request or tagging a release:
 1. Rebuild Cython: `pip install -e ".[dev]" --no-build-isolation`
-2. Lint: `black --check clarans examples` && `flake8 clarans` && `mypy clarans`
+2. Lint (PowerShell-compatible sequential commands without `&&`):
+   ```powershell
+   black --check clarans examples
+   flake8 clarans
+   mypy clarans
+   ```
 3. Sklearn check: `pytest clarans/tests/test_common.py`
 4. Full tests: `pytest --cov=clarans clarans/tests/`
-5. Pre-commit: `pre-commit run --all-files`
+5. Pre-commit (requires `pip install pre-commit`): `pre-commit run --all-files`
 
 ### CI/CD Workflows (`.github/workflows/`)
 1. `test_suite.yml`: Cross-platform test matrix across Ubuntu (Python 3.11–3.15), Windows (3.11, 3.15 with MSVC), and macOS (3.11, 3.15).
@@ -198,7 +226,7 @@ Run before opening a pull request or tagging a release:
 ### Release (`/release`)
 
 #### Step A: Local dry-run validation
-Verify locally that sdist and wheels compile cleanly and metadata passes twine validation without uploading:
+Verify locally that sdist and wheels compile cleanly and metadata passes twine validation without uploading (install build tools first if needed: `pip install build twine`):
 1. Check that version strings match in `pyproject.toml`, `meson.build`, and `clarans/__init__.py`.
 2. Run `/preflight` to verify tests, linters, and sklearn checks pass.
 3. Clean previous build folders: `Remove-Item -Recurse -Force dist, build`
@@ -243,6 +271,7 @@ pip install --index-url https://test.pypi.org/simple/ --extra-index-url https://
 | Typical use | Tabular datasets, production pipelines, and larger datasets. | Baseline comparisons and reproducing Ng & Han (2002). |
 
 ### Key hyperparameters
+All hyperparameters in both `CLARANS` and `FastCLARANS` are **keyword-only** (`*`).
 - `n_clusters`: Number of clusters ($k$).
 - `num_local`: Number of local search restarts (typically 2 to 5).
 - `max_neighbors`: Neighbor sampling budget per local search:
@@ -253,7 +282,7 @@ pip install --index-url https://test.pypi.org/simple/ --extra-index-url https://
 - `cost_evaluation`: Strategy for swap evaluation (`CLARANS` only):
   - `'delta'` (default): FastPAM1-style nearest and second-nearest distance tracking in $O(n \cdot d)$.
   - `'brute_force'`: Recalculates full clustering cost in $O(n \cdot k \cdot d)$ per candidate (classic Ng & Han).
-  - (`FastCLARANS` always uses `'delta'`).
+  - (`FastCLARANS` always uses `'delta'` and does not accept `cost_evaluation` in `__init__`).
 - `init`: Initialization strategy (`'k-medoids++'`, `'random'`, `'heuristic'`, `'build'`, or explicit array-like).
 - `metric`: Distance metric (`'euclidean'`, `'manhattan'`, `'cosine'`, `'chebyshev'`, `'precomputed'`, or a callable).
 - `metric_params`: Optional dictionary of keyword arguments for the metric (such as `{'VI': VI}` for `'mahalanobis'`).
@@ -320,12 +349,13 @@ model.fit(X_sparse)
 ## 6. Distance metric routing
 
 `scikit-clarans` routes distance evaluations based on input type and metric:
-1. `'precomputed'`: Validates matrix symmetry with `_core.is_matrix_symmetric`. In precomputed mode, `cluster_centers_` is set to `None` because coordinate data does not exist. Transposes row/column slices automatically if precomputed matrix is asymmetric.
-2. `cdist` (SciPy): Used for dense arrays with standard metrics (`euclidean`, `cityblock`, `cosine`, `chebyshev`). Metric aliases mapped in `_SCIPY_METRIC_MAP` translate `manhattan` to `cityblock`, `l1` to `cityblock`, `l2` to `euclidean`, `infinity` to `chebyshev`, and `sokalmichener` to `matching`.
-3. `DistanceMetric` (scikit-learn): Used for sparse inputs (`scipy.sparse.csr_matrix` and `csc_matrix`) to compute row-wise distances without densifying the matrix.
+1. `'precomputed'`: Validates matrix symmetry with `_core.is_matrix_symmetric`. In precomputed mode, `cluster_centers_` is not defined (attribute deleted/unset via `del self.cluster_centers_`) because coordinate data does not exist. Transposes row/column slices automatically if precomputed matrix is asymmetric (extracts 1D zero-copy row view for symmetric, column slice for asymmetric).
+2. `cdist` (SciPy): Used for dense arrays with standard metrics (`euclidean`, `cityblock`, `cosine`, `chebyshev`). Metric aliases mapped in `_SCIPY_METRIC_MAP` translate `manhattan` to `cityblock`, `l1` to `cityblock`, `l2` to `euclidean`, `infinity` to `chebyshev`, `sokalmichener` to `matching`, and `p` to `minkowski`.
+3. `DistanceMetric` (scikit-learn): Used for sparse inputs (`scipy.sparse.csr_matrix` and `csc_matrix`) to compute row-wise distances without densifying the matrix. Falls back to `pairwise` if `DistanceMetric` returns `-999.0` for unsupported callables on sparse data.
 4. `pairwise`: Fallback for custom callable metrics (`metric=func`).
 5. `nan_euclidean`: Computes pairwise Euclidean distances over non-missing feature subsets when inputs contain NaNs.
 6. Special requirements: Metric `'mahalanobis'` requires the inverse covariance matrix `VI` passed in `metric_params`.
+7. Excluded metrics: Metrics `'kulczynski1'` and `'wminkowski'` are explicitly excluded (`_EXCLUDED_METRICS = {"kulczynski1", "wminkowski"}`) due to upstream deprecation in SciPy and scikit-learn.
 
 ---
 
@@ -333,9 +363,10 @@ model.fit(X_sparse)
 
 - `'k-medoids++'` (default): Probabilistic $D^2$-weighting adapted from Arthur & Vassilvitskii (2007). Evaluates $2 + \ln(k)$ local trials via `_core.kmedoids_pp_trials`.
 - `'random'`: Uniform random sample of $k$ distinct points.
-- `'heuristic'`: Selects points with the lowest sum of distances to all other samples. Computes full $O(n^2)$ pairwise distances.
+- `'heuristic'`: Selects points with the lowest sum of distances to all other samples. Computes full $O(n^2)$ pairwise distances, guaranteeing deterministically sorted medoid indices (`current_medoids_indices.sort()`).
 - `'build'`: Greedy BUILD phase from Kaufman & Rousseeuw (1990). Selects an initial center minimizing total distance, then adds medoids that maximize distance reduction. Computes $O(n^2)$ distances, accelerated by `_core.pam_build_step`.
 - Explicit array (`init=array_like`): Snaps supplied coordinates to nearest unique training samples and backfills duplicates with random points.
+- **Callable initializer and metric support**: Standalone initialization routines (`initialize_k_medoids_plus_plus`, `initialize_heuristic`, `initialize_build`, `initialize_from_array`) can be invoked directly as callable functions and support custom callable distance metrics (`metric: str | Callable`).
 - **Deterministic cache optimization** (`_prepare_initial_medoids`): For deterministic initializers (`'build'`, `'heuristic'`, explicit array), initial medoids are calculated once before the `num_local` loop rather than recalculated every restart, issuing a `UserWarning` if `num_local > 1`.
 
 ---
@@ -345,7 +376,7 @@ model.fit(X_sparse)
 These safeguards are tested in `test_regressions.py` and `test_robustness.py`:
 
 1. Delta tolerance: Accept swaps only when `total_delta < _delta_tolerance(cost)`, where `_delta_tolerance(cost) = -max(1e-16, 1e-12 * abs(cost))`. This prevents infinite swap loops caused by floating-point rounding when delta is near zero.
-2. Scikit-learn `score(X)`: Returns negative inertia (`-self.inertia_`) so higher values indicate better fits in `GridSearchCV`.
+2. Scikit-learn `score(X)`: Computes `-float(np.sum(np.min(self.transform(X), axis=1)))` (the opposite of the total distance of samples to their closest medoid), which evaluates to negative inertia (`-self.inertia_`) on training data and dynamically computes negative total distance on unseen test/validation folds, enabling direct integration with `GridSearchCV` and `cross_val_score`.
 3. Precomputed distance memory efficiency: Precomputed distance matrices never attach temporary full-matrix attributes (such as `_precomputed_source`) to `self`. Slices are extracted directly as 1D zero-copy row views (symmetric) or written into caller buffers (asymmetric), ensuring an $O(1)$ memory footprint without risking object instance memory leaks.
 4. Scikit-learn compatibility: Supports both modern `__sklearn_tags__` (scikit-learn >= 1.6) and legacy `_more_tags()`.
 5. Numerical overflow: Verifies costs with `np.isfinite()`. If values exceed float64 limits ($> 10^{160}$) and square Euclidean distances overflow to infinity, raises a `ValueError`.
@@ -375,4 +406,3 @@ Publications and citation details:
     url          = {https://github.com/ThienNguyen3001/scikit-clarans}
   }
   ```
-
