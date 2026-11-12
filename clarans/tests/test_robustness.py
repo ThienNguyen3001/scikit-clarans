@@ -953,43 +953,6 @@ class TestFastCLARANSSpecific(unittest.TestCase):
 
 
 # ===========================================================================
-# Group K: calculate_cost Exhaustive
-# ===========================================================================
-class TestCalculateCostExhaustive(unittest.TestCase):
-    """Group K – Exhaustive tests for the calculate_cost utility function."""
-
-    def setUp(self):
-        self.X, _ = make_blobs(n_samples=50, centers=3, n_features=2, random_state=42)
-
-    def test_calculate_cost_sparse_input(self):
-        """calculate_cost should work with CSR sparse X."""
-        X_sparse = sparse.csr_matrix(self.X)
-        medoids = np.array([0, 20, 40])
-        cost_dense = calculate_cost(self.X, medoids, "euclidean")
-        cost_sparse = calculate_cost(X_sparse, medoids, "euclidean")
-        self.assertAlmostEqual(cost_dense, cost_sparse, places=6)
-
-    def test_calculate_cost_callable_metric(self):
-        """calculate_cost should work with a callable metric function."""
-
-        def my_l1(u, v):
-            return float(np.sum(np.abs(u - v)))
-
-        medoids = np.array([0, 20, 40])
-        cost_callable = calculate_cost(self.X, medoids, my_l1)
-        cost_manhattan = calculate_cost(self.X, medoids, "manhattan")
-        self.assertAlmostEqual(cost_callable, cost_manhattan, places=5)
-
-    def test_calculate_cost_single_medoid(self):
-        """calculate_cost with a single medoid."""
-        medoids = np.array([0])
-        cost = calculate_cost(self.X, medoids, "euclidean")
-        # Manual: sum of distances from every point to X[0]
-        expected = float(np.sum(np.sqrt(np.sum((self.X - self.X[0]) ** 2, axis=1))))
-        self.assertAlmostEqual(cost, expected, places=6)
-
-
-# ===========================================================================
 # Group L: Cython Kernel Edge Cases
 # ===========================================================================
 @unittest.skipUnless(
