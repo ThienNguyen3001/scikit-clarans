@@ -6,8 +6,8 @@ reference implementations, verifying numerical precision for both float64 and
 float32 fused types, 0-allocation behavior, and index handling.
 """
 
-import unittest
 import numpy as np
+import pytest
 
 from clarans import HAS_CYTHON
 
@@ -17,12 +17,13 @@ except ImportError:
     _core = None  # type: ignore[assignment]
 
 
-@unittest.skipUnless(
-    HAS_CYTHON and _core is not None,
-    "Cython extension '_core' not compiled or available",
+@pytest.mark.skipif(
+    not (HAS_CYTHON and _core is not None),
+    reason="Cython extension '_core' not compiled or available",
 )
-class TestCythonCore(unittest.TestCase):
-    def setUp(self):
+class TestCythonCore:
+    @pytest.fixture(autouse=True)
+    def _setup_rng(self):
         self.rng = np.random.RandomState(42)
 
     # -----------------------------------------------------------------------
@@ -35,13 +36,18 @@ class TestCythonCore(unittest.TestCase):
         delta2 = np.sum(d_xc[mask2] - near_dist[mask2])
         return float(delta1 + delta2)
 
-    def test_clarans_delta_float64(self):
-        n_samples = 200
-        n_clusters = 5
+    @pytest.mark.parametrize(
+        "dtype, n_samples, n_clusters, places",
+        [
+            (np.float64, 200, 5, 10),
+            (np.float32, 150, 4, 4),
+        ],
+    )
+    def test_clarans_delta(self, dtype, n_samples, n_clusters, places):
         near_idx_map = self.rng.randint(0, n_clusters, size=n_samples).astype(np.intp)
-        near_dist = self.rng.uniform(0.1, 5.0, size=n_samples).astype(np.float64)
-        second_dist = near_dist + self.rng.uniform(0.1, 3.0, size=n_samples).astype(np.float64)
-        d_xc = self.rng.uniform(0.1, 8.0, size=n_samples).astype(np.float64)
+        near_dist = self.rng.uniform(0.1, 5.0, size=n_samples).astype(dtype)
+        second_dist = near_dist + self.rng.uniform(0.1, 3.0, size=n_samples).astype(dtype)
+        d_xc = self.rng.uniform(0.1, 8.0, size=n_samples).astype(dtype)
 
         for random_medoid_pos in range(n_clusters):
             py_delta = self._numpy_clarans_delta(
@@ -50,24 +56,7 @@ class TestCythonCore(unittest.TestCase):
             cy_delta = _core.clarans_delta(
                 near_idx_map, near_dist, second_dist, d_xc, random_medoid_pos, n_samples
             )
-            self.assertAlmostEqual(py_delta, cy_delta, places=10)
-
-    def test_clarans_delta_float32(self):
-        n_samples = 150
-        n_clusters = 4
-        near_idx_map = self.rng.randint(0, n_clusters, size=n_samples).astype(np.intp)
-        near_dist = self.rng.uniform(0.1, 5.0, size=n_samples).astype(np.float32)
-        second_dist = near_dist + self.rng.uniform(0.1, 3.0, size=n_samples).astype(np.float32)
-        d_xc = self.rng.uniform(0.1, 8.0, size=n_samples).astype(np.float32)
-
-        for random_medoid_pos in range(n_clusters):
-            py_delta = self._numpy_clarans_delta(
-                near_idx_map, near_dist, second_dist, d_xc, random_medoid_pos
-            )
-            cy_delta = _core.clarans_delta(
-                near_idx_map, near_dist, second_dist, d_xc, random_medoid_pos, n_samples
-            )
-            self.assertAlmostEqual(py_delta, cy_delta, places=4)
+            assert np.isclose(py_delta, cy_delta, atol=10 ** (-places))
 
     # -----------------------------------------------------------------------
     # 2. fastpam1_delta vs NumPy
@@ -90,13 +79,18 @@ class TestCythonCore(unittest.TestCase):
         best_val = float(delta_arr[best_m])
         return best_m, best_val, delta_arr
 
-    def test_fastpam1_delta_float64(self):
-        n_samples = 300
-        n_clusters = 6
+    @pytest.mark.parametrize(
+        "dtype, n_samples, n_clusters, places, rtol",
+        [
+            (np.float64, 300, 6, 10, 1e-10),
+            (np.float32, 200, 4, 4, 1e-4),
+        ],
+    )
+    def test_fastpam1_delta(self, dtype, n_samples, n_clusters, places, rtol):
         near_idx_map = self.rng.randint(0, n_clusters, size=n_samples).astype(np.intp)
-        near_dist = self.rng.uniform(0.5, 4.0, size=n_samples).astype(np.float64)
-        second_dist = near_dist + self.rng.uniform(0.2, 3.0, size=n_samples).astype(np.float64)
-        d_xc = self.rng.uniform(0.1, 6.0, size=n_samples).astype(np.float64)
+        near_dist = self.rng.uniform(0.5, 4.0, size=n_samples).astype(dtype)
+        second_dist = near_dist + self.rng.uniform(0.2, 3.0, size=n_samples).astype(dtype)
+        d_xc = self.rng.uniform(0.1, 6.0, size=n_samples).astype(dtype)
 
         py_best_m, py_best_val, py_delta_arr = self._numpy_fastpam1_delta(
             near_idx_map, near_dist, second_dist, d_xc, n_clusters
@@ -105,28 +99,9 @@ class TestCythonCore(unittest.TestCase):
             near_idx_map, near_dist, second_dist, d_xc, n_samples, n_clusters
         )
 
-        self.assertEqual(py_best_m, cy_best_m)
-        self.assertAlmostEqual(py_best_val, cy_best_val, places=10)
-        np.testing.assert_allclose(py_delta_arr, cy_delta_arr, rtol=1e-10)
-
-    def test_fastpam1_delta_float32(self):
-        n_samples = 200
-        n_clusters = 4
-        near_idx_map = self.rng.randint(0, n_clusters, size=n_samples).astype(np.intp)
-        near_dist = self.rng.uniform(0.5, 4.0, size=n_samples).astype(np.float32)
-        second_dist = near_dist + self.rng.uniform(0.2, 3.0, size=n_samples).astype(np.float32)
-        d_xc = self.rng.uniform(0.1, 6.0, size=n_samples).astype(np.float32)
-
-        py_best_m, py_best_val, py_delta_arr = self._numpy_fastpam1_delta(
-            near_idx_map, near_dist, second_dist, d_xc, n_clusters
-        )
-        cy_best_m, cy_best_val, cy_delta_arr = _core.fastpam1_delta(
-            near_idx_map, near_dist, second_dist, d_xc, n_samples, n_clusters
-        )
-
-        self.assertEqual(py_best_m, cy_best_m)
-        self.assertAlmostEqual(py_best_val, cy_best_val, places=4)
-        np.testing.assert_allclose(py_delta_arr, cy_delta_arr, rtol=1e-4)
+        assert py_best_m == cy_best_m
+        assert np.isclose(py_best_val, cy_best_val, atol=10 ** (-places))
+        np.testing.assert_allclose(py_delta_arr, cy_delta_arr, rtol=rtol)
 
     def test_fastpam1_delta_with_preallocated_buffer(self):
         n_samples = 250
@@ -144,19 +119,25 @@ class TestCythonCore(unittest.TestCase):
             near_idx_map, near_dist, second_dist, d_xc, n_samples, n_clusters
         )
 
-        self.assertEqual(cy_m, cy_m_nobuf)
-        self.assertAlmostEqual(cy_val, cy_val_nobuf, places=12)
+        assert cy_m == cy_m_nobuf
+        assert np.isclose(cy_val, cy_val_nobuf, atol=1e-12)
         np.testing.assert_allclose(cy_arr, cy_arr_nobuf, rtol=1e-12)
         np.testing.assert_allclose(buf, cy_arr_nobuf, rtol=1e-12)
 
     # -----------------------------------------------------------------------
     # 3. update_cache_2min vs NumPy
     # -----------------------------------------------------------------------
-    def test_update_cache_2min_general(self):
+    @pytest.mark.parametrize(
+        "dtype, rtol",
+        [
+            (np.float64, 1e-10),
+            (np.float32, 1e-5),
+        ],
+    )
+    def test_update_cache_2min(self, dtype, rtol):
         n_samples = 150
         for n_clusters in [2, 3, 7]:
-            subD = self.rng.uniform(0.5, 20.0, size=(n_samples, n_clusters)).astype(np.float64)
-            # Ensure C-contiguous
+            subD = self.rng.uniform(0.5, 20.0, size=(n_samples, n_clusters)).astype(dtype)
             subD = np.ascontiguousarray(subD)
 
             near_idx, near_d, second_d = _core.update_cache_2min(subD, n_samples, n_clusters)
@@ -166,9 +147,8 @@ class TestCythonCore(unittest.TestCase):
             ref_near_d = np.take_along_axis(subD, sorted_indices[:, :1], axis=1).ravel()
             ref_second_d = np.take_along_axis(subD, sorted_indices[:, 1:2], axis=1).ravel()
 
-            np.testing.assert_allclose(near_d, ref_near_d)
-            np.testing.assert_allclose(second_d, ref_second_d)
-            # When distances are strictly distinct, indices must match
+            np.testing.assert_allclose(near_d, ref_near_d, rtol=rtol)
+            np.testing.assert_allclose(second_d, ref_second_d, rtol=rtol)
             np.testing.assert_array_equal(near_idx, ref_near_idx)
 
     def test_update_cache_2min_k1(self):
@@ -180,38 +160,30 @@ class TestCythonCore(unittest.TestCase):
         near_idx, near_d, second_d = _core.update_cache_2min(subD, n_samples, n_clusters)
         np.testing.assert_array_equal(near_idx, np.zeros(n_samples, dtype=np.intp))
         np.testing.assert_allclose(near_d, subD[:, 0])
-        self.assertTrue(np.all(np.isinf(second_d)))
-
-    def test_update_cache_2min_float32(self):
-        n_samples = 80
-        n_clusters = 3
-        subD = self.rng.uniform(0.5, 15.0, size=(n_samples, n_clusters)).astype(np.float32)
-        subD = np.ascontiguousarray(subD)
-
-        near_idx, near_d, second_d = _core.update_cache_2min(subD, n_samples, n_clusters)
-        sorted_indices = np.argsort(subD, axis=1)
-        ref_near_d = np.take_along_axis(subD, sorted_indices[:, :1], axis=1).ravel()
-        ref_second_d = np.take_along_axis(subD, sorted_indices[:, 1:2], axis=1).ravel()
-
-        np.testing.assert_allclose(near_d, ref_near_d, rtol=1e-5)
-        np.testing.assert_allclose(second_d, ref_second_d, rtol=1e-5)
+        assert np.all(np.isinf(second_d))
 
     # -----------------------------------------------------------------------
     # 4. pam_build_step vs NumPy
     # -----------------------------------------------------------------------
-    def test_pam_build_step(self):
+    @pytest.mark.parametrize(
+        "dtype, places",
+        [
+            (np.float64, 10),
+            (np.float32, 4),
+        ],
+    )
+    def test_pam_build_step(self, dtype, places):
         n_samples = 100
         n_candidates = 20
-        D = self.rng.uniform(0.1, 10.0, size=(n_samples, n_samples)).astype(np.float64)
+        D = self.rng.uniform(0.1, 10.0, size=(n_samples, n_samples)).astype(dtype)
         D = np.ascontiguousarray(0.5 * (D + D.T))
         np.fill_diagonal(D, 0.0)
 
-        dist_to_nearest = self.rng.uniform(2.0, 8.0, size=n_samples).astype(np.float64)
+        dist_to_nearest = self.rng.uniform(2.0, 8.0, size=n_samples).astype(dtype)
         candidate_indices = np.ascontiguousarray(
             self.rng.choice(n_samples, size=n_candidates, replace=False).astype(np.intp)
         )
 
-        # NumPy reference
         diffs = np.maximum(0.0, dist_to_nearest[:, None] - D[:, candidate_indices])
         gains = np.sum(diffs, axis=0)
         ref_best_idx = int(np.argmax(gains))
@@ -221,25 +193,31 @@ class TestCythonCore(unittest.TestCase):
             D, candidate_indices, dist_to_nearest, n_samples, n_candidates
         )
 
-        self.assertEqual(ref_best_idx, cy_best_idx)
-        self.assertAlmostEqual(ref_max_gain, cy_max_gain, places=10)
+        assert ref_best_idx == cy_best_idx
+        assert np.isclose(ref_max_gain, cy_max_gain, atol=10 ** (-places))
 
     # -----------------------------------------------------------------------
     # 5. kmedoids_pp_trials vs NumPy
     # -----------------------------------------------------------------------
-    def test_kmedoids_pp_trials(self):
+    @pytest.mark.parametrize(
+        "dtype, places, rtol",
+        [
+            (np.float64, 10, 1e-10),
+            (np.float32, 3, 1e-4),
+        ],
+    )
+    def test_kmedoids_pp_trials(self, dtype, places, rtol):
         n_samples = 120
         n_trials = 10
         n_current = 2
 
-        closest_dist_sq = self.rng.uniform(1.0, 10.0, size=n_samples).astype(np.float64)
+        closest_dist_sq = self.rng.uniform(1.0, 10.0, size=n_samples).astype(dtype)
         dists_candidates = np.ascontiguousarray(
-            self.rng.uniform(0.5, 12.0, size=(n_trials, n_samples)).astype(np.float64)
+            self.rng.uniform(0.5, 12.0, size=(n_trials, n_samples)).astype(dtype)
         )
         candidate_ids = np.ascontiguousarray(np.arange(10, 10 + n_trials, dtype=np.intp))
         current_medoids = np.ascontiguousarray(np.array([2, 5], dtype=np.intp))
 
-        # NumPy reference
         ref_best_cand = -1
         ref_best_pot = np.inf
         ref_best_dist_sq = None
@@ -264,33 +242,26 @@ class TestCythonCore(unittest.TestCase):
             n_current,
         )
 
-        self.assertEqual(ref_best_cand, cy_best_cand)
-        self.assertAlmostEqual(ref_best_pot, cy_best_pot, places=10)
-        np.testing.assert_allclose(ref_best_dist_sq, cy_best_dist_sq, rtol=1e-10)
+        assert ref_best_cand == cy_best_cand
+        assert np.isclose(ref_best_pot, cy_best_pot, atol=10 ** (-places))
+        np.testing.assert_allclose(ref_best_dist_sq, cy_best_dist_sq, rtol=rtol)
 
     # -----------------------------------------------------------------------
     # 6. is_matrix_symmetric vs NumPy
     # -----------------------------------------------------------------------
-    def test_is_matrix_symmetric_float64_and_float32(self):
-        for dtype in (np.float64, np.float32):
-            n_samples = 50
-            mat = self.rng.uniform(0.1, 10.0, size=(n_samples, n_samples)).astype(dtype)
-            sym_mat = np.ascontiguousarray(0.5 * (mat + mat.T))
+    @pytest.mark.parametrize("dtype", [np.float64, np.float32])
+    def test_is_matrix_symmetric(self, dtype):
+        n_samples = 50
+        mat = self.rng.uniform(0.1, 10.0, size=(n_samples, n_samples)).astype(dtype)
+        sym_mat = np.ascontiguousarray(0.5 * (mat + mat.T))
 
-            # Strictly symmetric
-            self.assertTrue(_core.is_matrix_symmetric(sym_mat, n_samples, 1e-6))
+        assert _core.is_matrix_symmetric(sym_mat, n_samples, 1e-6)
 
-            # Asymmetric perturbation
-            asym_mat = sym_mat.copy()
-            asym_mat[10, 20] += 0.5
-            self.assertFalse(_core.is_matrix_symmetric(asym_mat, n_samples, 1e-6))
+        asym_mat = sym_mat.copy()
+        asym_mat[10, 20] += 0.5
+        assert not _core.is_matrix_symmetric(asym_mat, n_samples, 1e-6)
 
-            # Perturbation below tolerance
-            near_sym = sym_mat.copy()
-            near_sym[10, 20] += 1e-8
-            near_sym[20, 10] -= 1e-8
-            self.assertTrue(_core.is_matrix_symmetric(near_sym, n_samples, 1e-6))
-
-
-if __name__ == "__main__":
-    unittest.main()
+        near_sym = sym_mat.copy()
+        near_sym[10, 20] += 1e-8
+        near_sym[20, 10] -= 1e-8
+        assert _core.is_matrix_symmetric(near_sym, n_samples, 1e-6)
