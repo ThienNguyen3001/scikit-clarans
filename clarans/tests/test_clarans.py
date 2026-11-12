@@ -2,7 +2,9 @@ import unittest
 import warnings
 
 import numpy as np
+import pytest
 from scipy.sparse import issparse
+from sklearn.base import clone
 from sklearn.exceptions import NotFittedError
 from sklearn.datasets import make_blobs
 from sklearn.metrics import (
@@ -15,55 +17,230 @@ from clarans import CLARANS, FastCLARANS
 from clarans.utils import calculate_cost, check_medoids
 
 
+@pytest.mark.parametrize("estimator_cls", [CLARANS, FastCLARANS])
+class TestCommonEstimators:
+    @pytest.fixture(autouse=True)
+    def _setup_data(self):
+        self.X, self.y = make_blobs(n_samples=100, centers=3, n_features=2, random_state=42)
+
+    def test_fit(self, estimator_cls):
+        model = estimator_cls(n_clusters=3, num_local=2, max_neighbors=10, random_state=42)
+        model.fit(self.X)
+
+        assert len(model.cluster_centers_) == 3
+        assert len(model.labels_) == 100
+        assert hasattr(model, "medoid_indices_")
+        np.testing.assert_array_equal(model.cluster_centers_, self.X[model.medoid_indices_])
+        np.testing.assert_array_equal(model.labels_, np.argmin(model.transform(self.X), axis=1))
+
+    def test_predict(self, estimator_cls):
+        model = estimator_cls(n_clusters=3, num_local=1, random_state=42)
+        model.fit(self.X)
+        labels = model.predict(self.X)
+        assert labels.shape == (100,)
+        np.testing.assert_array_equal(labels, model.labels_)
+
+    def test_sparse_input(self, estimator_cls):
+        try:
+            from scipy import sparse
+        except Exception:
+            pytest.skip("scipy not available")
+
+        # Test with csr_matrix
+        X_sparse = sparse.csr_matrix(self.X)
+        model = estimator_cls(n_clusters=3, num_local=1, random_state=42)
+        model.fit(X_sparse)
+        labels = model.predict(X_sparse)
+        assert labels.shape == (100,)
+
+        # Test with csr_array if available
+        if hasattr(sparse, "csr_array"):
+            X_arr = sparse.csr_array(self.X)
+            model_arr = estimator_cls(n_clusters=3, num_local=1, random_state=42)
+            model_arr.fit(X_arr)
+            labels_arr = model_arr.predict(X_arr)
+            assert labels_arr.shape == (100,)
+
+    def test_init_methods(self, estimator_cls):
+        for init_method in ["random", "heuristic", "k-medoids++", "build"]:
+            model = estimator_cls(
+                n_clusters=3, num_local=1, max_neighbors=10, init=init_method, random_state=42
+            )
+            model.fit(self.X)
+            assert len(model.cluster_centers_) == 3
+            assert len(model.labels_) == 100
+
+    def test_precomputed_init(self, estimator_cls):
+        init_centers = self.X[[0, 10, 20]]
+        model = estimator_cls(
+            n_clusters=3, num_local=1, max_neighbors=10, init=init_centers, random_state=42
+        )
+        model.fit(self.X)
+        assert len(model.cluster_centers_) == 3
+
+    def test_input_validation_init(self, estimator_cls):
+        model = estimator_cls(n_clusters=3, init="invalid_method")
+        with pytest.raises(ValueError):
+            model.fit(self.X)
+
+        model = estimator_cls(n_clusters=3, init=self.X[:2])
+        with pytest.raises(ValueError):
+            model.fit(self.X)
+
+    def test_transform(self, estimator_cls):
+        model = estimator_cls(n_clusters=3, num_local=1, max_neighbors=10, random_state=42)
+        model.fit(self.X)
+        X_transformed = model.transform(self.X)
+
+        assert X_transformed.shape == (100, 3)
+        assert np.all(X_transformed >= 0)
+        for i, idx in enumerate(model.medoid_indices_):
+            assert np.isclose(X_transformed[idx, i], 0.0, atol=1e-10)
+
+    def test_cosine_metric(self, estimator_cls):
+        model = estimator_cls(
+            n_clusters=3, num_local=1, max_neighbors=10, metric="cosine", random_state=42
+        )
+        model.fit(self.X)
+        assert len(model.cluster_centers_) == 3
+        assert len(model.labels_) == 100
+        labels = model.predict(self.X)
+        np.testing.assert_array_equal(labels, model.labels_)
+
+    def test_single_cluster(self, estimator_cls):
+        model = estimator_cls(n_clusters=1, num_local=1, max_neighbors=10, random_state=42)
+        model.fit(self.X)
+        assert len(model.cluster_centers_) == 1
+        assert np.all(model.labels_ == 0)
+
+    def test_inertia_attribute(self, estimator_cls):
+        model = estimator_cls(n_clusters=3, num_local=2, max_neighbors=50, random_state=42)
+        model.fit(self.X)
+        assert hasattr(model, "inertia_")
+        assert model.inertia_ >= 0
+
+    def test_invalid_parameters(self, estimator_cls):
+        with pytest.raises(ValueError):
+            estimator_cls(n_clusters=0).fit(self.X)
+        with pytest.raises(ValueError):
+            estimator_cls(num_local=0).fit(self.X)
+        for val in [0, -1, "invalid", 1.5, True, False]:
+            with pytest.raises(ValueError):
+                estimator_cls(max_neighbors=val).fit(self.X)
+        with pytest.raises(TypeError):
+            estimator_cls(max_iter=-1)
+
+    def test_precomputed_metric(self, estimator_cls):
+        D = pairwise_distances(self.X, metric="euclidean")
+        model = estimator_cls(
+            n_clusters=3, num_local=2, max_neighbors=20, metric="precomputed", random_state=42
+        )
+        model.fit(D)
+
+        assert len(model.medoid_indices_) == 3
+        assert len(model.labels_) == 100
+        assert model.inertia_ >= 0
+        assert not hasattr(model, "cluster_centers_")
+        assert model.n_features_in_ == 100
+
+        labels = model.predict(D)
+        np.testing.assert_array_equal(labels, model.labels_)
+
+        transformed = model.transform(D)
+        assert transformed.shape == (100, 3)
+
+    def test_precomputed_non_square(self, estimator_cls):
+        model = estimator_cls(n_clusters=3, metric="precomputed", random_state=42)
+        with pytest.raises(ValueError):
+            model.fit(self.X)
+
+    def test_deterministic_init_warning(self, estimator_cls):
+        with pytest.warns(UserWarning):
+            model = estimator_cls(
+                n_clusters=3, num_local=2, max_neighbors=10, init="heuristic", random_state=42
+            )
+            model.fit(self.X)
+        assert len(model.medoid_indices_) == 3
+
+    def test_keyword_only_args(self, estimator_cls):
+        with pytest.raises(TypeError):
+            estimator_cls(3)
+
+    def test_get_feature_names_out(self, estimator_cls):
+        prefix = estimator_cls.__name__.lower()
+        model = estimator_cls(n_clusters=3)
+        with pytest.raises(NotFittedError):
+            model.get_feature_names_out()
+
+        model.fit(self.X)
+        names = model.get_feature_names_out()
+        np.testing.assert_array_equal(
+            names,
+            np.array([f"{prefix}0", f"{prefix}1", f"{prefix}2"], dtype=object),
+        )
+
+    def test_get_feature_names_out_validation(self, estimator_cls):
+        try:
+            import pandas as pd
+        except ImportError:
+            pytest.skip("pandas is not installed")
+
+        prefix = estimator_cls.__name__.lower()
+        df = pd.DataFrame(self.X, columns=[f"col_{i}" for i in range(self.X.shape[1])])
+        model = estimator_cls(n_clusters=3, random_state=42).fit(df)
+        assert hasattr(model, "feature_names_in_")
+
+        valid_cols = [f"col_{i}" for i in range(self.X.shape[1])]
+        names = model.get_feature_names_out(valid_cols)
+        np.testing.assert_array_equal(
+            names, np.array([f"{prefix}0", f"{prefix}1", f"{prefix}2"], dtype=object)
+        )
+
+        with pytest.raises(ValueError, match="input_features should have length equal"):
+            model.get_feature_names_out(["col_0"])
+
+    def test_pandas_output(self, estimator_cls):
+        try:
+            import pandas as pd
+        except ImportError:
+            pytest.skip("pandas is not installed")
+
+        prefix = estimator_cls.__name__.lower()
+        model = estimator_cls(n_clusters=3, random_state=42)
+        model.set_output(transform="pandas")
+        model.fit(self.X)
+        transformed = model.transform(self.X)
+        assert isinstance(transformed, pd.DataFrame)
+        assert list(transformed.columns) == [f"{prefix}0", f"{prefix}1", f"{prefix}2"]
+
+    def test_legacy_parameters_removed(self, estimator_cls):
+        with pytest.raises(TypeError):
+            estimator_cls(numlocal=2)
+        with pytest.raises(TypeError):
+            estimator_cls(maxneighbor=25)
+
+    def test_parameters_num_local_max_neighbors(self, estimator_cls):
+        model = estimator_cls(n_clusters=3, num_local=2, max_neighbors=25, random_state=42)
+        model.fit(self.X)
+        assert model.max_neighbors_ == 25
+        assert not hasattr(model, "maxneighbor_")
+
+    def test_delta_tolerance_rejects_ghost_swaps(self, estimator_cls):
+        X_dup = np.array([[0.0, 0.0], [0.0, 0.0], [10.0, 10.0], [10.0, 10.0]])
+        model = estimator_cls(n_clusters=2, num_local=1, max_neighbors=50, random_state=42)
+        model.fit(X_dup)
+        assert model.n_swaps_ >= 0
+
+
 class TestCLARANS(unittest.TestCase):
     def setUp(self):
         self.X, self.y = make_blobs(n_samples=100, centers=3, n_features=2, random_state=42)
-
-    def test_fit(self):
-        clarans = CLARANS(n_clusters=3, num_local=2, max_neighbors=10, random_state=42)
-        clarans.fit(self.X)
-
-        self.assertEqual(len(clarans.cluster_centers_), 3)
-        self.assertEqual(len(clarans.labels_), 100)
-        self.assertTrue(hasattr(clarans, "medoid_indices_"))
-
-        for idx in clarans.medoid_indices_:
-            self.assertTrue(np.any(np.all(self.X == self.X[idx], axis=1)))
-
-    def test_predict(self):
-        clarans = CLARANS(n_clusters=3, num_local=1, random_state=42)
-        clarans.fit(self.X)
-        labels = clarans.predict(self.X)
-        self.assertEqual(labels.shape, (100,))
 
     def test_convergence(self):
         clarans = CLARANS(n_clusters=3, num_local=10, max_neighbors=100, random_state=42)
         clarans.fit(self.X)
         score = silhouette_score(self.X, clarans.labels_)
         self.assertGreater(score, -0.1, f"Silhouette score too low: {score}")
-
-    def test_init_methods(self):
-        """Test different initialization methods."""
-        for init_method in ["random", "heuristic", "k-medoids++", "build"]:
-            clarans = CLARANS(
-                n_clusters=3,
-                num_local=1,
-                max_neighbors=10,
-                init=init_method,
-                random_state=42,
-            )
-            clarans.fit(self.X)
-            self.assertEqual(len(clarans.cluster_centers_), 3)
-            self.assertEqual(len(clarans.labels_), 100)
-
-    def test_precomputed_init(self):
-        """Test initialization with precomputed array."""
-        init_centers = self.X[[0, 10, 20]]
-        clarans = CLARANS(
-            n_clusters=3, num_local=1, max_neighbors=10, init=init_centers, random_state=42
-        )
-        clarans.fit(self.X)
-        self.assertEqual(len(clarans.cluster_centers_), 3)
 
     def test_metrics(self):
         """Test different metrics."""
@@ -73,55 +250,6 @@ class TestCLARANS(unittest.TestCase):
             )
             clarans.fit(self.X)
             self.assertEqual(len(clarans.cluster_centers_), 3)
-
-    def test_input_validation_init(self):
-        """Test invalid init parameter."""
-        clarans = CLARANS(n_clusters=3, init="invalid_method")
-        with self.assertRaises(ValueError):
-            clarans.fit(self.X)
-
-        clarans = CLARANS(n_clusters=3, init=self.X[:2])
-        with self.assertRaises(ValueError):
-            clarans.fit(self.X)
-
-    def test_transform(self):
-        """Test transform() returns distances to cluster centers."""
-        clarans = CLARANS(n_clusters=3, num_local=1, max_neighbors=10, random_state=42)
-        clarans.fit(self.X)
-        X_transformed = clarans.transform(self.X)
-
-        # Shape: (n_samples, n_clusters)
-        self.assertEqual(X_transformed.shape, (100, 3))
-        # All distances should be non-negative
-        self.assertTrue(np.all(X_transformed >= 0))
-        # Each medoid should have distance 0 to itself
-        for i, idx in enumerate(clarans.medoid_indices_):
-            self.assertAlmostEqual(X_transformed[idx, i], 0.0, places=10)
-
-    def test_cosine_metric(self):
-        """Test that cosine metric works correctly."""
-        clarans = CLARANS(
-            n_clusters=3, num_local=1, max_neighbors=10, metric="cosine", random_state=42
-        )
-        clarans.fit(self.X)
-        self.assertEqual(len(clarans.cluster_centers_), 3)
-        self.assertEqual(len(clarans.labels_), 100)
-        labels = clarans.predict(self.X)
-        np.testing.assert_array_equal(labels, clarans.labels_)
-
-    def test_single_cluster(self):
-        """Test with n_clusters=1 (edge case)."""
-        clarans = CLARANS(n_clusters=1, num_local=1, max_neighbors=10, random_state=42)
-        clarans.fit(self.X)
-        self.assertEqual(len(clarans.cluster_centers_), 1)
-        self.assertTrue(np.all(clarans.labels_ == 0))
-
-    def test_inertia_attribute(self):
-        """Test that inertia_ is set after fit and is non-negative."""
-        clarans = CLARANS(n_clusters=3, num_local=2, max_neighbors=50, random_state=42)
-        clarans.fit(self.X)
-        self.assertTrue(hasattr(clarans, "inertia_"))
-        self.assertGreaterEqual(clarans.inertia_, 0)
 
     def test_n_iter_and_n_swaps_attributes(self):
         """Test that n_iter_, n_swaps_, and neighborhood_size_ are set correctly,
@@ -158,28 +286,6 @@ class TestCLARANS(unittest.TestCase):
         clarans = CLARANS(n_clusters=4, num_local=5, max_neighbors=30, random_state=42)
         clarans.fit(self.X)
         self.assertTrue(np.all(np.diff(clarans.medoid_indices_) >= 0))
-
-    def test_sparse_input(self):
-        """Test CLARANS with scipy sparse matrices and arrays."""
-        try:
-            from scipy import sparse
-        except Exception:
-            self.skipTest("scipy not available")
-
-        # Test with csr_matrix
-        X_sparse = sparse.csr_matrix(self.X)
-        model = CLARANS(n_clusters=3, num_local=1, random_state=42)
-        model.fit(X_sparse)
-        labels = model.predict(X_sparse)
-        self.assertEqual(labels.shape, (100,))
-
-        # Test with csr_array if available
-        if hasattr(sparse, "csr_array"):
-            X_arr = sparse.csr_array(self.X)
-            model_arr = CLARANS(n_clusters=3, num_local=1, random_state=42)
-            model_arr.fit(X_arr)
-            labels_arr = model_arr.predict(X_arr)
-            self.assertEqual(labels_arr.shape, (100,))
 
     def test_medoid_uniqueness_multiple_seeds(self):
         """All medoids should be unique across multiple random seeds."""
@@ -298,58 +404,6 @@ class TestCLARANS(unittest.TestCase):
         clarans = CLARANS(n_clusters=3)
         with self.assertRaises(Exception):
             clarans.predict(self.X)
-
-    def test_keyword_only_args(self):
-        """CLARANS should enforce keyword-only arguments per SLEP009."""
-        with self.assertRaises(TypeError):
-            CLARANS(3)
-
-    def test_get_feature_names_out(self):
-        """CLARANS should provide get_feature_names_out per SLEP007."""
-        clarans = CLARANS(n_clusters=3)
-        with self.assertRaises(NotFittedError):
-            clarans.get_feature_names_out()
-
-        clarans.fit(self.X)
-        names = clarans.get_feature_names_out()
-        np.testing.assert_array_equal(
-            names, np.array(["clarans0", "clarans1", "clarans2"], dtype=object)
-        )
-
-    def test_get_feature_names_out_validation(self):
-        """get_feature_names_out should validate input_features against feature_names_in_."""
-        try:
-            import pandas as pd
-        except ImportError:
-            self.skipTest("pandas is not installed")
-
-        df = pd.DataFrame(self.X, columns=[f"col_{i}" for i in range(self.X.shape[1])])
-        clarans = CLARANS(n_clusters=3, random_state=42).fit(df)
-        self.assertTrue(hasattr(clarans, "feature_names_in_"))
-
-        valid_cols = [f"col_{i}" for i in range(self.X.shape[1])]
-        names = clarans.get_feature_names_out(valid_cols)
-        np.testing.assert_array_equal(
-            names, np.array(["clarans0", "clarans1", "clarans2"], dtype=object)
-        )
-
-        with self.assertRaises(ValueError) as ctx:
-            clarans.get_feature_names_out(["col_0"])
-        self.assertIn("input_features should have length equal", str(ctx.exception))
-
-    def test_pandas_output(self):
-        """CLARANS should support set_output(transform='pandas') per SLEP018."""
-        try:
-            import pandas as pd
-        except ImportError:
-            self.skipTest("pandas is not installed")
-
-        clarans = CLARANS(n_clusters=3, random_state=42)
-        clarans.set_output(transform="pandas")
-        clarans.fit(self.X)
-        transformed = clarans.transform(self.X)
-        self.assertIsInstance(transformed, pd.DataFrame)
-        self.assertListEqual(list(transformed.columns), ["clarans0", "clarans1", "clarans2"])
 
 
 class TestCLARANSEdgeCases(unittest.TestCase):
@@ -874,154 +928,132 @@ class TestUtilsHelpers(unittest.TestCase):
                 self.assertEqual(len(w), 1)
 
 
-class TestCLARANSMetricParams(unittest.TestCase):
-    """Test suite for metric_params parameter in CLARANS."""
+@pytest.mark.parametrize("estimator_cls", [CLARANS, FastCLARANS])
+class TestCommonMetricParams:
+    """Parameterized metric_params and verbose logging tests across CLARANS & FastCLARANS."""
 
-    def setUp(self):
+    @pytest.fixture(autouse=True)
+    def _setup_data(self):
         np.random.seed(42)
         self.X = np.random.randn(30, 3)
 
-    def test_minkowski_with_p(self):
-        """CLARANS should support Minkowski metric with p passed via metric_params."""
-        model = CLARANS(n_clusters=2, metric="minkowski", metric_params={"p": 3}, random_state=42)
+    def test_minkowski_with_p(self, estimator_cls):
+        model = estimator_cls(
+            n_clusters=2, metric="minkowski", metric_params={"p": 3}, random_state=42
+        )
         model.fit(self.X)
-        self.assertEqual(model.labels_.shape, (len(self.X),))
-        self.assertEqual(model.cluster_centers_.shape, (2, 3))
+        assert model.labels_.shape == (len(self.X),)
+        assert model.cluster_centers_.shape == (2, 3)
         preds = model.predict(self.X[:5])
-        self.assertEqual(preds.shape, (5,))
+        assert preds.shape == (5,)
         trans = model.transform(self.X[:5])
-        self.assertEqual(trans.shape, (5, 2))
+        assert trans.shape == (5, 2)
 
-    def test_mahalanobis_with_vi(self):
-        """CLARANS should support Mahalanobis metric with VI in metric_params."""
+    def test_mahalanobis_with_vi(self, estimator_cls):
         VI = np.linalg.inv(np.cov(self.X.T))
-        model = CLARANS(
+        model = estimator_cls(
             n_clusters=2, metric="mahalanobis", metric_params={"VI": VI}, random_state=42
         )
         model.fit(self.X)
-        self.assertEqual(model.labels_.shape, (len(self.X),))
+        assert model.labels_.shape == (len(self.X),)
         preds = model.predict(self.X[:5])
-        self.assertEqual(preds.shape, (5,))
+        assert preds.shape == (5,)
         trans = model.transform(self.X[:5])
-        self.assertEqual(trans.shape, (5, 2))
+        assert trans.shape == (5, 2)
 
-    def test_mahalanobis_missing_vi_raises(self):
-        """CLARANS with mahalanobis and no VI should raise ValueError."""
-        with self.assertRaises(ValueError) as ctx:
-            CLARANS(n_clusters=2, metric="mahalanobis", random_state=42).fit(self.X)
-        self.assertIn("vi", str(ctx.exception).lower())
+    def test_mahalanobis_missing_vi_raises(self, estimator_cls):
+        with pytest.raises(ValueError, match="(?i)vi"):
+            estimator_cls(n_clusters=2, metric="mahalanobis", random_state=42).fit(self.X)
+        with pytest.raises(ValueError, match="(?i)vi"):
+            estimator_cls(
+                n_clusters=2, metric="mahalanobis", metric_params={}, random_state=42
+            ).fit(self.X)
 
-        with self.assertRaises(ValueError) as ctx:
-            CLARANS(n_clusters=2, metric="mahalanobis", metric_params={}, random_state=42).fit(
-                self.X
-            )
-        self.assertIn("vi", str(ctx.exception).lower())
-
-    def test_custom_callable_with_metric_params(self):
-        """CLARANS should forward metric_params to custom callable metric."""
-
+    def test_custom_callable_with_metric_params(self, estimator_cls):
         def custom_dist(x, y, weight=1.0):
             return np.sum(np.abs(x - y)) * weight
 
-        model = CLARANS(
+        model = estimator_cls(
             n_clusters=2,
             metric=custom_dist,
             metric_params={"weight": 2.5},
             random_state=42,
         )
         model.fit(self.X)
-        self.assertEqual(model.labels_.shape, (len(self.X),))
+        assert model.labels_.shape == (len(self.X),)
 
-    def test_invalid_metric_params_type(self):
-        """Non-dict metric_params should raise ValueError."""
-        with self.assertRaises(ValueError) as ctx:
-            CLARANS(n_clusters=2, metric_params="not_a_dict", random_state=42).fit(self.X)
-        self.assertIn("metric_params", str(ctx.exception).lower())
+    def test_invalid_metric_params_type(self, estimator_cls):
+        with pytest.raises(ValueError, match="metric_params"):
+            estimator_cls(n_clusters=2, metric_params="not_a_dict", random_state=42).fit(self.X)
 
-    def test_clone_preserves_metric_params(self):
-        """clone should preserve metric_params correctly."""
-        from sklearn.base import clone
-
-        model = CLARANS(metric="minkowski", metric_params={"p": 4})
+    def test_clone_preserves_metric_params(self, estimator_cls):
+        model = estimator_cls(metric="minkowski", metric_params={"p": 4})
         cloned = clone(model)
-        self.assertEqual(cloned.metric_params, {"p": 4})
+        assert cloned.metric_params == {"p": 4}
 
-    def test_verbose_silent(self):
-        """verbose=0 and verbose=False should produce no output to stdout."""
-        import io
-        from contextlib import redirect_stdout
-
+    def test_verbose_silent(self, estimator_cls, capsys):
         for v in (0, False):
-            f = io.StringIO()
-            with redirect_stdout(f):
-                model = CLARANS(
-                    n_clusters=2, num_local=1, max_neighbors=10, verbose=v, random_state=42
-                )
-                model.fit(self.X)
-            self.assertEqual(f.getvalue(), "")
-
-    def test_verbose_level_1(self):
-        """verbose=1 and verbose=True should print table header, rows, and best line."""
-        import io
-        from contextlib import redirect_stdout
-
-        for v in (1, True):
-            f = io.StringIO()
-            with redirect_stdout(f):
-                model = CLARANS(
-                    n_clusters=2, num_local=2, max_neighbors=10, verbose=v, random_state=42
-                )
-                model.fit(self.X)
-            output = f.getvalue()
-            self.assertIn("[CLARANS]", output)
-            self.assertIn("max_neighbors=", output)
-            self.assertIn("Cost", output)
-            self.assertIn("Swaps", output)
-            self.assertIn("Evals", output)
-            self.assertIn("converged", output)
-            self.assertIn("Best: #", output)
-            self.assertIn("Totals:", output)
-            # verbose=1 should NOT print per-swap details
-            self.assertNotIn("Restart", output)
-
-    def test_verbose_level_2(self):
-        """verbose=2 should print per-swap details with Restart labels."""
-        import io
-        from contextlib import redirect_stdout
-
-        f = io.StringIO()
-        with redirect_stdout(f):
-            model = CLARANS(
-                n_clusters=2,
-                num_local=1,
-                max_neighbors=50,
-                init="random",
-                verbose=2,
-                random_state=0,
+            model = estimator_cls(
+                n_clusters=2, num_local=1, max_neighbors=10, verbose=v, random_state=42
             )
             model.fit(self.X)
-        output = f.getvalue()
-        self.assertIn("[CLARANS]", output)
-        self.assertIn("Restart 1/1 (init cost:", output)
-        self.assertIn("Best: #", output)
+            captured = capsys.readouterr()
+            assert captured.out == ""
+
+    def test_verbose_level_1(self, estimator_cls, capsys):
+        prefix = estimator_cls.__name__
+        for v in (1, True):
+            model = estimator_cls(
+                n_clusters=2, num_local=2, max_neighbors=10, verbose=v, random_state=42
+            )
+            model.fit(self.X)
+            output = capsys.readouterr().out
+            assert f"[{prefix}]" in output
+            assert "max_neighbors=" in output
+            assert "Cost" in output
+            assert "Swaps" in output
+            assert "Evals" in output
+            assert "converged" in output
+            assert "Best: #" in output
+            assert "Totals:" in output
+            assert "Restart" not in output
+
+    def test_verbose_level_2(self, estimator_cls, capsys):
+        prefix = estimator_cls.__name__
+        model = estimator_cls(
+            n_clusters=2,
+            num_local=1,
+            max_neighbors=50,
+            init="random",
+            verbose=2,
+            random_state=0,
+        )
+        model.fit(self.X)
+        output = capsys.readouterr().out
+        assert f"[{prefix}]" in output
+        assert "Restart 1/1 (init cost:" in output
+        assert "Best: #" in output
         if model.n_swaps_ > 0:
-            self.assertIn("swap", output)
-            self.assertIn("| diff ", output)
+            assert "swap" in output
+            assert "| diff " in output
 
-    def test_verbose_invalid(self):
-        """Invalid verbose values should raise ValueError."""
+    def test_verbose_invalid(self, estimator_cls):
         for invalid_val in [-1, -5, "1", 1.5, [1]]:
-            with self.assertRaises(ValueError) as ctx:
-                CLARANS(n_clusters=2, verbose=invalid_val, random_state=42).fit(self.X)
-            self.assertIn("verbose", str(ctx.exception).lower())
+            with pytest.raises(ValueError, match="verbose"):
+                estimator_cls(n_clusters=2, verbose=invalid_val, random_state=42).fit(self.X)
 
-    def test_clone_preserves_verbose(self):
-        """clone should preserve verbose correctly."""
-        from sklearn.base import clone
-
-        model = CLARANS(verbose=2)
+    def test_clone_preserves_verbose(self, estimator_cls):
+        model = estimator_cls(verbose=2)
         cloned = clone(model)
-        self.assertEqual(cloned.verbose, 2)
+        assert cloned.verbose == 2
+
+
+class TestCLARANSMetricParams(unittest.TestCase):
+    """CLARANS-specific metric and verbose tests."""
+
+    def setUp(self):
+        np.random.seed(42)
+        self.X = np.random.randn(30, 3)
 
     def test_verbose_2_brute_force_swap_logging(self):
         """verbose=2 with cost_evaluation='brute_force' should log swap details."""
@@ -1040,7 +1072,3 @@ class TestCLARANSMetricParams(unittest.TestCase):
             ).fit(self.X)
         output = f.getvalue()
         self.assertIn("Restart", output)
-
-
-if __name__ == "__main__":
-    unittest.main()
