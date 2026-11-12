@@ -1048,27 +1048,23 @@ class TestCommonMetricParams:
         assert cloned.verbose == 2
 
 
-class TestCLARANSMetricParams(unittest.TestCase):
+class TestCLARANSMetricParams:
     """CLARANS-specific metric and verbose tests."""
 
-    def setUp(self):
+    @pytest.fixture(autouse=True)
+    def _setup_data(self):
         np.random.seed(42)
         self.X = np.random.randn(30, 3)
 
-    def test_verbose_2_brute_force_swap_logging(self):
+    def test_verbose_2_brute_force_swap_logging(self, capsys):
         """verbose=2 with cost_evaluation='brute_force' should log swap details."""
-        import io
-        from contextlib import redirect_stdout
-
-        f = io.StringIO()
-        with redirect_stdout(f):
-            CLARANS(
-                n_clusters=2,
-                num_local=1,
-                max_neighbors=50,
-                cost_evaluation="brute_force",
-                verbose=2,
-                random_state=42,
-            ).fit(self.X)
-        output = f.getvalue()
-        self.assertIn("Restart", output)
+        CLARANS(
+            n_clusters=2,
+            num_local=1,
+            max_neighbors=50,
+            cost_evaluation="brute_force",
+            verbose=2,
+            random_state=42,
+        ).fit(self.X)
+        output = capsys.readouterr().out
+        assert "Restart" in output
