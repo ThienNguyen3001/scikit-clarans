@@ -914,11 +914,10 @@ class TestFastCLARANSSpecific(unittest.TestCase):
         expected = max(1, int(250 / 3), int(0.025 * (100 - 3)))
         self.assertEqual(m.max_neighbors_, expected)
 
-        # The values differ between algorithms across sample sizes
+        # Values differ across algorithms for large N without needing full fit on 50k points
         clarans_expected = max(250, int(0.0125 * 10 * (50000 - 10)))
-        X_large, _ = make_blobs(n_samples=50000, centers=10, random_state=42)
         m_fast = FastCLARANS(n_clusters=10, random_state=42)
-        m_fast.fit(X_large)
+        m_fast._init_search_budget(50000)
         fast_expected = max(1, int(250 / 10), int(0.025 * (50000 - 10)))
         self.assertEqual(m_fast.max_neighbors_, fast_expected)
         self.assertNotEqual(fast_expected, clarans_expected)
