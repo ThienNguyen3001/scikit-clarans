@@ -361,22 +361,17 @@ class TestCLARANS(unittest.TestCase):
     def test_max_neighbors_explicit_none(self):
         """Explicit max_neighbors=None should work without any deprecation warning."""
         clarans = CLARANS(n_clusters=3, num_local=1, max_neighbors=None, random_state=42)
-        with warnings.catch_warnings(record=True) as w:
-            warnings.simplefilter("always")
+        with warnings.catch_warnings():
+            warnings.simplefilter("error", FutureWarning)
             clarans.fit(self.X)
-            future_warnings = [item for item in w if issubclass(item.category, FutureWarning)]
-            self.assertEqual(len(future_warnings), 0)
         expected = max(250, int(0.0125 * 3 * (100 - 3)))
         self.assertEqual(clarans.max_neighbors_, expected)
 
     def test_max_neighbors_explicit_auto(self):
         """Explicit max_neighbors='auto' should raise a FutureWarning and calculate correctly."""
         clarans = CLARANS(n_clusters=3, num_local=1, max_neighbors="auto", random_state=42)
-        with warnings.catch_warnings(record=True) as w:
-            warnings.simplefilter("always")
+        with pytest.warns(FutureWarning, match="deprecated"):
             clarans.fit(self.X)
-            future_warnings = [item for item in w if issubclass(item.category, FutureWarning)]
-            self.assertTrue(any("deprecated" in str(item.message) for item in future_warnings))
         expected = max(250, int(0.0125 * 3 * (100 - 3)))
         self.assertEqual(clarans.max_neighbors_, expected)
 
@@ -608,17 +603,13 @@ class TestCLARANSValidationAndPrecomputed(unittest.TestCase):
 
     def test_deterministic_init_warning_and_caching(self):
         """CLARANS should warn when num_local > 1 with deterministic init and succeed."""
-        import warnings
-
         for init_strategy in ["heuristic", "build", self.X[:3]]:
-            with warnings.catch_warnings(record=True) as w:
-                warnings.simplefilter("always")
+            with pytest.warns(UserWarning):
                 model = CLARANS(
                     n_clusters=3, num_local=2, max_neighbors=10, init=init_strategy, random_state=42
                 )
                 model.fit(self.X)
-                self.assertTrue(any(issubclass(warn.category, UserWarning) for warn in w))
-                self.assertEqual(len(model.medoid_indices_), 3)
+            self.assertEqual(len(model.medoid_indices_), 3)
 
     def test_cost_evaluation_parameter(self):
         """Test cost_evaluation parameter: 'delta', 'brute_force', and invalid values."""

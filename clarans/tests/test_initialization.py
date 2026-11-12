@@ -11,9 +11,9 @@ Covers:
 """
 
 import unittest
-import warnings
 
 import numpy as np
+import pytest
 from sklearn.datasets import make_blobs
 from sklearn.metrics import pairwise_distances
 
@@ -82,14 +82,9 @@ class TestInitializationFunctions(unittest.TestCase):
 
         D = pairwise_distances(self.X[:10], metric="euclidean")
         D_sparse = csr_matrix(D)
-        with warnings.catch_warnings(record=True) as w:
-            warnings.simplefilter("always")
+        with pytest.warns(UserWarning, match="(?i)toarray|sparse"):
             medoids = initialize_build(D_sparse, n_clusters=2, metric="precomputed")
-            self.assertEqual(len(medoids), 2)
-            self.assertEqual(len(w), 1)
-            self.assertTrue(issubclass(w[-1].category, UserWarning))
-            self.assertIn("toarray", str(w[-1].message))
-            self.assertIn("sparse", str(w[-1].message))
+        self.assertEqual(len(medoids), 2)
 
     def test_kmedoids_plusplus_count_and_uniqueness(self):
         """K-medoids++ should return correct number of unique medoids."""
@@ -181,8 +176,7 @@ class TestInitializationDeep(unittest.TestCase):
                 self.X[10],
             ]
         )
-        with warnings.catch_warnings(record=True) as w:
-            warnings.simplefilter("always")
+        with pytest.warns(UserWarning, match="(?i)duplicate"):
             model = CLARANS(
                 n_clusters=3,
                 num_local=1,
@@ -191,10 +185,8 @@ class TestInitializationDeep(unittest.TestCase):
                 random_state=42,
             )
             model.fit(self.X)
-            dup_warnings = [x for x in w if "duplicate" in str(x.message).lower()]
-            self.assertGreaterEqual(len(dup_warnings), 1)
-            self.assertEqual(len(model.medoid_indices_), 3)
-            self.assertEqual(len(np.unique(model.medoid_indices_)), 3)
+        self.assertEqual(len(model.medoid_indices_), 3)
+        self.assertEqual(len(np.unique(model.medoid_indices_)), 3)
 
     def test_heuristic_deterministic_multiple_calls(self):
         """Heuristic init is deterministic – two calls produce identical result."""

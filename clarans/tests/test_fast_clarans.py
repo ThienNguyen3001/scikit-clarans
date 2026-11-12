@@ -2,6 +2,7 @@ import unittest
 import warnings
 
 import numpy as np
+import pytest
 from sklearn.datasets import make_blobs
 
 from clarans import FastCLARANS
@@ -61,22 +62,17 @@ class TestFastCLARANS(unittest.TestCase):
     def test_max_neighbors_explicit_none(self):
         """Explicit max_neighbors=None should work without any deprecation warning."""
         model = FastCLARANS(n_clusters=3, num_local=1, max_neighbors=None, random_state=42)
-        with warnings.catch_warnings(record=True) as w:
-            warnings.simplefilter("always")
+        with warnings.catch_warnings():
+            warnings.simplefilter("error", FutureWarning)
             model.fit(self.X)
-            future_warnings = [item for item in w if issubclass(item.category, FutureWarning)]
-            self.assertEqual(len(future_warnings), 0)
         expected = max(1, int(250 / 3), int(0.025 * (100 - 3)))
         self.assertEqual(model.max_neighbors_, expected)
 
     def test_max_neighbors_explicit_auto(self):
         """Explicit max_neighbors='auto' should raise a FutureWarning and calculate correctly."""
         model = FastCLARANS(n_clusters=3, num_local=1, max_neighbors="auto", random_state=42)
-        with warnings.catch_warnings(record=True) as w:
-            warnings.simplefilter("always")
+        with pytest.warns(FutureWarning, match="deprecated"):
             model.fit(self.X)
-            future_warnings = [item for item in w if issubclass(item.category, FutureWarning)]
-            self.assertTrue(any("deprecated" in str(item.message) for item in future_warnings))
         expected = max(1, int(250 / 3), int(0.025 * (100 - 3)))
         self.assertEqual(model.max_neighbors_, expected)
 
