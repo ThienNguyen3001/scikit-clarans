@@ -1067,7 +1067,3 @@ class TestInvariant_PrecomputedZeroCopyOptimization(unittest.TestCase):
         self.assertIs(res, out_buf_float32)
         self.assertEqual(res.dtype, np.float32)
         self.assertTrue(np.allclose(res, D[3], atol=1e-5))
-
-
-if __name__ == "__main__":
-    unittest.main(verbosity=2)

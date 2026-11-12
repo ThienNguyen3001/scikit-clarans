@@ -1075,7 +1075,3 @@ class TestSparseMatrixInitAndCosineSupport(unittest.TestCase):
             # Score must return negative inertia
             s = m.score(self.X_sparse)
             self.assertAlmostEqual(s, -m.inertia_)
-
-
-if __name__ == "__main__":
-    unittest.main()
