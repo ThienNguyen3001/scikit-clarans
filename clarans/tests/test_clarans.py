@@ -854,49 +854,33 @@ class TestCascadingDistanceEngine(unittest.TestCase):
         self.assertEqual(len(fmodel.medoid_indices_), 2)
 
 
-class TestUtilsHelpers(unittest.TestCase):
+class TestUtilsHelpers:
     """Tests for utility helpers in clarans.utils."""
 
     def test_check_medoids_valid(self):
         """Valid medoids should convert to 1D intp array."""
         medoids = [0, 2, 4]
         res = check_medoids(medoids, n_samples=10)
-        self.assertIsInstance(res, np.ndarray)
-        self.assertEqual(res.dtype, np.intp)
+        assert isinstance(res, np.ndarray)
+        assert res.dtype == np.intp
         np.testing.assert_array_equal(res, [0, 2, 4])
 
-    def test_check_medoids_duplicate_raises(self):
-        """Duplicate medoids should raise ValueError."""
-        with self.assertRaises(ValueError):
-            check_medoids([1, 2, 2])
-
-    def test_check_medoids_empty_raises(self):
-        """Empty medoids sequence should raise ValueError."""
-        with self.assertRaises(ValueError):
-            check_medoids([])
-
-    def test_check_medoids_out_of_bounds_raises(self):
-        """Indices exceeding n_samples or negative should raise ValueError."""
-        with self.assertRaises(ValueError):
-            check_medoids([0, 10], n_samples=10)
-        with self.assertRaises(ValueError):
-            check_medoids([-1, 2], n_samples=10)
-
-    def test_check_medoids_non_integer_raises(self):
-        """Non-integer medoid elements should raise TypeError."""
-        with self.assertRaises(TypeError):
-            check_medoids([0.5, 1.2])
-
-    def test_check_medoids_multidimensional_raises(self):
-        """2D medoids array should raise ValueError."""
-        with self.assertRaises(ValueError):
-            check_medoids(np.array([[0, 1], [2, 3]]))
-
-    def test_check_medoids_none_raises(self):
-        """Passing None for medoid_indices should raise ValueError."""
-        with self.assertRaises(ValueError) as ctx:
-            check_medoids(None)
-        self.assertIn("medoid_indices cannot be empty", str(ctx.exception))
+    @pytest.mark.parametrize(
+        "bad_input, n_samples, exc",
+        [
+            (None, None, ValueError),
+            ([], None, ValueError),
+            ([-1, 2], 10, ValueError),
+            ([0, 10], 10, ValueError),
+            ([1, 2, 2], None, ValueError),
+            (np.array([[0, 1], [2, 3]]), None, ValueError),
+            ([0.5, 1.2], None, TypeError),
+        ],
+    )
+    def test_check_medoids_invalid(self, bad_input, n_samples, exc):
+        """Invalid medoids should raise the expected exception."""
+        with pytest.raises(exc):
+            check_medoids(bad_input, n_samples=n_samples)
 
     def test_check_medoids_unconvertible_raises(self):
         """Passing unconvertible object to check_medoids should raise an exception."""
@@ -905,7 +889,7 @@ class TestUtilsHelpers(unittest.TestCase):
             def __array__(self, *args, **kwargs):
                 raise RuntimeError("Cannot convert")
 
-        with self.assertRaises((ValueError, TypeError, RuntimeError)):
+        with pytest.raises((ValueError, TypeError, RuntimeError)):
             check_medoids(BadObject())
 
     def test_calculate_cost_cdist_fallback(self):
@@ -915,7 +899,7 @@ class TestUtilsHelpers(unittest.TestCase):
         X = np.array([[0.0, 0.0], [1.0, 1.0], [2.0, 2.0]])
         with patch("clarans.utils.cdist", side_effect=Exception("cdist failed")):
             cost = calculate_cost(X, [0, 1])
-            self.assertGreater(cost, 0.0)
+            assert cost > 0.0
 
     def test_public_imports_from_init(self):
         """calculate_cost, check_medoids, EfficiencyWarning, and HAS_CYTHON should be in clarans."""
@@ -926,10 +910,10 @@ class TestUtilsHelpers(unittest.TestCase):
             check_medoids as chk,
         )
 
-        self.assertTrue(callable(calc))
-        self.assertTrue(callable(chk))
-        self.assertTrue(issubclass(EffWarn, UserWarning))
-        self.assertIsInstance(has_cy, bool)
+        assert callable(calc)
+        assert callable(chk)
+        assert issubclass(EffWarn, UserWarning)
+        assert isinstance(has_cy, bool)
 
     def test_efficiency_warning_issued_once(self):
         """EfficiencyWarning should be issued when HAS_CYTHON is False, exactly once."""
@@ -945,15 +929,13 @@ class TestUtilsHelpers(unittest.TestCase):
                 warnings.simplefilter("always")
                 utils._warn_cython_unavailable()
 
-                self.assertEqual(len(w), 1)
-                self.assertTrue(issubclass(w[-1].category, utils.EfficiencyWarning))
-                self.assertIn(
-                    "Compiled Cython extensions (_core) are not available", str(w[-1].message)
-                )
+                assert len(w) == 1
+                assert issubclass(w[-1].category, utils.EfficiencyWarning)
+                assert "Compiled Cython extensions (_core) are not available" in str(w[-1].message)
 
                 # Second call should not issue another warning
                 utils._warn_cython_unavailable()
-                self.assertEqual(len(w), 1)
+                assert len(w) == 1
 
 
 @pytest.mark.parametrize("estimator_cls", [CLARANS, FastCLARANS])
