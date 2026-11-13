@@ -59,7 +59,10 @@ jobs:
 
       - name: Run ASV Benchmarks
         run: |
-          asv run -E existing --set-commit-hash ${{ github.sha }} --show-stderr
+          for commit in $(git rev-list --reverse -n 3 HEAD); do
+            echo "Benchmarking commit $commit..."
+            asv run -E existing --skip-existing-commits --set-commit-hash "$commit" --show-stderr || true
+          done
 
       - name: Build ASV HTML Dashboard
         run: |
