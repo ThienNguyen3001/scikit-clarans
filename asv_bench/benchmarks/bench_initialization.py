@@ -4,8 +4,8 @@ import numpy as np
 from clarans import FastCLARANS
 
 
-class TimeInitialization:
-    """Benchmark initial medoid selection strategies."""
+class Initialization:
+    """Benchmark medoid initialization algorithms."""
 
     params = ["k-medoids++", "random", "build", "heuristic"]
     param_names = ["init_method"]
@@ -14,7 +14,7 @@ class TimeInitialization:
         rng = np.random.RandomState(42)
         self.X = rng.randn(400, 8)
 
-    def time_initialization(self, init_method: str) -> None:
+    def time_init(self, init_method: str) -> None:
         FastCLARANS(
             n_clusters=4,
             init=init_method,

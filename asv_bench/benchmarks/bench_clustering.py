@@ -1,13 +1,13 @@
-"""Benchmarks for CLARANS and FastCLARANS clustering."""
+"""Benchmarks for core CLARANS and FastCLARANS clustering performance."""
 
 import numpy as np
 from clarans import CLARANS, FastCLARANS
 
 
-class TimeClustering:
-    """Benchmark execution time of CLARANS vs FastCLARANS across sizes."""
+class ClusteringRuntime:
+    """Benchmark runtime scaling of FastCLARANS vs classic CLARANS."""
 
-    params = ([500, 1000], [3, 5])
+    params = ([500, 1500], [3, 8])
     param_names = ["n_samples", "n_clusters"]
 
     def setup(self, n_samples: int, n_clusters: int) -> None:
@@ -29,10 +29,10 @@ class TimeClustering:
         ).fit(self.X)
 
 
-class PeakMemClustering:
-    """Benchmark peak memory usage of CLARANS vs FastCLARANS."""
+class ClusteringMemory:
+    """Benchmark memory footprint scaling with sample size to verify O(n) bounds."""
 
-    params = [500, 1000]
+    params = [1000, 3000]
     param_names = ["n_samples"]
 
     def setup(self, n_samples: int) -> None:
@@ -41,14 +41,33 @@ class PeakMemClustering:
 
     def peakmem_fast_clarans(self, n_samples: int) -> None:
         FastCLARANS(
-            n_clusters=4,
+            n_clusters=5,
             num_local=2,
             random_state=42,
         ).fit(self.X)
 
     def peakmem_clarans(self, n_samples: int) -> None:
         CLARANS(
-            n_clusters=4,
+            n_clusters=5,
             num_local=2,
+            random_state=42,
+        ).fit(self.X)
+
+
+class ParallelRestarts:
+    """Benchmark multi-core scalability over Cython nogil blocks."""
+
+    params = [1, 2]
+    param_names = ["n_jobs"]
+
+    def setup(self, n_jobs: int) -> None:
+        rng = np.random.RandomState(42)
+        self.X = rng.randn(1000, 10)
+
+    def time_parallel_restarts(self, n_jobs: int) -> None:
+        FastCLARANS(
+            n_clusters=5,
+            num_local=4,
+            n_jobs=n_jobs,
             random_state=42,
         ).fit(self.X)
