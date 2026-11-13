@@ -164,6 +164,7 @@ cython_debug/
 
 # Benchmarks
 /benchmarks/
+.asv/
 
 # Temporary untracked directories
 .agents/

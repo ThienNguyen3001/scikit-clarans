@@ -1,0 +1,75 @@
+name: ASV Benchmarks
+
+on:
+  push:
+    branches:
+      - main
+    paths:
+      - 'clarans/**'
+      - 'asv_bench/**'
+      - 'asv.conf.json'
+      - '.github/workflows/benchmarks.yml'
+  workflow_dispatch:
+
+permissions:
+  contents: write
+
+concurrency:
+  group: ${{ github.workflow }}-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  benchmark:
+    name: Run ASV Benchmark Suite
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+
+      - name: Set up Python 3.11
+        uses: actions/setup-python@v5
+        with:
+          python-version: '3.11'
+
+      - name: Install system build tools
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y ninja-build
+
+      - name: Install dependencies
+        run: |
+          python -m pip install --upgrade pip
+          pip install asv virtualenv meson-python ninja "cython>=3.0" "numpy>=2.0.0"
+          pip install --no-build-isolation -e ".[dev]"
+
+      - name: Configure ASV machine
+        run: |
+          asv machine --yes
+
+      - name: Restore ASV raw results cache
+        uses: actions/cache@v4
+        with:
+          path: .asv/results
+          key: asv-results-${{ runner.os }}-${{ github.sha }}
+          restore-keys: |
+            asv-results-${{ runner.os }}-
+            asv-results-
+
+      - name: Run ASV Benchmarks
+        run: |
+          asv run -E existing --skip-existing-commits --show-stderr HEAD^! || asv run -E existing --show-stderr
+
+      - name: Build ASV HTML Dashboard
+        run: |
+          asv publish
+
+      - name: Deploy ASV HTML to GitHub Pages
+        uses: peaceiris/actions-gh-pages@v4
+        if: github.ref == 'refs/heads/main'
+        with:
+          github_token: ${{ secrets.GITHUB_TOKEN }}
+          publish_dir: .asv/html
+          keep_files: false
+

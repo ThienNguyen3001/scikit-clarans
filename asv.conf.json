@@ -1,0 +1,34 @@
+{
+    "version": 1,
+    "project": "scikit-clarans",
+    "project_url": "https://github.com/ThienNguyen3001/scikit-clarans",
+    "repo": ".",
+    "branches": ["main"],
+    "dvcs": "git",
+    "environment_type": "virtualenv",
+    "benchmark_dir": "asv_bench/benchmarks",
+    "env_dir": ".asv/env",
+    "results_dir": ".asv/results",
+    "html_dir": ".asv/html",
+    "show_commit_url": "https://github.com/ThienNguyen3001/scikit-clarans/commit/",
+    "pythons": ["3.11"],
+    "matrix": {
+        "req": {
+            "numpy": ["2.0.0"],
+            "scipy": [""],
+            "scikit-learn": [""]
+        }
+    },
+    "build_command": [
+        "python -m pip install meson-python ninja 'cython>=3.0' 'numpy>=2.0.0'",
+        "python -m pip install --no-build-isolation -e ."
+    ],
+    "install_command": [
+        "python -m pip install meson-python ninja 'cython>=3.0' 'numpy>=2.0.0'",
+        "python -m pip install --no-build-isolation -e ."
+    ],
+    "uninstall_command": [
+        "return-code=any python -m pip uninstall -y scikit-clarans"
+    ]
+}
+

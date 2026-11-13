@@ -179,6 +179,11 @@ python examples/benchmarks/plot_search_trajectory.py
 # - benchmarks/benchmark_clarans_colab.ipynb (Large-scale Colab benchmarking)
 # - benchmarks/benchmark_n_jobs_colab.ipynb (Multi-core parallel scalability benchmarking)
 # Note: Anomaly detection is implemented as a gallery script in examples/robustness/plot_anomaly_detection.py
+
+# 3. Airspeed Velocity regression benchmarks (asv_bench/, asv.conf.json)
+asv check -E existing
+asv run -E existing --quick
+asv publish
 ```
 
 ### Examples (`/examples`)
@@ -222,6 +227,7 @@ Run before opening a pull request or tagging a release:
 3. `docs-build.yml`: Builds Sphinx HTML documentation with `-W --keep-going` on Python 3.12.
 4. `draft-pdf.yml`: Compiles JOSS draft paper PDF on pushes to branch `paper`.
 5. `pypi-publish.yml`: Compiles multi-platform binary wheels (`cibuildwheel`) and sdist, publishing to PyPI via OIDC trusted publishing upon release publication or workflow dispatch.
+6. `benchmarks.yml`: Runs ASV (Airspeed Velocity) benchmark regression tests on pushes to `main` and publishes interactive performance dashboard to GitHub Pages (`gh-pages`).
 
 ### Release (`/release`)
 
