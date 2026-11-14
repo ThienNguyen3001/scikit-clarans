@@ -17,8 +17,8 @@
 [![Benchmarked by asv](https://img.shields.io/badge/benchmarked%20by-asv-blue.svg)](https://ThienNguyen3001.github.io/scikit-clarans/)
 [![PyPI Downloads](https://static.pepy.tech/personalized-badge/scikit-clarans?period=total&units=INTERNATIONAL_SYSTEM&left_color=BLACK&right_color=GREEN&left_text=downloads)](https://pepy.tech/projects/scikit-clarans)
 [![Conda Downloads](https://img.shields.io/conda/dn/conda-forge/scikit-clarans.svg)](https://anaconda.org/conda-forge/scikit-clarans)
-<!-- [![PRs Welcome](https://img.shields.io/badge/PRs-welcome-brightgreen.svg)](https://github.com/ThienNguyen3001/scikit-clarans/pulls) -->
 [![GitHub Stars](https://img.shields.io/github/stars/ThienNguyen3001/scikit-clarans?style=social)](https://github.com/ThienNguyen3001/scikit-clarans/stargazers)
+<!-- [![PRs Welcome](https://img.shields.io/badge/PRs-welcome-brightgreen.svg)](https://github.com/ThienNguyen3001/scikit-clarans/pulls) -->
 
 > [!NOTE]
 > This library is designed for coursework, algorithm study, and academic research. It uses Cython C-extensions with a pure Python fallback and maintains an $O(n)$ memory footprint instead of allocating an $O(n^2)$ pairwise distance matrix.
