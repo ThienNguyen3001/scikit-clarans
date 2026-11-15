@@ -168,6 +168,7 @@ sphinx-build -b html docs/source docs/build/html -W --keep-going
 ```powershell
 & .venv\Scripts\Activate.ps1
 # 1. Gallery benchmarks (examples/benchmarks/)
+python examples/benchmarks/plot_comparison_pam_clara.py
 python examples/benchmarks/plot_clarans_vs_fastclarans.py
 python examples/benchmarks/plot_runtime_scaling.py
 python examples/benchmarks/plot_cost_evaluation_strategy.py
@@ -187,7 +188,7 @@ asv publish
 ```
 
 ### Examples (`/examples`)
-Run all 29 gallery scripts across 6 categories (`cluster_geometry`: 4, `distance_metrics`: 10, `initialization`: 3, `inference`: 4, `robustness`: 2, `benchmarks`: 6) with headless `MPLBACKEND=Agg`:
+Run all 30 gallery scripts across 6 categories (`cluster_geometry`: 4, `distance_metrics`: 10, `initialization`: 3, `inference`: 4, `robustness`: 2, `benchmarks`: 7) with headless `MPLBACKEND=Agg`:
 ```powershell
 & .venv\Scripts\Activate.ps1
 $env:MPLBACKEND = "Agg"
