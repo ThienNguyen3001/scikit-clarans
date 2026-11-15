@@ -6,6 +6,9 @@ build:
     python: "3.11"
   apt_packages:
     - ninja-build
+  jobs:
+    post_install:
+      - pip install git+https://github.com/scikit-learn-contrib/scikit-learn-extra.git
 
 sphinx:
   configuration: docs/source/conf.py

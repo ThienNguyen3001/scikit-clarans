@@ -42,6 +42,7 @@ Robustness and anomaly detection:
   * :doc:`auto_examples/robustness/plot_anomaly_detection`: Unsupervised outlier and anomaly detection via distance-to-medoid scoring.
 
 Benchmarks and convergence:
+  * :doc:`auto_examples/benchmarks/plot_comparison_pam_clara`: Empirical benchmark across PAM and CLARA (scikit-learn-extra) vs. CLARANS and FastCLARANS.
   * :doc:`auto_examples/benchmarks/plot_clarans_vs_fastclarans`: Compare runtime, swap counts, and memory between CLARANS and FastCLARANS.
   * :doc:`auto_examples/benchmarks/plot_cost_evaluation_strategy`: Compare runtime and solution equivalence between delta caching and brute-force evaluation.
   * :doc:`auto_examples/benchmarks/plot_search_trajectory`: Monitor search progress across restarts and track candidate evaluations and swaps.
