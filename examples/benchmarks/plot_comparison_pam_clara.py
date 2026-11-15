@@ -75,7 +75,7 @@ plt.rcParams.update({"axes.edgecolor": "#cccccc", "axes.linewidth": 0.8})
 # ---------------------------------------------------------------------------
 # Benchmark execution
 # ---------------------------------------------------------------------------
-n_samples = 1200
+n_samples = 3000
 n_clusters = 5
 random_state = 42
 
@@ -91,7 +91,7 @@ X = StandardScaler().fit_transform(X)
 
 models = [
     (
-        "PAM\n(sklearn-extra)",
+        "PAM",
         KMedoids(
             n_clusters=n_clusters,
             method="pam",
@@ -101,7 +101,7 @@ models = [
         "#7570b3",
     ),
     (
-        "CLARA\n(sklearn-extra)",
+        "CLARA",
         CLARA(
             n_clusters=n_clusters,
             n_sampling_iter=5,
@@ -110,7 +110,7 @@ models = [
         "#e7298a",
     ),
     (
-        "CLARANS\n(Classic)",
+        "CLARANS",
         CLARANS(
             n_clusters=n_clusters,
             num_local=2,
@@ -119,7 +119,7 @@ models = [
         "#2b5c8f",
     ),
     (
-        "FastCLARANS\n(Ours)",
+        "FastCLARANS",
         FastCLARANS(
             n_clusters=n_clusters,
             num_local=2,
@@ -203,24 +203,26 @@ bars2 = ax2.bar(
     edgecolor="#555555",
     linewidth=0.8,
 )
-ax2.set_ylabel("Relative Inertia (% of PAM, Lower is Better)", fontsize=10)
-ax2.set_title("Clustering Quality vs. PAM Baseline\n(Relative Inertia %)", fontsize=11, pad=10)
+ax2.set_ylabel("Inertia / Total Distance (% of PAM, Lower is Better)", fontsize=10)
+ax2.set_title("Inertia Loss (Lower is Better)\nRelative to PAM Baseline", fontsize=11, pad=10)
 ax2.set_ylim(95, max(rel_inertias) + 6)
 ax2.axhline(
     100.0,
     color="#7570b3",
-    linestyle=":",
+    linestyle="--",
     linewidth=1.2,
-    alpha=0.7,
-    label="PAM baseline (100%)",
+    alpha=0.8,
+    label="PAM baseline (100% = Best)",
 )
 ax2.yaxis.grid(True, linestyle="--", linewidth=0.6, color="#e5e5e5", alpha=0.8)
 ax2.set_axisbelow(True)
 
 for bar, rel in zip(bars2, rel_inertias):
     diff = rel - 100.0
-    diff_str = f"+{diff:.1f}%" if diff > 0.05 else "0.0%"
-    txt = f"{rel:.1f}%\n({diff_str})"
+    if diff <= 0.05:
+        txt = f"{rel:.1f}%\n(Best/Opt)"
+    else:
+        txt = f"{rel:.1f}%\n(+{diff:.1f}% loss)"
     ax2.annotate(
         txt,
         xy=(bar.get_x() + bar.get_width() / 2, bar.get_height()),
@@ -239,8 +241,8 @@ ax3.scatter(
     X[:, 1],
     c=fast_model.labels_,
     cmap="tab10",
-    s=14,
-    alpha=0.45,
+    s=8,
+    alpha=0.35,
     edgecolors="none",
 )
 
