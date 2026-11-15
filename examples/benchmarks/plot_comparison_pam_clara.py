@@ -289,10 +289,5 @@ ax3.set_xticks([])
 ax3.set_yticks([])
 ax3.legend(loc="upper right", frameon=True, facecolor="white", edgecolor="#cccccc", fontsize=8.5)
 
-plt.suptitle(
-    "K-Medoids Family Benchmark: PAM vs. CLARA (scikit-learn-extra) vs. CLARANS & FastCLARANS",
-    fontsize=12.5,
-    y=1.02,
-)
 plt.tight_layout()
 plt.show()
