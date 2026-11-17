@@ -716,6 +716,20 @@ class TestPrecomputedEdgeCases(unittest.TestCase):
                 trans = m.transform(D_sparse)
                 self.assertEqual(trans.shape, (40, 3))
 
+        # Test exact symmetric matrix where diff.nnz == 0
+        D_exact = sparse.csr_matrix(np.array([[0.0, 1.0, 2.0], [1.0, 0.0, 3.0], [2.0, 3.0, 0.0]]))
+        m_exact = CLARANS(n_clusters=2, metric="precomputed", random_state=42).fit(D_exact)
+        self.assertTrue(m_exact._precomputed_is_sym)
+
+        # Test fallback when sparse subtraction raises
+        class BrokenSparse(sparse.csr_matrix):
+            def __sub__(self, other):
+                raise RuntimeError("simulated subtraction error")
+
+        broken_D = BrokenSparse(D_exact)
+        m_broken = CLARANS(n_clusters=2, metric="precomputed", random_state=42).fit(broken_D)
+        self.assertFalse(m_broken._precomputed_is_sym)
+
     def test_precomputed_sparse_asymmetric_matrix(self):
         """Asymmetric sparse precomputed matrix should be detected as asymmetric."""
         D_asym = self.D.copy()
