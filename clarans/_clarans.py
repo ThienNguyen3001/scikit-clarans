@@ -806,7 +806,20 @@ class CLARANS(ClusterMixin, TransformerMixin, BaseEstimator):
 
                 self._precomputed_is_sym = bool(is_sym)
             else:
-                self._precomputed_is_sym = False
+                try:
+                    diff = X - X.T
+                    if diff.nnz == 0:
+                        is_sym = True
+                    else:
+                        is_sym = bool(np.all(np.abs(diff.data) <= 1e-8))
+                except Exception:
+                    is_sym = False
+
+                self._precomputed_is_sym = bool(is_sym)
+                if not self._precomputed_is_sym and hasattr(X, "tocsc"):
+                    self._X_csc = X.tocsc()
+                else:
+                    self._X_csc = None
             return
 
         params = self.metric_params if self.metric_params is not None else {}
@@ -880,10 +893,17 @@ class CLARANS(ClusterMixin, TransformerMixin, BaseEstimator):
                             if row_data.flags.c_contiguous
                             else np.ascontiguousarray(row_data)
                         )
-                    col_data = X[candidate_idx]
+                    if hasattr(X, "format") and X.format == "csc":
+                        col_data = X[:, candidate_idx]
+                    else:
+                        col_data = X[candidate_idx]
                     res = _to_dense(col_data).ravel()
                 else:
-                    col_data = X[:, candidate_idx]
+                    mat = getattr(self, "_X_csc", None)
+                    if mat is not None and mat.shape == X.shape:
+                        col_data = mat[:, candidate_idx]
+                    else:
+                        col_data = X[:, candidate_idx]
                     res = _to_dense(col_data).ravel()
             else:
                 res = _to_dense(cand_row).ravel()
@@ -1079,6 +1099,8 @@ class CLARANS(ClusterMixin, TransformerMixin, BaseEstimator):
                 del self.cluster_centers_
             dist_to_medoids = _to_dense(X[:, self.medoid_indices_])
             self.labels_ = np.argmin(dist_to_medoids, axis=1)
+            if hasattr(self, "_X_csc"):
+                del self._X_csc
         else:
             self.cluster_centers_ = X[self.medoid_indices_]
             self.labels_ = self._assign_cluster_labels(X)
