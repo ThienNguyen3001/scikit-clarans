@@ -1,0 +1,62 @@
+# scikit-clarans
+
+> scikit-clarans implements the CLARANS (Ng & Han, 2002) and FastCLARANS (Schubert & Rousseeuw, 2021) k-medoids clustering algorithms for Python with full scikit-learn estimator compatibility.
+
+scikit-clarans provides O(n) working memory footprint k-medoids clustering accelerated by Cython C-extensions, supporting dense NumPy arrays, sparse SciPy matrices (CSR/CSC), precomputed distance matrices, and custom callable metrics.
+
+## Quickstart
+
+```python
+import numpy as np
+from clarans import FastCLARANS
+
+# Generate or load data
+X = np.random.randn(1000, 5)
+
+# Initialize and fit FastCLARANS
+clusterer = FastCLARANS(n_clusters=5, num_local=2, random_state=42)
+clusterer.fit(X)
+
+# Inspect cluster medoids and inertia
+print("Medoid indices:", clusterer.medoid_indices_)
+print("Cluster centers:", clusterer.cluster_centers_)
+print("Inertia:", clusterer.inertia_)
+
+# Predict clusters for new samples
+labels_new = clusterer.predict(X[:10])
+```
+
+## Key Estimators
+
+- `FastCLARANS`: Recommended modern k-medoids clusterer using FastPAM1 simultaneous k-swap evaluation. Computes swaps across all k medoids in a single pass. Substantially faster for k >= 5.
+- `CLARANS`: Classic randomized graph-search k-medoids evaluating single (medoid, candidate) pairs per step. Suitable for baseline comparisons and reproducing Ng & Han (2002).
+
+## Core Architecture & Algorithmic Invariants
+
+- **Memory Footprint**: Strictly O(n) working memory during local search. Never computes, stores, or caches full O(n^2) pairwise distance matrices during clustering loops.
+- **Dynamic Distance Routing**: 
+  - `cdist` (SciPy C-kernel) for dense arrays with standard metrics (Euclidean, Manhattan, Cosine, Chebyshev).
+  - `DistanceMetric` (scikit-learn) for sparse CSR/CSC matrices without densifying.
+  - `precomputed` with fast C-level symmetry validation via Cython.
+  - `pairwise_distances` fallback for custom callable metrics and `nan_euclidean`.
+- **Cython Acceleration**: Core swap delta calculations (`clarans_delta`, `fastpam1_delta`), distance cache tracking (`update_cache_2min`), and greedy initialization steps run in Cython with `nogil`. Pure Python/NumPy fallbacks are provided if C-extensions are uncompiled.
+
+## Key Hyperparameters
+
+- `n_clusters` (int, default=8): Number of clusters k.
+- `num_local` (int, default=2): Number of local search restarts. Higher values find better local minima at the cost of runtime.
+- `max_neighbors` (int or None, default=None): Candidate neighbor sampling budget per restart. Default `None` dynamically scales with dataset size.
+- `init` ({'k-medoids++', 'random', 'heuristic', 'build', array-like}, default='k-medoids++'): Medoid initialization strategy.
+- `metric` (str or callable, default='euclidean'): Distance metric.
+- `metric_params` (dict, default=None): Additional keyword arguments for metric functions.
+- `n_jobs` (int, default=None): Number of parallel threads across local search restarts via joblib (`prefer="threads"` exploiting `nogil`).
+- `random_state` (int, RandomState or None, default=None): Random number seed for reproducible results.
+
+## Documentation Links
+
+- [Official Documentation](https://scikit-clarans.readthedocs.io/): Complete guides, tutorials, and benchmark gallery.
+- [API Reference](https://scikit-clarans.readthedocs.io/api.html): Complete public API specifications for CLARANS, FastCLARANS, and utilities.
+- [Installation Guide](https://scikit-clarans.readthedocs.io/installation.html): Instructions for pip and editable source installation with Cython/Meson.
+- [Examples Gallery](https://scikit-clarans.readthedocs.io/auto_examples/index.html): Visualizations of cluster geometry, custom distance metrics, robustness, and runtime scaling benchmarks.
+- [GitHub Repository](https://github.com/ThienNguyen3001/scikit-clarans): Source code, issue tracker, and development workflows.
+

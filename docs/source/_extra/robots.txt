@@ -1,0 +1,11 @@
+User-agent: *
+Allow: /
+
+# Prevent indexing of internal search and raw Sphinx source files
+Disallow: /_sources/
+Disallow: /search.html
+Disallow: /_downloads/
+
+# Sitemap location
+Sitemap: https://scikit-clarans.readthedocs.io/sitemap.xml
+

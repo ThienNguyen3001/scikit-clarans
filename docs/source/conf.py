@@ -108,6 +108,7 @@ html_context = {
     "conf_py_path": "/docs/source/",
 }
 html_static_path = ["_static"]
+html_extra_path = ["_extra"]
 
 html_sidebars = {
     "**": [
