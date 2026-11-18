@@ -273,30 +273,65 @@ def is_matrix_symmetric(
 ):
     """Check whether a square distance matrix is symmetric within tolerance."""
     cdef:
-        Py_ssize_t i, j
+        Py_ssize_t i, j, ii, jj, i_end, j_end
         floating d_ij, d_ji, diff, threshold
         int symmetric = 1
 
     with nogil:
-        for i in range(n_samples):
-            for j in range(i + 1, n_samples):
-                d_ij = D[i, j]
-                d_ji = D[j, i]
-                if isnan(d_ij) or isnan(d_ji):
-                    symmetric = 0
+        ii = 0
+        while ii < n_samples:
+            i_end = ii + 64
+            if i_end > n_samples:
+                i_end = n_samples
+
+            jj = ii
+            while jj < n_samples:
+                j_end = jj + 64
+                if j_end > n_samples:
+                    j_end = n_samples
+
+                if ii == jj:
+                    for i in range(ii, i_end):
+                        for j in range(i + 1, j_end):
+                            d_ij = D[i, j]
+                            d_ji = D[j, i]
+                            if d_ij == d_ji:
+                                continue
+                            if isnan(d_ij) or isnan(d_ji) or isinf(d_ij) or isinf(d_ji):
+                                symmetric = 0
+                                break
+                            diff = fabs(d_ij - d_ji)
+                            threshold = atol + rtol * fabs(d_ji)
+                            if diff > threshold:
+                                symmetric = 0
+                                break
+                        if not symmetric:
+                            break
+                else:
+                    for i in range(ii, i_end):
+                        for j in range(jj, j_end):
+                            d_ij = D[i, j]
+                            d_ji = D[j, i]
+                            if d_ij == d_ji:
+                                continue
+                            if isnan(d_ij) or isnan(d_ji) or isinf(d_ij) or isinf(d_ji):
+                                symmetric = 0
+                                break
+                            diff = fabs(d_ij - d_ji)
+                            threshold = atol + rtol * fabs(d_ji)
+                            if diff > threshold:
+                                symmetric = 0
+                                break
+                        if not symmetric:
+                            break
+
+                if not symmetric:
                     break
-                if d_ij == d_ji:
-                    continue
-                if isinf(d_ij) or isinf(d_ji):
-                    symmetric = 0
-                    break
-                diff = fabs(d_ij - d_ji)
-                threshold = atol + rtol * fabs(d_ji)
-                if diff > threshold:
-                    symmetric = 0
-                    break
+                jj += 64
+
             if not symmetric:
                 break
+            ii += 64
 
     return bool(symmetric)
 
