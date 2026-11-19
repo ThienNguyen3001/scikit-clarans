@@ -4,6 +4,8 @@ on:
   push:
     branches:
       - main
+    tags:
+      - '*'
     paths:
       - 'clarans/**'
       - 'asv_bench/**'
@@ -60,10 +62,42 @@ jobs:
 
       - name: Run ASV Benchmarks
         run: |
-          for commit in $(git rev-list --reverse -n 3 HEAD); do
-            echo "Benchmarking commit $commit..."
-            asv run -E existing --skip-existing-commits --set-commit-hash "$commit" --show-stderr || true
-          done
+          git fetch --tags --force
+          python -c "
+          import subprocess
+          from packaging.version import parse as parse_version
+
+          raw_tags = subprocess.check_output(['git', 'tag', '-l']).decode().split()
+          tags = [t for t in raw_tags if parse_version(t.lstrip('v')) >= parse_version('0.3.0')]
+          tags.sort(key=lambda t: parse_version(t.lstrip('v')))
+
+          targets = []
+          for tag in tags:
+              try:
+                  ref = 'refs/tags/' + tag + '^{commit}'
+                  commit = subprocess.check_output(['git', 'rev-parse', ref]).decode().strip()
+                  targets.append(('tag ' + tag, commit))
+              except Exception as e:
+                  print('Warning: failed resolving tag ' + tag + ': ' + str(e))
+
+          head_commit = subprocess.check_output(['git', 'rev-parse', 'HEAD']).decode().strip()
+          if not any(c == head_commit for _, c in targets):
+              targets.append(('HEAD', head_commit))
+
+          for label, commit in targets:
+              print('==================================================')
+              print('Benchmarking ' + label + ' (' + commit + ')...')
+              print('==================================================')
+              cmd = [
+                  'asv', 'run', '-E', 'existing',
+                  '--skip-existing-commits',
+                  '--set-commit-hash', commit,
+                  '--show-stderr'
+              ]
+              res = subprocess.run(cmd)
+              if res.returncode != 0:
+                  print('ASV run for ' + label + ' exited with returncode ' + str(res.returncode))
+          "
 
       - name: Normalize ASV hardware profiles across runs
         run: |
@@ -99,7 +133,7 @@ jobs:
 
       - name: Deploy ASV HTML to GitHub Pages
         uses: peaceiris/actions-gh-pages@v4
-        if: github.ref == 'refs/heads/main'
+        if: github.ref == 'refs/heads/main' || startsWith(github.ref, 'refs/tags/')
         with:
           github_token: ${{ secrets.GITHUB_TOKEN }}
           publish_dir: .asv/html
