@@ -46,7 +46,8 @@ jobs:
 
       - name: Configure ASV machine
         run: |
-          asv machine --yes --ram "16759431168"
+          asv machine --yes
+          python -c "import json, os; p = os.path.expanduser('~/.asv-machine.json'); d = json.load(open(p)); [v.update({'ram': '16759431168'}) for v in d.values() if isinstance(v, dict)]; json.dump(d, open(p, 'w'))"
 
       - name: Restore ASV raw results cache
         uses: actions/cache@v4
