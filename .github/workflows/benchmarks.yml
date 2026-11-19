@@ -56,7 +56,7 @@ jobs:
                   'arch': 'x86_64',
                   'cpu': 'GitHub Actions Hosted CPU',
                   'machine': 'github-actions',
-                  'num_cpu': '2',
+                  'num_cpu': '4',
                   'os': 'Linux',
                   'ram': '16GB'
               },
@@ -119,11 +119,15 @@ jobs:
                               data['machine'] = target_machine
                               data['cpu'] = 'GitHub Actions Hosted CPU'
                               data['ram'] = '16GB'
+                              data['num_cpu'] = '4'
+                              data['os'] = 'Linux'
                               modified = True
                           elif isinstance(data, dict) and 'params' in data and isinstance(data['params'], dict):
                               data['params']['machine'] = target_machine
                               data['params']['cpu'] = 'GitHub Actions Hosted CPU'
                               data['params']['ram'] = '16GB'
+                              data['params']['num_cpu'] = '4'
+                              data['params']['os'] = 'Linux'
                               modified = True
                           if modified:
                               with open(p, 'w', encoding='utf-8') as fp:
@@ -189,11 +193,15 @@ jobs:
                               data['machine'] = 'github-actions'
                               data['cpu'] = 'GitHub Actions Hosted CPU'
                               data['ram'] = '16GB'
+                              data['num_cpu'] = '4'
+                              data['os'] = 'Linux'
                               modified = True
                           elif isinstance(data, dict) and 'params' in data and isinstance(data['params'], dict):
                               data['params']['machine'] = 'github-actions'
                               data['params']['cpu'] = 'GitHub Actions Hosted CPU'
                               data['params']['ram'] = '16GB'
+                              data['params']['num_cpu'] = '4'
+                              data['params']['os'] = 'Linux'
                               modified = True
                           if modified:
                               with open(p, 'w', encoding='utf-8') as fp:
