@@ -162,6 +162,43 @@ class TestCythonCore:
         np.testing.assert_allclose(near_d, subD[:, 0])
         assert np.all(np.isinf(second_d))
 
+    def test_update_cache_2min_with_preallocated_buffers(self):
+        n_samples = 200
+        n_clusters = 5
+        subD = self.rng.uniform(0.5, 20.0, size=(n_samples, n_clusters)).astype(np.float64)
+        subD = np.ascontiguousarray(subD)
+
+        idx_buf = np.empty(n_samples, dtype=np.intp)
+        near_buf = np.empty(n_samples, dtype=np.float64)
+        sec_buf = np.empty(n_samples, dtype=np.float64)
+
+        near_idx, near_d, second_d = _core.update_cache_2min(
+            subD, n_samples, n_clusters, idx_buf, near_buf, sec_buf, has_nan=0
+        )
+        assert near_idx is idx_buf
+        assert near_d is near_buf
+        assert second_d is sec_buf
+
+        # Compare with no-buffer call
+        ref_idx, ref_d, ref_sec = _core.update_cache_2min(subD, n_samples, n_clusters)
+        np.testing.assert_array_equal(near_idx, ref_idx)
+        np.testing.assert_allclose(near_d, ref_d, rtol=1e-12)
+        np.testing.assert_allclose(second_d, ref_sec, rtol=1e-12)
+
+        # Buffer shape validation
+        with pytest.raises(ValueError, match="near_idx_map_buf length"):
+            _core.update_cache_2min(
+                subD, n_samples, n_clusters, near_idx_map_buf=np.empty(10, dtype=np.intp)
+            )
+        with pytest.raises(ValueError, match="near_dist_buf length"):
+            _core.update_cache_2min(
+                subD, n_samples, n_clusters, near_dist_buf=np.empty(10, dtype=np.float64)
+            )
+        with pytest.raises(ValueError, match="second_dist_buf length"):
+            _core.update_cache_2min(
+                subD, n_samples, n_clusters, second_dist_buf=np.empty(10, dtype=np.float64)
+            )
+
     # -----------------------------------------------------------------------
     # 4. pam_build_step vs NumPy
     # -----------------------------------------------------------------------

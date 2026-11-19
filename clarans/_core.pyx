@@ -110,24 +110,61 @@ def update_cache_2min(
     const floating[:, ::1] subD,
     Py_ssize_t n_samples,
     Py_ssize_t n_clusters,
+    object near_idx_map_buf = None,
+    object near_dist_buf = None,
+    object second_dist_buf = None,
+    int has_nan = -1,
 ):
     """Find nearest and second-nearest medoid indices and distances."""
     cdef:
-        cnp.ndarray[intp_t, ndim=1] near_idx_map_np = np.empty(n_samples, dtype=np.intp)
-        cnp.ndarray[floating, ndim=1] near_dist_np = np.empty(
-            n_samples, dtype=np.float64 if floating is double else np.float32
-        )
-        cnp.ndarray[floating, ndim=1] second_dist_np = np.empty(
-            n_samples, dtype=np.float64 if floating is double else np.float32
-        )
+        object ret_idx_map
+        object ret_near_dist
+        object ret_second_dist
 
-        intp_t[::1] near_idx_map = near_idx_map_np
-        floating[::1] near_dist = near_dist_np
-        floating[::1] second_dist = second_dist_np
+        intp_t[::1] near_idx_map
+        floating[::1] near_dist
+        floating[::1] second_dist
 
         Py_ssize_t i, m
         floating d, m1_val, m2_val
         intp_t m1_idx, m2_idx
+
+    if near_idx_map_buf is None:
+        ret_idx_map = np.empty(n_samples, dtype=np.intp)
+        near_idx_map = ret_idx_map
+    else:
+        near_idx_map = near_idx_map_buf
+        if near_idx_map.shape[0] < n_samples:
+            raise ValueError(
+                f"near_idx_map_buf length ({near_idx_map.shape[0]}) must be >= n_samples ({n_samples})"
+            )
+        ret_idx_map = near_idx_map_buf
+
+    if near_dist_buf is None:
+        ret_near_dist = np.empty(
+            n_samples, dtype=np.float64 if floating is double else np.float32
+        )
+        near_dist = ret_near_dist
+    else:
+        near_dist = near_dist_buf
+        if near_dist.shape[0] < n_samples:
+            raise ValueError(
+                f"near_dist_buf length ({near_dist.shape[0]}) must be >= n_samples ({n_samples})"
+            )
+        ret_near_dist = near_dist_buf
+
+    if second_dist_buf is None:
+        ret_second_dist = np.empty(
+            n_samples, dtype=np.float64 if floating is double else np.float32
+        )
+        second_dist = ret_second_dist
+    else:
+        second_dist = second_dist_buf
+        if second_dist.shape[0] < n_samples:
+            raise ValueError(
+                f"second_dist_buf length ({second_dist.shape[0]}) must be >= n_samples ({n_samples})"
+            )
+        ret_second_dist = second_dist_buf
 
     if n_clusters < 2:
         with nogil:
@@ -135,48 +172,89 @@ def update_cache_2min(
                 near_idx_map[i] = 0
                 near_dist[i] = subD[i, 0]
                 second_dist[i] = INFINITY
-        return near_idx_map_np, near_dist_np, second_dist_np
+        return ret_idx_map, ret_near_dist, ret_second_dist
 
     with nogil:
-        for i in range(n_samples):
-            if isnan(subD[i, 0]):
-                m1_val = subD[i, 1]
-                m1_idx = 1
-                m2_val = subD[i, 0]
-                m2_idx = 0
-            elif isnan(subD[i, 1]):
-                m1_val = subD[i, 0]
-                m1_idx = 0
-                m2_val = subD[i, 1]
-                m2_idx = 1
-            elif subD[i, 0] <= subD[i, 1]:
-                m1_val = subD[i, 0]
-                m1_idx = 0
-                m2_val = subD[i, 1]
-                m2_idx = 1
-            else:
-                m1_val = subD[i, 1]
-                m1_idx = 1
-                m2_val = subD[i, 0]
-                m2_idx = 0
+        # Auto-detect NaN presence if not explicitly specified (has_nan < 0)
+        if has_nan < 0:
+            has_nan = 0
+            for i in range(n_samples):
+                for m in range(n_clusters):
+                    if isnan(subD[i, m]):
+                        has_nan = 1
+                        break
+                if has_nan:
+                    break
 
-            for m in range(2, n_clusters):
-                d = subD[i, m]
-                if isnan(d):
-                    continue
-                if isnan(m1_val) or d < m1_val:
-                    m2_val = m1_val
-                    m2_idx = m1_idx
-                    m1_val = d
-                    m1_idx = m
-                elif isnan(m2_val) or d < m2_val:
-                    m2_val = d
-                    m2_idx = m
-            near_idx_map[i] = m1_idx
-            near_dist[i] = m1_val
-            second_dist[i] = m2_val
+        if not has_nan:
+            # Fast vectorized/branchless path: finite distances guaranteed
+            for i in range(n_samples):
+                if subD[i, 0] <= subD[i, 1]:
+                    m1_val = subD[i, 0]
+                    m1_idx = 0
+                    m2_val = subD[i, 1]
+                    m2_idx = 1
+                else:
+                    m1_val = subD[i, 1]
+                    m1_idx = 1
+                    m2_val = subD[i, 0]
+                    m2_idx = 0
 
-    return near_idx_map_np, near_dist_np, second_dist_np
+                for m in range(2, n_clusters):
+                    d = subD[i, m]
+                    if d < m1_val:
+                        m2_val = m1_val
+                        m2_idx = m1_idx
+                        m1_val = d
+                        m1_idx = m
+                    elif d < m2_val:
+                        m2_val = d
+                        m2_idx = m
+
+                near_idx_map[i] = m1_idx
+                near_dist[i] = m1_val
+                second_dist[i] = m2_val
+        else:
+            # Robust fallback path for nan_euclidean with missing values
+            for i in range(n_samples):
+                if isnan(subD[i, 0]):
+                    m1_val = subD[i, 1]
+                    m1_idx = 1
+                    m2_val = subD[i, 0]
+                    m2_idx = 0
+                elif isnan(subD[i, 1]):
+                    m1_val = subD[i, 0]
+                    m1_idx = 0
+                    m2_val = subD[i, 1]
+                    m2_idx = 1
+                elif subD[i, 0] <= subD[i, 1]:
+                    m1_val = subD[i, 0]
+                    m1_idx = 0
+                    m2_val = subD[i, 1]
+                    m2_idx = 1
+                else:
+                    m1_val = subD[i, 1]
+                    m1_idx = 1
+                    m2_val = subD[i, 0]
+                    m2_idx = 0
+
+                for m in range(2, n_clusters):
+                    d = subD[i, m]
+                    if isnan(d):
+                        continue
+                    if isnan(m1_val) or d < m1_val:
+                        m2_val = m1_val
+                        m2_idx = m1_idx
+                        m1_val = d
+                        m1_idx = m
+                    elif isnan(m2_val) or d < m2_val:
+                        m2_val = d
+                        m2_idx = m
+                near_idx_map[i] = m1_idx
+                near_dist[i] = m1_val
+                second_dist[i] = m2_val
+
+    return ret_idx_map, ret_near_dist, ret_second_dist
 
 
 # PAM BUILD greedy selection
@@ -273,30 +351,65 @@ def is_matrix_symmetric(
 ):
     """Check whether a square distance matrix is symmetric within tolerance."""
     cdef:
-        Py_ssize_t i, j
+        Py_ssize_t i, j, ii, jj, i_end, j_end
         floating d_ij, d_ji, diff, threshold
         int symmetric = 1
 
     with nogil:
-        for i in range(n_samples):
-            for j in range(i + 1, n_samples):
-                d_ij = D[i, j]
-                d_ji = D[j, i]
-                if isnan(d_ij) or isnan(d_ji):
-                    symmetric = 0
+        ii = 0
+        while ii < n_samples:
+            i_end = ii + 64
+            if i_end > n_samples:
+                i_end = n_samples
+
+            jj = ii
+            while jj < n_samples:
+                j_end = jj + 64
+                if j_end > n_samples:
+                    j_end = n_samples
+
+                if ii == jj:
+                    for i in range(ii, i_end):
+                        for j in range(i + 1, j_end):
+                            d_ij = D[i, j]
+                            d_ji = D[j, i]
+                            if d_ij == d_ji:
+                                continue
+                            if isnan(d_ij) or isnan(d_ji) or isinf(d_ij) or isinf(d_ji):
+                                symmetric = 0
+                                break
+                            diff = fabs(d_ij - d_ji)
+                            threshold = atol + rtol * fabs(d_ji)
+                            if diff > threshold:
+                                symmetric = 0
+                                break
+                        if not symmetric:
+                            break
+                else:
+                    for i in range(ii, i_end):
+                        for j in range(jj, j_end):
+                            d_ij = D[i, j]
+                            d_ji = D[j, i]
+                            if d_ij == d_ji:
+                                continue
+                            if isnan(d_ij) or isnan(d_ji) or isinf(d_ij) or isinf(d_ji):
+                                symmetric = 0
+                                break
+                            diff = fabs(d_ij - d_ji)
+                            threshold = atol + rtol * fabs(d_ji)
+                            if diff > threshold:
+                                symmetric = 0
+                                break
+                        if not symmetric:
+                            break
+
+                if not symmetric:
                     break
-                if d_ij == d_ji:
-                    continue
-                if isinf(d_ij) or isinf(d_ji):
-                    symmetric = 0
-                    break
-                diff = fabs(d_ij - d_ji)
-                threshold = atol + rtol * fabs(d_ji)
-                if diff > threshold:
-                    symmetric = 0
-                    break
+                jj += 64
+
             if not symmetric:
                 break
+            ii += 64
 
     return bool(symmetric)
 

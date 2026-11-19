@@ -242,13 +242,8 @@ class FastCLARANS(CLARANS):
         delta_arr_buf: np.ndarray | None = None,
     ) -> tuple[int, float]:
         """Evaluate candidate swap against all k medoids simultaneously via FastPAM1."""
-        if self.n_clusters == 1:
-            candidate_cost = float(np.sum(d_xc))
-            return 0, candidate_cost - current_cost
-        elif can_use_cython:
-            assert near_idx_map is not None
-            assert near_dist is not None
-            assert second_dist is not None
+        if can_use_cython and self.n_clusters > 1:
+            assert near_idx_map is not None and near_dist is not None and second_dist is not None
             best_m, min_delta_val, _ = _core.fastpam1_delta(
                 near_idx_map,
                 near_dist,
@@ -259,10 +254,11 @@ class FastCLARANS(CLARANS):
                 delta_arr_buf,
             )
             return int(best_m), float(min_delta_val)
-        else:
-            assert near_idx_map is not None
-            assert near_dist is not None
-            assert second_dist is not None
-            return _fallback_fastpam1_delta(
-                near_idx_map, near_dist, second_dist, d_xc, self.n_clusters
-            )
+        if self.n_clusters == 1:
+            candidate_cost = float(np.sum(d_xc))
+            return 0, candidate_cost - current_cost
+
+        assert near_idx_map is not None
+        assert near_dist is not None
+        assert second_dist is not None
+        return _fallback_fastpam1_delta(near_idx_map, near_dist, second_dist, d_xc, self.n_clusters)

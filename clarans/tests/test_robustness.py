@@ -694,22 +694,68 @@ class TestPrecomputedEdgeCases(unittest.TestCase):
 
     def test_precomputed_sparse_distance_matrix(self):
         """fit/predict/transform should work with sparse precomputed matrix."""
-        D_sparse = sparse.csr_matrix(self.D)
-        for cls in [CLARANS, FastCLARANS]:
-            m = cls(
-                n_clusters=3,
-                metric="precomputed",
-                random_state=42,
-                num_local=1,
-                max_neighbors=20,
-            )
-            m.fit(D_sparse)
-            self.assertEqual(len(m.medoid_indices_), 3)
-            self.assertFalse(hasattr(m, "cluster_centers_"))
-            labels = m.predict(D_sparse)
-            self.assertEqual(labels.shape, (40,))
-            trans = m.transform(D_sparse)
-            self.assertEqual(trans.shape, (40, 3))
+        for sp_format in ["csr", "csc"]:
+            D_sparse = getattr(sparse, f"{sp_format}_matrix")(self.D)
+            for cls in [CLARANS, FastCLARANS]:
+                m = cls(
+                    n_clusters=3,
+                    metric="precomputed",
+                    random_state=42,
+                    num_local=1,
+                    max_neighbors=20,
+                )
+                m.fit(D_sparse)
+                self.assertEqual(len(m.medoid_indices_), 3)
+                self.assertTrue(
+                    m._precomputed_is_sym,
+                    f"{cls.__name__} should detect symmetric {sp_format} matrix",
+                )
+                self.assertFalse(hasattr(m, "cluster_centers_"))
+                labels = m.predict(D_sparse)
+                self.assertEqual(labels.shape, (40,))
+                trans = m.transform(D_sparse)
+                self.assertEqual(trans.shape, (40, 3))
+
+        # Test exact symmetric matrix where diff.nnz == 0
+        D_exact = sparse.csr_matrix(np.array([[0.0, 1.0, 2.0], [1.0, 0.0, 3.0], [2.0, 3.0, 0.0]]))
+        m_exact = CLARANS(n_clusters=2, metric="precomputed", random_state=42).fit(D_exact)
+        self.assertTrue(m_exact._precomputed_is_sym)
+
+        # Test fallback when sparse subtraction raises
+        class BrokenSparse(sparse.csr_matrix):
+            def __sub__(self, other):
+                raise RuntimeError("simulated subtraction error")
+
+        broken_D = BrokenSparse(D_exact)
+        m_broken = CLARANS(n_clusters=2, metric="precomputed", random_state=42).fit(broken_D)
+        self.assertFalse(m_broken._precomputed_is_sym)
+
+    def test_precomputed_sparse_asymmetric_matrix(self):
+        """Asymmetric sparse precomputed matrix should be detected as asymmetric."""
+        D_asym = self.D.copy()
+        D_asym[10, 5] += 15.0
+        for sp_format in ["csr", "csc"]:
+            D_sparse = getattr(sparse, f"{sp_format}_matrix")(D_asym)
+            for cls in [CLARANS, FastCLARANS]:
+                m = cls(
+                    n_clusters=3,
+                    metric="precomputed",
+                    random_state=42,
+                    num_local=1,
+                    max_neighbors=20,
+                )
+                m.fit(D_sparse)
+                self.assertFalse(
+                    m._precomputed_is_sym,
+                    f"{cls.__name__} should detect asymmetric {sp_format} matrix",
+                )
+                self.assertFalse(hasattr(m, "_X_csc"))
+                true_cost = calculate_cost(D_asym, m.medoid_indices_, metric="precomputed")
+                self.assertLess(
+                    abs(m.inertia_ - true_cost),
+                    1e-5,
+                    f"{cls.__name__} cost discrepancy on asymmetric {sp_format} matrix",
+                )
 
 
 # ===========================================================================

@@ -25,6 +25,10 @@ def update_cache_2min(
     subD: np.ndarray,
     n_samples: int,
     n_clusters: int,
+    near_idx_map_buf: np.ndarray | None = None,
+    near_dist_buf: np.ndarray | None = None,
+    second_dist_buf: np.ndarray | None = None,
+    has_nan: int = -1,
 ) -> tuple[np.ndarray, np.ndarray, np.ndarray]: ...
 def pam_build_step(
     D: np.ndarray,
