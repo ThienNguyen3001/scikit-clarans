@@ -47,7 +47,7 @@ jobs:
       - name: Configure ASV machine
         run: |
           asv machine --yes
-          python -c "import json, os; p = os.path.expanduser('~/.asv-machine.json'); d = json.load(open(p)); [v.update({'ram': '16759431168'}) for v in d.values() if isinstance(v, dict)]; json.dump(d, open(p, 'w'))"
+          python -c "import json, os; p = os.path.expanduser('~/.asv-machine.json'); d = json.load(open(p)); [v.update({'cpu': 'GitHub Actions Hosted CPU', 'ram': '16GB'}) for v in d.values() if isinstance(v, dict)]; json.dump(d, open(p, 'w'))"
 
       - name: Restore ASV raw results cache
         uses: actions/cache@v4
@@ -64,6 +64,34 @@ jobs:
             echo "Benchmarking commit $commit..."
             asv run -E existing --skip-existing-commits --set-commit-hash "$commit" --show-stderr || true
           done
+
+      - name: Normalize ASV hardware profiles across runs
+        run: |
+          python -c "
+          import os, json
+          results_dir = '.asv/results'
+          for root, dirs, files in os.walk(results_dir):
+              for f in files:
+                  if f.endswith('.json'):
+                      p = os.path.join(root, f)
+                      try:
+                          with open(p, 'r', encoding='utf-8') as fp:
+                              data = json.load(fp)
+                          modified = False
+                          if f == 'machine.json':
+                              data['cpu'] = 'GitHub Actions Hosted CPU'
+                              data['ram'] = '16GB'
+                              modified = True
+                          elif isinstance(data, dict) and 'params' in data and isinstance(data['params'], dict):
+                              data['params']['cpu'] = 'GitHub Actions Hosted CPU'
+                              data['params']['ram'] = '16GB'
+                              modified = True
+                          if modified:
+                              with open(p, 'w', encoding='utf-8') as fp:
+                                  json.dump(data, fp)
+                      except Exception:
+                          pass
+          "
 
       - name: Build ASV HTML Dashboard
         run: |
