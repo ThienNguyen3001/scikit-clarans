@@ -171,8 +171,8 @@ class CLARANS(ClusterMixin, TransformerMixin, BaseEstimator):
         equal to ``n_clusters * (n_samples - n_clusters)``.
 
     n_iter_ : int
-        Number of candidate neighbors evaluated during the best local search
-        restart.
+        Number of candidate graph edges (medoid, non-medoid pairs) evaluated
+        during the best local search restart.
 
     n_swaps_ : int
         Number of successful medoid swaps performed during the best local search

@@ -141,8 +141,9 @@ class FastCLARANS(CLARANS):
         ``n_samples - n_clusters``.
 
     n_iter_ : int
-        Number of candidate neighbors evaluated during the best local search
-        restart.
+        Number of non-medoid candidate points sampled during the best local search
+        restart. Each candidate iteration evaluates swaps against all k medoids
+        simultaneously via FastPAM1 (evaluating k graph edges per iteration).
 
     n_swaps_ : int
         Number of successful medoid swaps performed during the best local search

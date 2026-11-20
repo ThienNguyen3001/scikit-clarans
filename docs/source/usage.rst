@@ -237,7 +237,7 @@ After calling ``fit(X)``, both ``CLARANS`` and ``FastCLARANS`` store the cluster
      - Search neighborhood size: :math:`k(n-k)` in ``CLARANS`` (graph transitions) or :math:`n-k` in ``FastCLARANS`` (candidate points).
    * - ``n_iter_``
      - int
-     - Number of candidate evaluations tested during the best local search restart.
+     - Candidate evaluations tested during best restart: graph edges in ``CLARANS`` or candidate points (each checking :math:`k` medoids) in ``FastCLARANS``.
    * - ``n_swaps_``
      - int
      - Number of accepted medoid swaps performed during the best local search restart.
@@ -277,6 +277,11 @@ Neighbor attributes and auto-scaling:
 
 Iteration and swap counters:
   In accordance with scikit-learn clustering conventions (e.g., ``KMeans``, ``KMedoids``), ``n_iter_`` and ``n_swaps_`` record the candidate evaluations and accepted medoid swaps performed during the best local search restart (the run that achieved minimum ``inertia_``).
+
+  Note that the unit of ``n_iter_`` reflects each algorithm's search space formulation:
+
+  * In ``CLARANS``, ``n_iter_`` counts individual graph edge evaluations (single medoid-candidate pairs).
+  * In ``FastCLARANS``, ``n_iter_`` counts non-medoid candidate points sampled, where each iteration evaluates swaps across all :math:`k` medoids simultaneously via FastPAM1 (exploring :math:`k` edges per iteration).
 
 Monitoring search progress
 --------------------------
