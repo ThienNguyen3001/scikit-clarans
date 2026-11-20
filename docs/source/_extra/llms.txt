@@ -54,9 +54,9 @@ labels_new = clusterer.predict(X[:10])
 
 ## Documentation Links
 
-- [Official Documentation](https://scikit-clarans.readthedocs.io/): Complete guides, tutorials, and benchmark gallery.
-- [API Reference](https://scikit-clarans.readthedocs.io/api.html): Complete public API specifications for CLARANS, FastCLARANS, and utilities.
-- [Installation Guide](https://scikit-clarans.readthedocs.io/installation.html): Instructions for pip and editable source installation with Cython/Meson.
-- [Examples Gallery](https://scikit-clarans.readthedocs.io/auto_examples/index.html): Visualizations of cluster geometry, custom distance metrics, robustness, and runtime scaling benchmarks.
+- [Official Documentation](https://scikit-clarans.readthedocs.io/en/latest/): Complete guides, tutorials, and benchmark gallery.
+- [API Reference](https://scikit-clarans.readthedocs.io/en/latest/api.html): Complete public API specifications for CLARANS, FastCLARANS, and utilities.
+- [Installation Guide](https://scikit-clarans.readthedocs.io/en/latest/installation.html): Instructions for pip and editable source installation with Cython/Meson.
+- [Examples Gallery](https://scikit-clarans.readthedocs.io/en/latest/auto_examples/index.html): Visualizations of cluster geometry, custom distance metrics, robustness, and runtime scaling benchmarks.
 - [GitHub Repository](https://github.com/ThienNguyen3001/scikit-clarans): Source code, issue tracker, and development workflows.
 
