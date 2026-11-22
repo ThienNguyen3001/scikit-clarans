@@ -361,9 +361,11 @@ class CLARANS(ClusterMixin, TransformerMixin, BaseEstimator):
         return np.empty(n_samples, dtype=buf_dtype)
 
     @staticmethod
-    def _delta_tolerance(cost: float) -> float:
+    def _delta_tolerance(cost: float, dtype: Any = np.float64) -> float:
         """Calculate the negative tolerance threshold for improving swaps."""
-        return -max(1e-16, 1e-12 * abs(cost))
+        eps = float(np.finfo(dtype).eps) if np.issubdtype(dtype, np.floating) else 1e-16
+        rel_tol = max(eps * 10.0, 1e-12)
+        return -max(eps, rel_tol * abs(cost))
 
     @staticmethod
     def _update_candidate_pool(
@@ -434,9 +436,10 @@ class CLARANS(ClusterMixin, TransformerMixin, BaseEstimator):
         - Initialization methods such as ``'heuristic'`` and ``'build'``
           may compute the full pairwise distance matrix and therefore have
           O(n^2) time and memory costs.
-        - Compared with ``FastCLARANS``, this implementation avoids
-          caching the full distance matrix and is more memory-friendly for
-          very large datasets at the cost of repeated distance computations.
+        - Both ``CLARANS`` and ``FastCLARANS`` avoid storing full distance
+          matrices, maintaining a strict O(n) memory footprint. ``FastCLARANS``
+          evaluates swaps across all medoids simultaneously via FastPAM1,
+          reducing distance computations by a factor of k.
 
         Examples
         --------
@@ -642,7 +645,9 @@ class CLARANS(ClusterMixin, TransformerMixin, BaseEstimator):
             0.0,
             d_xc[~is_assigned_to_m] - near_dist[~is_assigned_to_m],
         )
-        total_delta = float(np.sum(delta_assigned) + np.sum(delta_others))
+        total_delta = float(
+            np.sum(delta_assigned, dtype=np.float64) + np.sum(delta_others, dtype=np.float64)
+        )
         return medoid_pos, total_delta
 
     def _single_local_search(
@@ -706,7 +711,8 @@ class CLARANS(ClusterMixin, TransformerMixin, BaseEstimator):
             else None
         )
         is_precomputed = self.metric == "precomputed"
-        delta_tol = self._delta_tolerance(current_cost)
+        buf_dtype = d_xc_buf.dtype if d_xc_buf is not None else np.float64
+        delta_tol = self._delta_tolerance(current_cost, buf_dtype)
 
         i = 0
         swap_count = 0
@@ -754,7 +760,7 @@ class CLARANS(ClusterMixin, TransformerMixin, BaseEstimator):
                         second_dist_buf=second_dist,
                     )
                     current_cost = float(np.sum(near_dist))
-                    delta_tol = self._delta_tolerance(current_cost)
+                    delta_tol = self._delta_tolerance(current_cost, buf_dtype)
 
                     available_candidates = self._update_candidate_pool(
                         non_medoid_mask, old_medoid, candidate_idx
@@ -786,7 +792,7 @@ class CLARANS(ClusterMixin, TransformerMixin, BaseEstimator):
                     current_medoids_indices = neighbor_medoids_indices
                     delta_cost = neighbor_cost - current_cost
                     current_cost = neighbor_cost
-                    delta_tol = self._delta_tolerance(current_cost)
+                    delta_tol = self._delta_tolerance(current_cost, np.float64)
 
                     available_candidates = self._update_candidate_pool(
                         non_medoid_mask, old_medoid, candidate_idx

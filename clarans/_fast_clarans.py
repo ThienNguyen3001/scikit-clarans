@@ -26,7 +26,7 @@ def _fallback_fastpam1_delta(
 ) -> tuple[int, float]:
     """Pure-Python fallback for FastPAM1 delta calculations when Cython is unavailable."""
     mask_closer = d_xc < near_dist
-    delta_td = float(np.sum(d_xc[mask_closer] - near_dist[mask_closer]))
+    delta_td = float(np.sum(d_xc[mask_closer] - near_dist[mask_closer], dtype=np.float64))
 
     weights = np.where(
         mask_closer,

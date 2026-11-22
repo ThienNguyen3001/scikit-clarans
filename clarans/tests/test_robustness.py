@@ -23,6 +23,7 @@ from unittest.mock import patch
 
 import numpy as np
 from scipy import sparse
+from scipy.spatial.distance import cdist
 from sklearn.datasets import make_blobs
 from sklearn.metrics import pairwise_distances
 
@@ -1121,3 +1122,132 @@ class TestSparseMatrixInitAndCosineSupport(unittest.TestCase):
             # Score must return negative inertia
             s = m.score(self.X_sparse)
             self.assertAlmostEqual(s, -m.inertia_)
+
+
+# ===========================================================================
+# 13. Float32 Precision & Delta Accumulation Robustness
+# ===========================================================================
+class TestFloat32PrecisionAndAccumulation(unittest.TestCase):
+    """Verifies numerical precision and stability when handling float32 inputs."""
+
+    def test_float32_vs_float64_precomputed_clustering_parity(self):
+        """Float32 precomputed matrix must reach parity with float64 without ghost swaps."""
+        X, _ = make_blobs(n_samples=60, n_features=4, centers=3, random_state=42)
+        D_f64 = pairwise_distances(X, metric="euclidean")
+        D_f32 = D_f64.astype(np.float32)
+
+        init_medoids = np.array([0, 20, 40])
+        for model_cls in [CLARANS, FastCLARANS]:
+            m64 = model_cls(
+                n_clusters=3,
+                metric="precomputed",
+                init=init_medoids.copy(),
+                num_local=1,
+                random_state=42,
+            ).fit(D_f64)
+
+            m32 = model_cls(
+                n_clusters=3,
+                metric="precomputed",
+                init=init_medoids.copy(),
+                num_local=1,
+                random_state=42,
+            ).fit(D_f32)
+
+            np.testing.assert_array_equal(
+                np.sort(m64.medoid_indices_),
+                np.sort(m32.medoid_indices_),
+                err_msg=f"{model_cls.__name__} float32 medoids diverged from float64",
+            )
+            self.assertAlmostEqual(
+                m64.inertia_,
+                float(m32.inertia_),
+                places=3,
+                msg=f"{model_cls.__name__} float32 inertia diverged from float64",
+            )
+
+    def test_delta_tolerance_scales_with_dtype(self):
+        """Delta tolerance must account for machine epsilon of float32 vs float64."""
+        cost = 1000.0
+        tol_f64 = CLARANS._delta_tolerance(cost, np.float64)
+        tol_f32 = CLARANS._delta_tolerance(cost, np.float32)
+
+        eps_f32 = np.finfo(np.float32).eps
+
+        self.assertLess(tol_f64, 0.0)
+        self.assertLess(tol_f32, 0.0)
+        # float32 tolerance threshold must be wider (more negative) than float64
+        self.assertLess(tol_f32, tol_f64)
+        self.assertAlmostEqual(tol_f32, -max(eps_f32, eps_f32 * 10.0 * cost), places=6)
+
+
+# ===========================================================================
+# 14. Distance Backend Parity & Cross-Engine Consistency
+# ===========================================================================
+class TestDistanceEngineBackendParity(unittest.TestCase):
+    """Verifies that cdist, DistanceMetric, and pairwise_distances yield consistent results."""
+
+    def setUp(self):
+        rng = np.random.RandomState(42)
+        self.X_dense = rng.randn(30, 5)
+        self.X_sparse = sparse.csr_matrix(np.where(self.X_dense > 0.3, self.X_dense, 0.0))
+
+    def test_dense_engine_parity(self):
+        """On dense arrays, cdist and pairwise_distances must produce consistent distances."""
+        cand_row = self.X_dense[0:1]
+        for metric in ["euclidean", "cityblock", "cosine", "chebyshev"]:
+            m_cdist = CLARANS(n_clusters=2, metric=metric, random_state=42)
+            m_cdist._setup_distance_engine(self.X_dense)
+            d_cdist = m_cdist._compute_1_vs_n(cand_row, self.X_dense)
+
+            m_pw = CLARANS(n_clusters=2, metric=metric, random_state=42)
+            m_pw._setup_distance_engine(self.X_dense)
+            m_pw._dist_engine = "pairwise"
+            d_pw = m_pw._compute_1_vs_n(cand_row, self.X_dense)
+
+            np.testing.assert_allclose(
+                d_cdist,
+                d_pw,
+                rtol=1e-5,
+                atol=1e-6,
+                err_msg=f"Discrepancy between cdist and pairwise for metric {metric}",
+            )
+
+    def test_sparse_engine_parity(self):
+        """On sparse CSR, DistanceMetric and pairwise must produce consistent distances."""
+        cand_row = self.X_sparse[0:1]
+        for metric in ["euclidean", "manhattan"]:
+            m_dm = CLARANS(n_clusters=2, metric=metric, random_state=42)
+            m_dm._setup_distance_engine(self.X_sparse)
+            d_dm = m_dm._compute_1_vs_n(cand_row, self.X_sparse)
+
+            m_pw = CLARANS(n_clusters=2, metric=metric, random_state=42)
+            m_pw._setup_distance_engine(self.X_sparse)
+            m_pw._dist_engine = "pairwise"
+            d_pw = m_pw._compute_1_vs_n(cand_row, self.X_sparse)
+
+            np.testing.assert_allclose(
+                d_dm,
+                d_pw,
+                rtol=1e-5,
+                atol=1e-6,
+                err_msg=f"Discrepancy DistanceMetric vs pairwise for sparse metric {metric}",
+            )
+
+        # Chebyshev on sparse is not supported by sklearn pairwise_distances,
+        # but DistanceMetric handles it without densifying; compare against dense cdist reference.
+        m_dm_cheb = CLARANS(n_clusters=2, metric="chebyshev", random_state=42)
+        m_dm_cheb._setup_distance_engine(self.X_sparse)
+        self.assertEqual(m_dm_cheb._dist_engine, "distance_metric")
+        d_dm_cheb = m_dm_cheb._compute_1_vs_n(cand_row, self.X_sparse)
+        X_sparse_dense = self.X_sparse.toarray()
+        d_ref_cheb = cdist(X_sparse_dense[0:1], X_sparse_dense, metric="chebyshev")[0]
+        np.testing.assert_allclose(d_dm_cheb, d_ref_cheb, rtol=1e-6, atol=1e-8)
+
+    def test_cosine_zero_vector_catches_non_finite_cost(self):
+        """Zero vectors with cosine distance must be caught safely by non-finite checks."""
+        X_with_zero = np.vstack([self.X_dense, np.zeros((1, 5))])
+        for model_cls in [CLARANS, FastCLARANS]:
+            with self.assertRaises(ValueError) as ctx:
+                model_cls(n_clusters=2, metric="cosine", random_state=42).fit(X_with_zero)
+            self.assertIn("non-finite", str(ctx.exception).lower())

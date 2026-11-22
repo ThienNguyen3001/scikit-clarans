@@ -5,6 +5,7 @@
 import numpy as np
 cimport numpy as cnp
 from libc.math cimport sqrt, INFINITY, isnan, isinf, fabs
+from libc.stdlib cimport malloc, free
 
 # Initialize NumPy C API
 cnp.import_array()
@@ -27,18 +28,18 @@ def clarans_delta(
 ):
     """Compute CLARANS delta cost for a candidate medoid swap."""
     cdef:
-        floating total_delta = 0.0
+        double total_delta = 0.0
         Py_ssize_t j
-        floating d, diff, val
+        double d, diff, val
 
     with nogil:
         for j in range(n_samples):
-            d = d_xc[j]
+            d = <double>d_xc[j]
             if near_idx_map[j] == random_medoid_pos:
-                val = second_dist[j] if second_dist[j] < d else d
-                total_delta += (val - near_dist[j])
+                val = <double>second_dist[j] if second_dist[j] < d else d
+                total_delta += (val - <double>near_dist[j])
             else:
-                diff = d - near_dist[j]
+                diff = d - <double>near_dist[j]
                 if diff < 0.0:
                     total_delta += diff
 
@@ -59,9 +60,12 @@ def fastpam1_delta(
     cdef:
         cnp.ndarray[floating, ndim=1] total_delta_np = None
         floating[::1] delta_arr
-        floating delta_td = 0.0
+        double delta_td = 0.0
         Py_ssize_t j, m, best_m = 0
-        floating d1, d2, dc, best_val
+        double d1, d2, dc, best_val
+        double stack_buf[512]
+        double* dbl_delta = NULL
+        bint heap_allocated = False
 
     if delta_buf is None:
         total_delta_np = np.zeros(
@@ -75,32 +79,46 @@ def fastpam1_delta(
             )
         delta_arr = delta_buf
 
-    with nogil:
-        if delta_buf is not None:
+    if n_clusters <= 512:
+        dbl_delta = stack_buf
+    else:
+        dbl_delta = <double*>malloc(n_clusters * sizeof(double))
+        if dbl_delta == NULL:
+            raise MemoryError(f"Failed to allocate {n_clusters} double-precision delta buffer")
+        heap_allocated = True
+
+    try:
+        with nogil:
             for m in range(n_clusters):
-                delta_arr[m] = 0.0
+                dbl_delta[m] = 0.0
 
-        for j in range(n_samples):
-            m = near_idx_map[j]
-            d1 = near_dist[j]
-            d2 = second_dist[j]
-            dc = d_xc[j]
+            for j in range(n_samples):
+                m = near_idx_map[j]
+                d1 = <double>near_dist[j]
+                d2 = <double>second_dist[j]
+                dc = <double>d_xc[j]
 
-            if dc < d1:
-                delta_td += (dc - d1)
-            elif dc < d2:
-                delta_arr[m] += (dc - d1)
-            else:
-                delta_arr[m] += (d2 - d1)
+                if dc < d1:
+                    delta_td += (dc - d1)
+                elif dc < d2:
+                    dbl_delta[m] += (dc - d1)
+                else:
+                    dbl_delta[m] += (d2 - d1)
 
-        best_val = delta_arr[0] + delta_td
-        delta_arr[0] = best_val
+            best_val = dbl_delta[0] + delta_td
+            dbl_delta[0] = best_val
 
-        for m in range(1, n_clusters):
-            delta_arr[m] += delta_td
-            if delta_arr[m] < best_val:
-                best_val = delta_arr[m]
-                best_m = m
+            for m in range(1, n_clusters):
+                dbl_delta[m] += delta_td
+                if dbl_delta[m] < best_val:
+                    best_val = dbl_delta[m]
+                    best_m = m
+
+            for m in range(n_clusters):
+                delta_arr[m] = <floating>dbl_delta[m]
+    finally:
+        if heap_allocated:
+            free(dbl_delta)
 
     return best_m, best_val, total_delta_np if total_delta_np is not None else np.asarray(delta_arr)
 
