@@ -228,7 +228,7 @@ Run before opening a pull request or tagging a release:
 3. `docs-build.yml`: Builds Sphinx HTML documentation with `-W --keep-going` on Python 3.12.
 4. `draft-pdf.yml`: Compiles JOSS draft paper PDF on pushes to branch `paper`.
 5. `pypi-publish.yml`: Compiles multi-platform binary wheels (`cibuildwheel`) and sdist, publishing to PyPI via OIDC trusted publishing upon release publication or workflow dispatch.
-6. `benchmarks.yml`: Runs ASV (Airspeed Velocity) benchmark regression tests on pushes to `main` and publishes interactive performance dashboard to GitHub Pages (`gh-pages`).
+6. `benchmarks.yml`: Runs ASV (Airspeed Velocity) benchmark regression tests on manual trigger (`workflow_dispatch`) and publishes interactive performance dashboard to GitHub Pages (`gh-pages`).
 
 ### Release (`/release`)
 

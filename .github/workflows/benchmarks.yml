@@ -1,16 +1,6 @@
 name: ASV Benchmarks
 
 on:
-  push:
-    branches:
-      - main
-    tags:
-      - '*'
-    paths:
-      - 'clarans/**'
-      - 'asv_bench/**'
-      - 'asv.conf.json'
-      - '.github/workflows/benchmarks.yml'
   workflow_dispatch:
 
 permissions:
