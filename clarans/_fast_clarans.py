@@ -14,7 +14,7 @@ import numpy as np
 from numpy.typing import ArrayLike
 
 from ._clarans import CLARANS
-from .utils import _core
+from .utils import _core, _nonfinite_swap_components
 
 
 def _fallback_fastpam1_delta(
@@ -25,15 +25,25 @@ def _fallback_fastpam1_delta(
     n_clusters: int,
 ) -> tuple[int, float]:
     """Pure-Python fallback for FastPAM1 delta calculations when Cython is unavailable."""
-    mask_closer = d_xc < near_dist
-    delta_td = float(np.sum(d_xc[mask_closer] - near_dist[mask_closer], dtype=np.float64))
+    with np.errstate(invalid="ignore"):
+        mask_closer = d_xc < near_dist
+        delta_td = float(np.sum(d_xc[mask_closer] - near_dist[mask_closer], dtype=np.float64))
 
-    weights = np.where(
-        mask_closer,
-        0.0,
-        np.where(d_xc < second_dist, d_xc - near_dist, second_dist - near_dist),
-    )
-    delta_arr = np.bincount(near_idx_map, weights=weights, minlength=n_clusters) + delta_td
+        weights = np.where(
+            mask_closer,
+            0.0,
+            np.where(d_xc < second_dist, d_xc - near_dist, second_dist - near_dist),
+        )
+        delta_arr = np.bincount(near_idx_map, weights=weights, minlength=n_clusters) + delta_td
+    if not np.isfinite(delta_td) or not np.all(np.isfinite(delta_arr)):
+        base_inf, base_fin, inf_w, fin_w = _nonfinite_swap_components(near_dist, second_dist, d_xc)
+        tot_inf = base_inf + np.bincount(near_idx_map, weights=inf_w, minlength=n_clusters).astype(
+            np.int64
+        )
+        tot_fin = base_fin + np.bincount(near_idx_map, weights=fin_w, minlength=n_clusters)
+        delta_arr = np.where(tot_inf < 0, -np.inf, np.where(tot_inf > 0, np.inf, tot_fin))
+        best_m = int(np.lexsort((tot_fin, tot_inf))[0])
+        return best_m, float(delta_arr[best_m])
     best_m = int(np.argmin(delta_arr))
     return best_m, float(delta_arr[best_m])
 

@@ -74,8 +74,18 @@ def initialize_heuristic(
         D = _pairwise_fast(X, metric=metric, metric_params=metric_params)
 
     dist_sums = np.asarray(D.sum(axis=0)).ravel()
-    current_medoids_indices = np.argpartition(dist_sums, n_clusters - 1)[:n_clusters]
-    current_medoids_indices.sort()  # Keep indices sorted for consistency
+    if (
+        isinstance(D, np.ndarray)
+        and np.issubdtype(dist_sums.dtype, np.floating)
+        and np.isnan(dist_sums).any()
+    ):
+        nan_counts = np.isnan(D).sum(axis=0)
+        finite_sums = np.nansum(D, axis=0)
+        order = np.lexsort((finite_sums, nan_counts))
+        current_medoids_indices = np.sort(order[:n_clusters])
+    else:
+        current_medoids_indices = np.argpartition(dist_sums, n_clusters - 1)[:n_clusters]
+        current_medoids_indices.sort()  # Keep indices sorted for consistency
     return current_medoids_indices
 
 
@@ -141,22 +151,37 @@ def initialize_build(
         D = _pairwise_fast(X, metric=metric, metric_params=metric_params)
 
     dist_sums = np.asarray(D.sum(axis=0)).ravel()
-    first_medoid = int(np.argmin(dist_sums))
+    if (
+        isinstance(D, np.ndarray)
+        and np.issubdtype(dist_sums.dtype, np.floating)
+        and np.isnan(dist_sums).any()
+    ):
+        nan_counts = np.isnan(D).sum(axis=0)
+        finite_sums = np.nansum(D, axis=0)
+        first_medoid = int(np.lexsort((finite_sums, nan_counts))[0])
+        finite_vals = D[~np.isnan(D)]
+        max_d = float(np.max(finite_vals)) if finite_vals.size > 0 else 1.0
+        penalty = max(1.0, max_d) * float(n_samples + 1)
+        D_build = np.ascontiguousarray(np.where(np.isnan(D), penalty, D))
+    else:
+        first_medoid = int(np.argmin(dist_sums))
+        D_build = D
+
     medoid_indices[0] = first_medoid
 
     use_cython_build = (
         _core is not None
-        and isinstance(D, np.ndarray)
-        and D.flags.c_contiguous
-        and D.dtype in (np.float64, np.float32)
+        and isinstance(D_build, np.ndarray)
+        and D_build.flags.c_contiguous
+        and D_build.dtype in (np.float64, np.float32)
     )
 
     is_medoid = np.zeros(n_samples, dtype=bool)
     is_medoid[first_medoid] = True
     dist_to_nearest = (
-        np.ascontiguousarray(D[:, first_medoid], dtype=D.dtype)
+        np.ascontiguousarray(D_build[:, first_medoid], dtype=D_build.dtype)
         if use_cython_build
-        else D[:, first_medoid]
+        else D_build[:, first_medoid]
     )
 
     for c in range(1, n_clusters):
@@ -164,18 +189,18 @@ def initialize_build(
         if use_cython_build:
             cand_c = np.ascontiguousarray(candidate_indices, dtype=np.intp)
             best_idx_in_cand, _ = _core.pam_build_step(
-                D, cand_c, dist_to_nearest, n_samples, len(cand_c)
+                D_build, cand_c, dist_to_nearest, n_samples, len(cand_c)
             )
             best_candidate = int(candidate_indices[best_idx_in_cand])
         else:
-            D_candidates = D[:, candidate_indices]
+            D_candidates = D_build[:, candidate_indices]
             diffs = dist_to_nearest[:, np.newaxis] - D_candidates
             gains = np.sum(np.maximum(diffs, 0), axis=0)
             best_candidate = int(candidate_indices[np.argmax(gains)])
 
         medoid_indices[c] = best_candidate
         is_medoid[best_candidate] = True
-        dist_to_nearest = np.minimum(dist_to_nearest, D[:, best_candidate])
+        dist_to_nearest = np.minimum(dist_to_nearest, D_build[:, best_candidate])
 
     return medoid_indices
 
@@ -265,15 +290,28 @@ def initialize_k_medoids_plus_plus(
 
     closest_dist_sq = closest**2
     current_pot = float(closest_dist_sq.sum())
+    has_nan_closest = bool(np.isnan(current_pot))
+    if has_nan_closest:
+        current_pot = float(np.nansum(closest_dist_sq))
 
     for c in range(1, n_clusters):
-        if current_pot <= 1e-16:
-            medoid_indices[c] = _sample_distinct_candidate(rng, n_samples, medoid_indices[:c])
-            continue
+        if has_nan_closest:
+            nan_mask = np.isnan(closest_dist_sq)
+            finite_vals = closest_dist_sq[~nan_mask]
+            max_finite = float(np.max(finite_vals)) if finite_vals.size > 0 else 0.0
+            fallback_w = max_finite if max_finite > 1e-16 else 1.0
+            weights = np.where(nan_mask, fallback_w, closest_dist_sq)
+            sampling_pot = float(weights.sum())
+        else:
+            if current_pot <= 1e-16:
+                medoid_indices[c] = _sample_distinct_candidate(rng, n_samples, medoid_indices[:c])
+                continue
+            weights = closest_dist_sq
+            sampling_pot = current_pot
 
-        rand_vals = rng.random_sample(n_local_trials) * current_pot
+        rand_vals = rng.random_sample(n_local_trials) * sampling_pot
 
-        cumsum_dist = np.cumsum(closest_dist_sq)
+        cumsum_dist = np.cumsum(weights)
 
         candidate_ids = np.searchsorted(cumsum_dist, rand_vals)
         np.clip(candidate_ids, 0, n_samples - 1, out=candidate_ids)
@@ -289,9 +327,15 @@ def initialize_k_medoids_plus_plus(
         best_candidate = None
         best_pot = None
         best_dist_sq = None
+        has_nan_cands = bool(
+            (metric in ("nan_euclidean", "precomputed") or callable(metric))
+            and np.isnan(float(dists_candidates.sum()))
+        )
 
         use_cython_pp = (
             _core is not None
+            and not has_nan_closest
+            and not has_nan_cands
             and isinstance(dists_candidates, np.ndarray)
             and dists_candidates.flags.c_contiguous
             and dists_candidates.dtype in (np.float64, np.float32)
@@ -318,14 +362,23 @@ def initialize_k_medoids_plus_plus(
                 best_dist_sq = dist_sq_res
 
         if best_candidate is None:
+            best_score: tuple[int, float] | None = None
             for i in range(n_local_trials):
                 cand_id = int(candidate_ids[i])
                 if cand_id in medoid_indices[:c]:
                     continue
-                new_dist_sq = np.minimum(closest_dist_sq, dists_candidates[i])
-                new_pot = new_dist_sq.sum()
+                if has_nan_closest or has_nan_cands:
+                    new_dist_sq = np.fmin(closest_dist_sq, dists_candidates[i])
+                    n_uncovered = int(np.isnan(new_dist_sq).sum())
+                    new_pot = float(np.nansum(new_dist_sq))
+                else:
+                    new_dist_sq = np.minimum(closest_dist_sq, dists_candidates[i])
+                    n_uncovered = 0
+                    new_pot = float(new_dist_sq.sum())
+                score = (n_uncovered, new_pot)
 
-                if best_candidate is None or new_pot < best_pot:
+                if best_score is None or score < best_score:
+                    best_score = score
                     best_candidate = cand_id
                     best_pot = new_pot
                     best_dist_sq = new_dist_sq
@@ -339,13 +392,16 @@ def initialize_k_medoids_plus_plus(
                 row_dist = _pairwise_fast(
                     X, cand_row, metric=metric, metric_params=metric_params
                 ).ravel()
-            best_dist_sq = np.minimum(closest_dist_sq, row_dist**2)
-            best_pot = float(best_dist_sq.sum())
+            best_dist_sq = np.fmin(closest_dist_sq, row_dist**2)
+            best_pot = float(np.nansum(best_dist_sq))
 
         assert best_pot is not None and best_dist_sq is not None
         medoid_indices[c] = best_candidate
         current_pot = best_pot
         closest_dist_sq = best_dist_sq
+        has_nan_closest = bool(
+            (has_nan_closest or has_nan_cands) and np.isnan(float(closest_dist_sq.sum()))
+        )
 
     return medoid_indices
 
@@ -402,8 +458,11 @@ def initialize_from_array(
             raise ValueError(f"init array must be of shape ({n_clusters}, {n_features})")
         current_medoids_indices = np.asarray(init_centers.argmin(axis=1)).ravel()
     else:
+        ensure_all_finite: str | bool = "allow-nan" if metric == "nan_euclidean" else True
         try:
-            init_centers = check_array(init, accept_sparse=["csr", "csc"])
+            init_centers = check_array(
+                init, accept_sparse=["csr", "csc"], ensure_all_finite=ensure_all_finite
+            )
         except ValueError as err:
             if "Expected 2D array, got 1D array instead" in str(err):
                 raise ValueError(
@@ -417,7 +476,17 @@ def initialize_from_array(
 
         params = metric_params if metric_params is not None else {}
         D = _pairwise_fast(init_centers, X, metric=metric, metric_params=params)
-        current_medoids_indices = np.argmin(D, axis=1)
+        if np.issubdtype(D.dtype, np.floating) and np.isnan(D).any():
+            valid_rows = ~np.isnan(D).all(axis=1)
+            if np.any(valid_rows):
+                D_valid = D[valid_rows]
+                current_medoids_indices = np.argmin(
+                    np.where(np.isnan(D_valid), np.inf, D_valid), axis=1
+                )
+            else:
+                current_medoids_indices = np.empty(0, dtype=np.intp)
+        else:
+            current_medoids_indices = np.argmin(D, axis=1)
 
     current_medoids_indices = np.unique(current_medoids_indices)
 
