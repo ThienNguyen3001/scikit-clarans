@@ -90,6 +90,20 @@ def _to_dense(arr: Any) -> np.ndarray:
     return arr.toarray() if hasattr(arr, "toarray") else np.asarray(arr)
 
 
+def _nan_safe_argmin(D: np.ndarray) -> np.ndarray:
+    """Return column index of minimum distance per row, treating NaNs as +inf."""
+    if np.issubdtype(D.dtype, np.floating) and np.isnan(D).any():
+        return np.argmin(np.where(np.isnan(D), np.inf, D), axis=1)
+    return np.argmin(D, axis=1)
+
+
+def _nan_safe_min(D: np.ndarray) -> np.ndarray:
+    """Return minimum distance per row, treating NaNs as +inf."""
+    if np.issubdtype(D.dtype, np.floating) and np.isnan(D).any():
+        return np.min(np.where(np.isnan(D), np.inf, D), axis=1)
+    return np.min(D, axis=1)
+
+
 def _is_valid_int(val: Any, min_val: int | None = 1, allow_bool: bool = False) -> bool:
     """Check if value is a valid integer >= min_val and optionally allow booleans."""
     if isinstance(val, (bool, np.bool_)):
@@ -189,8 +203,51 @@ def calculate_cost(
 
     if metric == "precomputed":
         dist_sub = _to_dense(X[:, medoid_indices])
-        return float(np.sum(np.min(dist_sub, axis=1)))
+        return float(np.sum(_nan_safe_min(dist_sub), dtype=np.float64))
 
     medoids = X[medoid_indices]
     D = _pairwise_fast(X, medoids, metric=metric, metric_params=metric_params)
-    return float(np.sum(np.min(D, axis=1)))
+    return float(np.sum(_nan_safe_min(D), dtype=np.float64))
+
+
+def _nonfinite_swap_components(
+    near_dist: np.ndarray,
+    second_dist: np.ndarray,
+    d_xc: np.ndarray,
+) -> tuple[int, float, np.ndarray, np.ndarray]:
+    """Compute exact (inf_delta, finite_delta) terms when deltas contain inf or NaN."""
+    d1 = np.where(np.isnan(near_dist), np.inf, near_dist)
+    d2 = np.where(np.isnan(second_dist), np.inf, second_dist)
+    dc = np.where(np.isnan(d_xc), np.inf, d_xc)
+
+    closer = dc < d1
+    d1_inf = np.isinf(d1)
+
+    base_inf = -int(np.count_nonzero(closer & d1_inf))
+    with np.errstate(invalid="ignore"):
+        fin_closer = np.where(closer, np.where(d1_inf, dc, dc - d1), 0.0)
+    base_fin = float(np.sum(fin_closer, dtype=np.float64))
+
+    stay = ~closer
+    new_d = np.minimum(dc, d2)
+    new_inf = np.isinf(new_d)
+    inf_w = np.where(
+        stay & d1_inf & ~new_inf,
+        -1,
+        np.where(stay & ~d1_inf & new_inf, 1, 0),
+    )
+    with np.errstate(invalid="ignore"):
+        fin_w = np.where(
+            stay,
+            np.where(
+                d1_inf & ~new_inf,
+                new_d,
+                np.where(
+                    ~d1_inf & new_inf,
+                    -d1,
+                    np.where(d1_inf & new_inf, 0.0, new_d - d1),
+                ),
+            ),
+            0.0,
+        )
+    return base_inf, base_fin, inf_w, fin_w

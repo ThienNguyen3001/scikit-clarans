@@ -30,6 +30,9 @@ from .utils import (
     _core,
     _is_valid_int,
     _map_scipy_metric,
+    _nan_safe_argmin,
+    _nan_safe_min,
+    _nonfinite_swap_components,
     _pairwise_fast,
     _to_dense,
     _warn_cython_unavailable,
@@ -364,6 +367,8 @@ class CLARANS(ClusterMixin, TransformerMixin, BaseEstimator):
     def _delta_tolerance(cost: float, dtype: Any = np.float64) -> float:
         """Calculate the negative tolerance threshold for improving swaps."""
         eps = float(np.finfo(dtype).eps) if np.issubdtype(dtype, np.floating) else 1e-16
+        if not np.isfinite(cost):
+            return -eps
         rel_tol = max(eps * 10.0, 1e-12)
         return -max(eps, rel_tol * abs(cost))
 
@@ -462,125 +467,132 @@ class CLARANS(ClusterMixin, TransformerMixin, BaseEstimator):
 
         deterministic_medoids = self._prepare_initial_medoids(X, random_state)
         self._setup_distance_engine(X)
+        try:
+            if self.verbose:
+                _name = self.__class__.__name__
+                tot_nb = self.neighborhood_size_
+                pct = (self.max_neighbors_ / tot_nb * 100) if tot_nb > 0 else 100.0
+                print(
+                    f"[{_name}] n={n_samples}, k={self.n_clusters}, "
+                    f"metric={self.metric}, num_local={self.num_local}, "
+                    f"max_neighbors={self.max_neighbors_}/{tot_nb} ({pct:.1f}%)"
+                )
+                if self.verbose < 2:
+                    print(f"{'':>4}#  {'Cost':>14}  {'Swaps':>5}  {'Evals':>5}  {'Time(s)':>8}")
 
-        if self.verbose:
-            _name = self.__class__.__name__
-            tot_nb = self.neighborhood_size_
-            pct = (self.max_neighbors_ / tot_nb * 100) if tot_nb > 0 else 100.0
-            print(
-                f"[{_name}] n={n_samples}, k={self.n_clusters}, "
-                f"metric={self.metric}, num_local={self.num_local}, "
-                f"max_neighbors={self.max_neighbors_}/{tot_nb} ({pct:.1f}%)"
-            )
-            if self.verbose < 2:
-                print(f"{'':>4}#  {'Cost':>14}  {'Swaps':>5}  {'Evals':>5}  {'Time(s)':>8}")
+            start_fit_time = time.perf_counter()
 
-        start_fit_time = time.perf_counter()
+            # Deterministic seed splitting ensures reproducible results regardless of parallelism
+            seeds = random_state.randint(0, np.iinfo(np.int32).max, size=self.num_local)
 
-        # Deterministic seed splitting ensures reproducible results regardless of job parallelism
-        seeds = random_state.randint(0, np.iinfo(np.int32).max, size=self.num_local)
+            def _run_single_search_restart(
+                loc_idx: int,
+                seed: int,
+                preallocated_buffer: np.ndarray | None = None,
+            ) -> tuple[float, np.ndarray, int, int, float]:
+                loc_start = time.perf_counter()
+                worker_rng = np.random.RandomState(seed)
+                d_xc_buf = (
+                    preallocated_buffer
+                    if preallocated_buffer is not None
+                    else self._allocate_search_buffers(X, n_samples)
+                )
+                cost, medoids_idx, eval_cnt, swap_cnt = self._single_local_search(
+                    X,
+                    worker_rng,
+                    deterministic_medoids,
+                    d_xc_buf=d_xc_buf,
+                    loc_idx=loc_idx + 1,
+                )
+                loc_time = time.perf_counter() - loc_start
+                return cost, medoids_idx, eval_cnt, swap_cnt, loc_time
 
-        def _run_single_search_restart(
-            loc_idx: int,
-            seed: int,
-            preallocated_buffer: np.ndarray | None = None,
-        ) -> tuple[float, np.ndarray, int, int, float]:
-            loc_start = time.perf_counter()
-            worker_rng = np.random.RandomState(seed)
-            d_xc_buf = (
-                preallocated_buffer
-                if preallocated_buffer is not None
-                else self._allocate_search_buffers(X, n_samples)
-            )
-            cost, medoids_idx, eval_cnt, swap_cnt = self._single_local_search(
-                X,
-                worker_rng,
-                deterministic_medoids,
-                d_xc_buf=d_xc_buf,
-                loc_idx=loc_idx + 1,
-            )
-            loc_time = time.perf_counter() - loc_start
-            return cost, medoids_idx, eval_cnt, swap_cnt, loc_time
+            n_jobs_eff = effective_n_jobs(self.n_jobs)
+            if self.num_local == 1 or n_jobs_eff == 1:
+                # Fast sequential path: allocate scratch buffer once and reuse across restarts
+                d_xc_buf = self._allocate_search_buffers(X, n_samples)
+                results = [
+                    _run_single_search_restart(
+                        loc_idx, seeds[loc_idx], preallocated_buffer=d_xc_buf
+                    )
+                    for loc_idx in range(self.num_local)
+                ]
+            else:
+                # Parallel path: run restarts concurrently using lightweight threads
+                results = Parallel(n_jobs=self.n_jobs, prefer="threads")(
+                    delayed(_run_single_search_restart)(loc_idx, seeds[loc_idx])
+                    for loc_idx in range(self.num_local)
+                )
 
-        n_jobs_eff = effective_n_jobs(self.n_jobs)
-        if self.num_local == 1 or n_jobs_eff == 1:
-            # Fast sequential path: allocate scratch buffer once and reuse across restarts
-            d_xc_buf = self._allocate_search_buffers(X, n_samples)
-            results = [
-                _run_single_search_restart(loc_idx, seeds[loc_idx], preallocated_buffer=d_xc_buf)
-                for loc_idx in range(self.num_local)
-            ]
-        else:
-            # Parallel path: run restarts concurrently using lightweight threads
-            results = Parallel(n_jobs=self.n_jobs, prefer="threads")(
-                delayed(_run_single_search_restart)(loc_idx, seeds[loc_idx])
-                for loc_idx in range(self.num_local)
-            )
-
-        for loc_idx, (
-            current_cost,
-            current_medoids_indices,
-            eval_count,
-            swap_count,
-            loc_elapsed,
-        ) in enumerate(results):
-            total_eval_count += eval_count
-            total_swap_count += swap_count
-
-            tol = self._delta_tolerance(current_cost)
-            if (
-                loc_idx == 0
-                or not np.isfinite(best_cost)
-                or (np.isfinite(current_cost) and current_cost < best_cost + tol)
-            ):
-                best_cost = current_cost
-                best_medoids = current_medoids_indices.copy()
-                best_loc_idx = loc_idx
-                best_eval_count = eval_count
-                best_swap_count = swap_count
-
-        if best_medoids is None or not np.isfinite(best_cost):
-            raise ValueError(
-                f"Clustering failed: all local search iterations produced non-finite "
-                f"costs ({best_cost}). Check input data or distance metric."
-            )
-
-        self.n_iter_ = best_eval_count
-        self.n_swaps_ = best_swap_count
-
-        if self.verbose:
             for loc_idx, (
                 current_cost,
-                _,
+                current_medoids_indices,
                 eval_count,
                 swap_count,
                 loc_elapsed,
             ) in enumerate(results):
-                stop = (
-                    "exhausted" if (eval_count - swap_count) < self.max_neighbors_ else "converged"
+                total_eval_count += eval_count
+                total_swap_count += swap_count
+
+                tol = self._delta_tolerance(current_cost)
+                if (
+                    loc_idx == 0
+                    or not np.isfinite(best_cost)
+                    or (np.isfinite(current_cost) and current_cost < best_cost + tol)
+                ):
+                    best_cost = current_cost
+                    best_medoids = current_medoids_indices.copy()
+                    best_loc_idx = loc_idx
+                    best_eval_count = eval_count
+                    best_swap_count = swap_count
+
+            if best_medoids is None or not np.isfinite(best_cost):
+                raise ValueError(
+                    f"Clustering failed: all local search iterations produced non-finite "
+                    f"costs ({best_cost}). Check input data or distance metric."
                 )
-                star = "*" if loc_idx == best_loc_idx else " "
-                if self.verbose >= 2:
-                    print(
-                        f"    {loc_idx + 1:>2}  {current_cost:>14.5f}{star} "
-                        f" swaps={swap_count}, evals={eval_count}, "
-                        f"{loc_elapsed:.3f}s ({stop})"
-                    )
-                else:
-                    print(
-                        f"    {loc_idx + 1:>1}  {current_cost:>14.5f}{star} "
-                        f"{swap_count:>5}  {eval_count:>5}  "
-                        f"{loc_elapsed:>7.3f}s  {stop}"
-                    )
 
-            total_elapsed = time.perf_counter() - start_fit_time
-            print(
-                f"  Best: #{best_loc_idx + 1} | "
-                f"Totals: {total_swap_count} swaps, "
-                f"{total_eval_count} evals, {total_elapsed:.3f}s"
-            )
+            self.n_iter_ = best_eval_count
+            self.n_swaps_ = best_swap_count
 
-        return self._finalize_fit(X, best_cost, best_medoids)
+            if self.verbose:
+                for loc_idx, (
+                    current_cost,
+                    _,
+                    eval_count,
+                    swap_count,
+                    loc_elapsed,
+                ) in enumerate(results):
+                    stop = (
+                        "exhausted"
+                        if (eval_count - swap_count) < self.max_neighbors_
+                        else "converged"
+                    )
+                    star = "*" if loc_idx == best_loc_idx else " "
+                    if self.verbose >= 2:
+                        print(
+                            f"    {loc_idx + 1:>2}  {current_cost:>14.5f}{star} "
+                            f" swaps={swap_count}, evals={eval_count}, "
+                            f"{loc_elapsed:.3f}s ({stop})"
+                        )
+                    else:
+                        print(
+                            f"    {loc_idx + 1:>1}  {current_cost:>14.5f}{star} "
+                            f"{swap_count:>5}  {eval_count:>5}  "
+                            f"{loc_elapsed:>7.3f}s  {stop}"
+                        )
+
+                total_elapsed = time.perf_counter() - start_fit_time
+                print(
+                    f"  Best: #{best_loc_idx + 1} | "
+                    f"Totals: {total_swap_count} swaps, "
+                    f"{total_eval_count} evals, {total_elapsed:.3f}s"
+                )
+
+            return self._finalize_fit(X, best_cost, best_medoids)
+        finally:
+            if hasattr(self, "_X_csc"):
+                del self._X_csc
 
     def _sample_candidate(
         self,
@@ -627,7 +639,12 @@ class CLARANS(ClusterMixin, TransformerMixin, BaseEstimator):
             return medoid_pos, total_delta
         if self.n_clusters == 1:
             assert medoid_pos is not None
-            candidate_cost = float(np.sum(d_xc))
+            clean_d = np.where(np.isnan(d_xc), np.inf, d_xc) if np.isnan(d_xc).any() else d_xc
+            candidate_cost = float(np.sum(clean_d))
+            if not np.isfinite(current_cost) and np.isfinite(candidate_cost):
+                return medoid_pos, -np.inf
+            if not np.isfinite(current_cost) and not np.isfinite(candidate_cost):
+                return medoid_pos, 0.0
             return medoid_pos, candidate_cost - current_cost
 
         assert (
@@ -637,17 +654,29 @@ class CLARANS(ClusterMixin, TransformerMixin, BaseEstimator):
             and medoid_pos is not None
         )
         is_assigned_to_m = near_idx_map == medoid_pos
-        delta_assigned = (
-            np.minimum(second_dist[is_assigned_to_m], d_xc[is_assigned_to_m])
-            - near_dist[is_assigned_to_m]
-        )
-        delta_others = np.minimum(
-            0.0,
-            d_xc[~is_assigned_to_m] - near_dist[~is_assigned_to_m],
-        )
-        total_delta = float(
-            np.sum(delta_assigned, dtype=np.float64) + np.sum(delta_others, dtype=np.float64)
-        )
+        with np.errstate(invalid="ignore"):
+            delta_assigned = (
+                np.fmin(second_dist[is_assigned_to_m], d_xc[is_assigned_to_m])
+                - near_dist[is_assigned_to_m]
+            )
+            delta_others = np.fmin(
+                0.0,
+                d_xc[~is_assigned_to_m] - near_dist[~is_assigned_to_m],
+            )
+            total_delta = float(
+                np.sum(delta_assigned, dtype=np.float64) + np.sum(delta_others, dtype=np.float64)
+            )
+        if not np.isfinite(total_delta):
+            base_inf, base_fin, inf_w, fin_w = _nonfinite_swap_components(
+                near_dist, second_dist, d_xc
+            )
+            tot_inf = base_inf + int(np.sum(inf_w[is_assigned_to_m]))
+            if tot_inf < 0:
+                total_delta = -np.inf
+            elif tot_inf > 0:
+                total_delta = np.inf
+            else:
+                total_delta = base_fin + float(np.sum(fin_w[is_assigned_to_m], dtype=np.float64))
         return medoid_pos, total_delta
 
     def _single_local_search(
@@ -819,6 +848,7 @@ class CLARANS(ClusterMixin, TransformerMixin, BaseEstimator):
         3. 'distance_metric': Scikit-Learn DistanceMetric for sparse matrices or callables.
         4. 'pairwise': Fallback using pairwise_distances.
         """
+        self._X_csc = None
         if self.metric == "precomputed":
             self._dist_engine = "precomputed"
             self._scipy_metric = None
@@ -1133,7 +1163,7 @@ class CLARANS(ClusterMixin, TransformerMixin, BaseEstimator):
         D = _pairwise_fast(
             X, self.cluster_centers_, metric=self.metric, metric_params=self.metric_params
         )
-        return np.argmin(D, axis=1)
+        return _nan_safe_argmin(D)
 
     def _finalize_fit(
         self,
@@ -1150,7 +1180,7 @@ class CLARANS(ClusterMixin, TransformerMixin, BaseEstimator):
             if hasattr(self, "cluster_centers_"):
                 del self.cluster_centers_
             dist_to_medoids = _to_dense(X[:, self.medoid_indices_])
-            self.labels_ = np.argmin(dist_to_medoids, axis=1)
+            self.labels_ = _nan_safe_argmin(dist_to_medoids)
             if hasattr(self, "_X_csc"):
                 del self._X_csc
         else:
@@ -1205,7 +1235,7 @@ class CLARANS(ClusterMixin, TransformerMixin, BaseEstimator):
 
         if self.metric == "precomputed":
             dist_to_medoids = self._validate_precomputed_input(X)
-            return np.argmin(dist_to_medoids, axis=1)
+            return _nan_safe_argmin(dist_to_medoids)
 
         X = self._validate_data_compat(X, reset=False, ensure_min_samples=1)
         return self._assign_cluster_labels(X)
@@ -1258,7 +1288,7 @@ class CLARANS(ClusterMixin, TransformerMixin, BaseEstimator):
             Opposite of the total cost (sum of distances to the closest center).
         """
         check_is_fitted(self)
-        return -float(np.sum(np.min(self.transform(X), axis=1)))
+        return -float(np.sum(_nan_safe_min(self.transform(X)), dtype=np.float64))
 
     def get_feature_names_out(self, input_features=None) -> np.ndarray:
         """
