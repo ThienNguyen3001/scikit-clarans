@@ -15,7 +15,7 @@ import numpy as np
 from scipy.sparse import issparse
 from sklearn.utils import check_array, check_random_state
 
-from .utils import _core, _pairwise_fast, _to_dense, check_medoids
+from .utils import _core, _nan_safe_argmin, _pairwise_fast, _to_dense, check_medoids
 
 
 def _check_init_args(X: Any, n_clusters: int) -> int:
@@ -473,20 +473,20 @@ def initialize_from_array(
             raise
         if init_centers.shape != (n_clusters, n_features):
             raise ValueError(f"init array must be of shape ({n_clusters}, {n_features})")
+        if (
+            not issparse(init_centers)
+            and np.issubdtype(init_centers.dtype, np.floating)
+            and np.isnan(init_centers).all(axis=1).any()
+        ):
+            raise ValueError("init array must not contain rows with all NaN values.")
 
         params = metric_params if metric_params is not None else {}
         D = _pairwise_fast(init_centers, X, metric=metric, metric_params=params)
-        if np.issubdtype(D.dtype, np.floating) and np.isnan(D).any():
-            valid_rows = ~np.isnan(D).all(axis=1)
-            if np.any(valid_rows):
-                D_valid = D[valid_rows]
-                current_medoids_indices = np.argmin(
-                    np.where(np.isnan(D_valid), np.inf, D_valid), axis=1
-                )
-            else:
-                current_medoids_indices = np.empty(0, dtype=np.intp)
-        else:
-            current_medoids_indices = np.argmin(D, axis=1)
+        if np.issubdtype(D.dtype, np.floating) and np.isnan(D).all(axis=1).any():
+            raise ValueError(
+                "Each row in init must have a finite distance to at least one sample in X."
+            )
+        current_medoids_indices = _nan_safe_argmin(D)
 
     current_medoids_indices = np.unique(current_medoids_indices)
 

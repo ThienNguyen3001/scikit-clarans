@@ -1200,6 +1200,36 @@ class TestCriticalNaNAndSparseRefitRegressions(unittest.TestCase):
             self.assertEqual(len(model.medoid_indices_), 2)
             self.assertTrue(np.isfinite(model.inertia_))
 
+            # All-NaN row in init must be rejected explicitly
+            bad_all_nan = np.array([[np.nan, np.nan, np.nan], [0.1, 0.1, 0.1]])
+            with self.assertRaisesRegex(ValueError, "all NaN"):
+                ModelClass(
+                    n_clusters=2,
+                    metric="nan_euclidean",
+                    init=bad_all_nan,
+                    num_local=1,
+                    random_state=0,
+                ).fit(X_subspaces)
+
+            # Init row with zero finite distances to X must also be rejected explicitly
+            X_col01 = np.array(
+                [
+                    [0.0, 0.0, np.nan],
+                    [1.0, 1.0, np.nan],
+                    [2.0, 2.0, np.nan],
+                    [3.0, 3.0, np.nan],
+                ]
+            )
+            bad_disjoint = np.array([[np.nan, np.nan, 5.0], [0.0, 0.0, np.nan]])
+            with self.assertRaisesRegex(ValueError, "finite distance"):
+                ModelClass(
+                    n_clusters=2,
+                    metric="nan_euclidean",
+                    init=bad_disjoint,
+                    num_local=1,
+                    random_state=0,
+                ).fit(X_col01)
+
     def test_asymmetric_sparse_precomputed_x_csc_cleanup_and_stale_refit(self):
         """Failed sparse asymmetric fit must not leak _X_csc or corrupt subsequent dense fit."""
         from scipy import sparse
