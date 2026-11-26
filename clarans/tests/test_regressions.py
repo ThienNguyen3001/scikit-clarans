@@ -1058,3 +1058,356 @@ class TestInvariant_PrecomputedZeroCopyOptimization(unittest.TestCase):
         self.assertIs(res, out_buf_float32)
         self.assertEqual(res.dtype, np.float32)
         self.assertTrue(np.allclose(res, D[3], atol=1e-5))
+
+
+class TestCriticalNaNAndSparseRefitRegressions(unittest.TestCase):
+    """Regressions for nan_euclidean NaN-pair handling and sparse precomputed _X_csc cleanup."""
+
+    def test_update_cache_2min_multiple_nans_returns_inf(self):
+        """Rows with >= 2 NaNs (only 1 finite distance) must set second_dist to inf, not NaN."""
+        if not HAS_CYTHON or _core is None:
+            self.skipTest("Requires Cython _core")
+
+        subD = np.array(
+            [
+                [np.nan, np.nan, 5.0],
+                [2.0, np.nan, np.nan],
+                [np.nan, 3.0, np.nan],
+            ],
+            dtype=np.float64,
+        )
+        near_idx, near_dist, second_dist = update_cache_2min(subD, 3, 3)
+        np.testing.assert_array_equal(near_idx, [2, 0, 1])
+        np.testing.assert_allclose(near_dist, [5.0, 2.0, 3.0])
+        self.assertTrue(np.all(np.isinf(second_dist)))
+
+        # k=2 with 1 NaN
+        subD_k2 = np.array([[np.nan, 2.0], [4.0, np.nan]], dtype=np.float64)
+        idx_k2, d1_k2, d2_k2 = update_cache_2min(subD_k2, 2, 2)
+        np.testing.assert_array_equal(idx_k2, [1, 0])
+        np.testing.assert_allclose(d1_k2, [2.0, 4.0])
+        self.assertTrue(np.all(np.isinf(d2_k2)))
+
+    def test_fastclarans_nan_euclidean_does_not_freeze_on_multi_nan_row(self):
+        """FastCLARANS must not freeze swaps when a sample has >=2 NaN distances to medoids."""
+        X_freeze = np.array(
+            [
+                [0.0, np.nan, np.nan],
+                [np.nan, 500.0, np.nan],
+                [np.nan, np.nan, 500.0],
+                [100.0, 100.0, 100.0],
+                [100.01, 0.0, 0.0],
+                [100.01, 0.01, 0.01],
+                [100.02, 0.02, 0.02],
+            ]
+        )
+        with patch.object(FastCLARANS, "_initialize_medoids", return_value=np.array([1, 2, 3])):
+            model = FastCLARANS(
+                n_clusters=3,
+                metric="nan_euclidean",
+                num_local=1,
+                max_neighbors=50,
+                random_state=42,
+            ).fit(X_freeze)
+
+        self.assertGreater(model.n_swaps_, 0)
+        self.assertLess(model.inertia_, 400.0)
+
+    def test_nan_euclidean_disjoint_labels_predict_score_calculate_cost(self):
+        """Ignore NaN pairs when a finite medoid exists across labels_, predict, score, cost."""
+        X_disjoint = np.array(
+            [
+                [1.0, np.nan, np.nan],
+                [np.nan, 2.0, np.nan],
+                [np.nan, np.nan, 3.0],
+                [1.1, 2.1, 3.1],
+                [1.2, 2.2, 3.2],
+                [1.3, 2.3, 3.3],
+            ]
+        )
+        for ModelClass in [CLARANS, FastCLARANS]:
+            with patch.object(ModelClass, "_initialize_medoids", return_value=np.array([1, 3, 4])):
+                model = ModelClass(
+                    n_clusters=3,
+                    metric="nan_euclidean",
+                    num_local=1,
+                    max_neighbors=1,
+                    random_state=0,
+                ).fit(X_disjoint)
+
+            # Sample 0 has NaN distance to medoid 1 (cluster 0), finite distance to medoids 3, 4
+            self.assertNotEqual(model.labels_[0], 0)
+            preds = model.predict(X_disjoint)
+            np.testing.assert_array_equal(preds, model.labels_)
+            self.assertTrue(np.isfinite(model.score(X_disjoint)))
+            self.assertAlmostEqual(model.score(X_disjoint), -model.inertia_, places=7)
+
+            cost = calculate_cost(X_disjoint, model.medoid_indices_, metric="nan_euclidean")
+            self.assertAlmostEqual(cost, model.inertia_, places=7)
+
+            # All-NaN query row must not crash predict()
+            X_all_nan = np.array([[np.nan, np.nan, np.nan]])
+            pred_nan = model.predict(X_all_nan)
+            self.assertEqual(pred_nan.shape, (1,))
+
+    def test_nan_euclidean_initializers_with_disjoint_features_and_nan_array_init(self):
+        """Initializers must handle NaN distances in nan_euclidean and accept NaNs in init array."""
+        X_subspaces = np.array(
+            [
+                [0.0, np.nan, np.nan],
+                [np.nan, 50.0, np.nan],
+                [np.nan, np.nan, 50.0],
+                [0.1, 0.1, 0.1],
+                [0.2, 0.2, 0.2],
+                [10.0, 10.0, 10.0],
+                [10.1, 10.1, 10.1],
+                [10.2, 10.2, 10.2],
+            ]
+        )
+        # k-medoids++ should not collapse all selections onto NaN points [1, 2]
+        med_pp = initialize_k_medoids_plus_plus(
+            X_subspaces, 3, random_state=2, metric="nan_euclidean"
+        )
+        self.assertEqual(len(np.unique(med_pp)), 3)
+        self.assertLess(
+            calculate_cost(X_subspaces, med_pp, metric="nan_euclidean"),
+            100.0,
+        )
+
+        # heuristic and build should not select isolated NaN-heavy points [1, 2] as first medoids
+        med_h = initialize_heuristic(X_subspaces, 3, metric="nan_euclidean")
+        self.assertEqual(len(np.unique(med_h)), 3)
+        self.assertNotIn(1, med_h)
+        self.assertNotIn(2, med_h)
+
+        med_b = initialize_build(X_subspaces, 3, metric="nan_euclidean")
+        self.assertEqual(len(np.unique(med_b)), 3)
+        self.assertNotIn(med_b[0], (0, 1, 2))
+        self.assertLess(
+            calculate_cost(X_subspaces, med_b, metric="nan_euclidean"),
+            60.0,
+        )
+
+        # Array-like init containing NaNs must be allowed under metric='nan_euclidean'
+        for ModelClass in [CLARANS, FastCLARANS]:
+            model = ModelClass(
+                n_clusters=2,
+                metric="nan_euclidean",
+                init=X_subspaces[:2],
+                num_local=1,
+                random_state=0,
+            ).fit(X_subspaces)
+            self.assertEqual(len(model.medoid_indices_), 2)
+            self.assertTrue(np.isfinite(model.inertia_))
+
+            # All-NaN row in init must be rejected explicitly
+            bad_all_nan = np.array([[np.nan, np.nan, np.nan], [0.1, 0.1, 0.1]])
+            with self.assertRaisesRegex(ValueError, "all NaN"):
+                ModelClass(
+                    n_clusters=2,
+                    metric="nan_euclidean",
+                    init=bad_all_nan,
+                    num_local=1,
+                    random_state=0,
+                ).fit(X_subspaces)
+
+            # Init row with zero finite distances to X must also be rejected explicitly
+            X_col01 = np.array(
+                [
+                    [0.0, 0.0, np.nan],
+                    [1.0, 1.0, np.nan],
+                    [2.0, 2.0, np.nan],
+                    [3.0, 3.0, np.nan],
+                ]
+            )
+            bad_disjoint = np.array([[np.nan, np.nan, 5.0], [0.0, 0.0, np.nan]])
+            with self.assertRaisesRegex(ValueError, "finite distance"):
+                ModelClass(
+                    n_clusters=2,
+                    metric="nan_euclidean",
+                    init=bad_disjoint,
+                    num_local=1,
+                    random_state=0,
+                ).fit(X_col01)
+
+    def test_asymmetric_sparse_precomputed_x_csc_cleanup_and_stale_refit(self):
+        """Failed sparse asymmetric fit must not leak _X_csc or corrupt subsequent dense fit."""
+        from scipy import sparse
+
+        D1 = np.array(
+            [
+                [0.0, 100.0, 100.0, 100.0],
+                [1.0, 0.0, 100.0, 100.0],
+                [100.0, 100.0, 0.0, 1.0],
+                [100.0, 100.0, 100.0, 0.0],
+            ]
+        )
+        D2 = np.array(
+            [
+                [0.0, 100.0, 100.0, 1.0],
+                [100.0, 0.0, 100.0, 1.0],
+                [100.0, 100.0, 0.0, 1.0],
+                [10.0, 100.0, 100.0, 0.0],
+            ]
+        )
+        D1_sp = sparse.csr_matrix(D1)
+
+        for ModelClass in [CLARANS, FastCLARANS]:
+            model = ModelClass(
+                n_clusters=2,
+                metric="precomputed",
+                init="random",
+                num_local=1,
+                random_state=42,
+            )
+            with patch.object(
+                ModelClass,
+                "_single_local_search",
+                return_value=(np.inf, np.array([0, 1]), 1, 0),
+            ):
+                with self.assertRaises(ValueError):
+                    model.fit(D1_sp)
+
+            self.assertFalse(hasattr(model, "_X_csc"))
+
+            model.fit(D2)
+            true_cost = calculate_cost(D2, model.medoid_indices_, metric="precomputed")
+            self.assertAlmostEqual(model.inertia_, true_cost, places=7)
+
+    def test_nan_delta_kernels_and_python_fallback_parity(self):
+        """Delta kernels treat NaN in d_xc as +inf and match Python fallback on nan_euclidean."""
+        if HAS_CYTHON and _core is not None:
+            for dtype in (np.float64, np.float32):
+                near_idx_map = np.array([0, 1, 0], dtype=np.intp)
+                near_dist = np.array([1.0, 2.0, 3.0], dtype=dtype)
+                second_dist = np.array([10.0, 4.0, np.inf], dtype=dtype)
+                d_xc = np.array([0.5, np.nan, 2.5], dtype=dtype)
+
+                delta_m1 = _core.clarans_delta(near_idx_map, near_dist, second_dist, d_xc, 1, 3)
+                self.assertAlmostEqual(delta_m1, 1.0, places=5)
+
+                delta_m0 = _core.clarans_delta(near_idx_map, near_dist, second_dist, d_xc, 0, 3)
+                self.assertAlmostEqual(delta_m0, -1.0, places=5)
+
+                delta_buf = np.empty(2, dtype=dtype)
+                best_m, best_delta, ret_buf = _core.fastpam1_delta(
+                    near_idx_map, near_dist, second_dist, d_xc, 3, 2, delta_buf=delta_buf
+                )
+                np.testing.assert_allclose(ret_buf, [-1.0, 1.0], atol=1e-5)
+                self.assertEqual(best_m, 0)
+                self.assertAlmostEqual(best_delta, -1.0, places=5)
+                self.assertAlmostEqual(float(delta_buf[0]), -1.0, places=5)
+                self.assertAlmostEqual(float(delta_buf[1]), 1.0, places=5)
+
+                # NaN in d_xc with second_dist=+inf penalizes medoid 0 without poisoning medoid 1
+                d_xc_inf = np.array([0.5, 1.0, np.nan], dtype=dtype)
+                delta_m0_inf = _core.clarans_delta(
+                    near_idx_map, near_dist, second_dist, d_xc_inf, 0, 3
+                )
+                self.assertEqual(delta_m0_inf, np.inf)
+                best_m_inf, best_delta_inf, _ = _core.fastpam1_delta(
+                    near_idx_map, near_dist, second_dist, d_xc_inf, 3, 2, delta_buf=delta_buf
+                )
+                self.assertEqual(best_m_inf, 1)
+                self.assertAlmostEqual(best_delta_inf, -1.5, places=5)
+                self.assertEqual(float(delta_buf[0]), np.inf)
+
+                # inf <-> finite cancellation and inf -> inf must not produce NaN
+                ni_2 = np.array([0, 1], dtype=np.intp)
+                nd_2 = np.array([np.inf, 2.0], dtype=dtype)
+                sd_2 = np.array([np.inf, np.inf], dtype=dtype)
+                dx_cancel = np.array([7.0, np.nan], dtype=dtype)
+                self.assertEqual(_core.clarans_delta(ni_2, nd_2, sd_2, dx_cancel, 0, 2), -np.inf)
+                self.assertAlmostEqual(
+                    _core.clarans_delta(ni_2, nd_2, sd_2, dx_cancel, 1, 2), 5.0, places=5
+                )
+                bm_c, bd_c, db_c = _core.fastpam1_delta(
+                    ni_2, nd_2, sd_2, dx_cancel, 2, 2, delta_buf=delta_buf
+                )
+                self.assertEqual(bm_c, 0)
+                self.assertEqual(bd_c, -np.inf)
+                self.assertAlmostEqual(float(db_c[1]), 5.0, places=5)
+
+                dx_inf_stay = np.array([np.nan, np.nan], dtype=dtype)
+                self.assertAlmostEqual(
+                    _core.clarans_delta(ni_2, nd_2, sd_2, dx_inf_stay, 0, 2), 0.0, places=5
+                )
+                self.assertEqual(_core.clarans_delta(ni_2, nd_2, sd_2, dx_inf_stay, 1, 2), np.inf)
+                bm_s, bd_s, db_s = _core.fastpam1_delta(
+                    ni_2, nd_2, sd_2, dx_inf_stay, 2, 2, delta_buf=delta_buf
+                )
+                self.assertEqual(bm_s, 0)
+                self.assertAlmostEqual(bd_s, 0.0, places=5)
+                self.assertEqual(float(db_s[1]), np.inf)
+
+        from clarans._fast_clarans import _fallback_fastpam1_delta
+
+        fb_m, fb_d = _fallback_fastpam1_delta(
+            np.array([0, 1], dtype=np.intp),
+            np.array([np.inf, 2.0], dtype=np.float64),
+            np.array([np.inf, np.inf], dtype=np.float64),
+            np.array([7.0, np.nan], dtype=np.float64),
+            2,
+        )
+        self.assertEqual(fb_m, 0)
+        self.assertEqual(fb_d, -np.inf)
+
+        # Python fallback (all _core refs patched to None) must match behavior on multi-NaN X_freeze
+        X_freeze = np.array(
+            [
+                [0.0, np.nan, np.nan],
+                [np.nan, 500.0, np.nan],
+                [np.nan, np.nan, 500.0],
+                [100.0, 100.0, 100.0],
+                [100.01, 0.0, 0.0],
+                [100.01, 0.01, 0.01],
+                [100.02, 0.02, 0.02],
+            ]
+        )
+        with (
+            patch("clarans._clarans._core", None),
+            patch("clarans._fast_clarans._core", None),
+            patch("clarans._initialization._core", None),
+            patch("clarans.utils._core", None),
+            patch.object(FastCLARANS, "_initialize_medoids", return_value=np.array([1, 2, 3])),
+            warnings.catch_warnings(),
+        ):
+            warnings.simplefilter("ignore")
+            model_py = FastCLARANS(
+                n_clusters=3,
+                metric="nan_euclidean",
+                num_local=1,
+                max_neighbors=50,
+                random_state=42,
+            ).fit(X_freeze)
+        self.assertGreater(model_py.n_swaps_, 0)
+        self.assertLess(model_py.inertia_, 400.0)
+
+    def test_clarans_nonfinite_swap_delta_python_fallback(self):
+        """Pure Python _evaluate_candidate_swap handles non-finite delta branches."""
+        model = CLARANS(n_clusters=2, random_state=42)
+        near_idx_map = np.array([0, 0, 1], dtype=np.intp)
+        cases = [
+            # (near_dist, second_dist, d_xc, current_cost, expected)
+            ([np.inf, 1.0, 0.0], [np.inf, 2.0, 1.0], [1.0, 0.0, 2.0], np.inf, -np.inf),
+            ([1.0, 1.0, 0.0], [np.inf, 2.0, 1.0], [np.inf, 0.0, 2.0], 2.0, np.inf),
+            ([np.inf, 1.0, 0.0], [np.inf, 2.0, 1.0], [np.nan, 0.0, 2.0], np.inf, -1.0),
+        ]
+        for near_vals, second_vals, dxc_vals, cost, expected in cases:
+            near_dist = np.array(near_vals, dtype=np.float64)
+            second_dist = np.array(second_vals, dtype=np.float64)
+            d_xc = np.array(dxc_vals, dtype=np.float64)
+            _, delta = model._evaluate_candidate_swap(
+                d_xc=d_xc,
+                near_idx_map=near_idx_map,
+                near_dist=near_dist,
+                second_dist=second_dist,
+                current_cost=cost,
+                can_use_cython=False,
+                n_samples=3,
+                medoid_pos=0,
+            )
+            self.assertEqual(delta, expected)
+            if HAS_CYTHON:
+                cy_delta = _core.clarans_delta(near_idx_map, near_dist, second_dist, d_xc, 0, 3)
+                self.assertEqual(delta, cy_delta)

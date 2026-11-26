@@ -4,7 +4,8 @@
 
 import numpy as np
 cimport numpy as cnp
-from libc.math cimport sqrt, INFINITY, isnan, isinf, fabs
+from libc.math cimport sqrt, INFINITY, isnan, isinf, isfinite, fabs
+from libc.stdlib cimport malloc, free
 
 # Initialize NumPy C API
 cnp.import_array()
@@ -27,20 +28,59 @@ def clarans_delta(
 ):
     """Compute CLARANS delta cost for a candidate medoid swap."""
     cdef:
-        floating total_delta = 0.0
+        double total_delta = 0.0
         Py_ssize_t j
-        floating d, diff, val
+        double d, d1, d2, diff, val
+        long long inf_delta = 0
 
     with nogil:
         for j in range(n_samples):
-            d = d_xc[j]
+            d = <double>d_xc[j]
+            if isnan(d):
+                d = INFINITY
             if near_idx_map[j] == random_medoid_pos:
-                val = second_dist[j] if second_dist[j] < d else d
-                total_delta += (val - near_dist[j])
+                val = <double>second_dist[j] if second_dist[j] < d else d
+                total_delta += (val - <double>near_dist[j])
             else:
-                diff = d - near_dist[j]
+                diff = d - <double>near_dist[j]
                 if diff < 0.0:
                     total_delta += diff
+
+        if not isfinite(total_delta):
+            total_delta = 0.0
+            inf_delta = 0
+            for j in range(n_samples):
+                d = <double>d_xc[j]
+                if isnan(d):
+                    d = INFINITY
+                d1 = <double>near_dist[j]
+                if isnan(d1):
+                    d1 = INFINITY
+                if near_idx_map[j] == random_medoid_pos:
+                    d2 = <double>second_dist[j]
+                    if isnan(d2):
+                        d2 = INFINITY
+                    val = d2 if d2 < d else d
+                    if isinf(d1):
+                        if not isinf(val):
+                            inf_delta -= 1
+                            total_delta += val
+                    elif isinf(val):
+                        inf_delta += 1
+                        total_delta -= d1
+                    else:
+                        total_delta += (val - d1)
+                else:
+                    if d < d1:
+                        if isinf(d1):
+                            inf_delta -= 1
+                            total_delta += d
+                        else:
+                            total_delta += (d - d1)
+            if inf_delta < 0:
+                total_delta = -INFINITY
+            elif inf_delta > 0:
+                total_delta = INFINITY
 
     return total_delta
 
@@ -59,9 +99,19 @@ def fastpam1_delta(
     cdef:
         cnp.ndarray[floating, ndim=1] total_delta_np = None
         floating[::1] delta_arr
-        floating delta_td = 0.0
+        double delta_td = 0.0
         Py_ssize_t j, m, best_m = 0
-        floating d1, d2, dc, best_val
+        double d1, d2, dc, val, best_val, tot_fin, best_fin
+        double stack_buf[512]
+        long long stack_inf[512]
+        double* dbl_delta = NULL
+        long long* inf_cnt = NULL
+        long long base_inf = 0
+        long long tot_inf, best_inf
+        bint heap_allocated = False
+        bint inf_heap_allocated = False
+        bint need_inf_resolve = False
+        bint inf_mem_error = False
 
     if delta_buf is None:
         total_delta_np = np.zeros(
@@ -75,32 +125,135 @@ def fastpam1_delta(
             )
         delta_arr = delta_buf
 
-    with nogil:
-        if delta_buf is not None:
+    if n_clusters <= 512:
+        dbl_delta = stack_buf
+    else:
+        dbl_delta = <double*>malloc(n_clusters * sizeof(double))
+        if dbl_delta == NULL:
+            raise MemoryError(f"Failed to allocate {n_clusters} double-precision delta buffer")
+        heap_allocated = True
+
+    try:
+        with nogil:
             for m in range(n_clusters):
-                delta_arr[m] = 0.0
+                dbl_delta[m] = 0.0
 
-        for j in range(n_samples):
-            m = near_idx_map[j]
-            d1 = near_dist[j]
-            d2 = second_dist[j]
-            dc = d_xc[j]
+            for j in range(n_samples):
+                m = near_idx_map[j]
+                d1 = <double>near_dist[j]
+                d2 = <double>second_dist[j]
+                dc = <double>d_xc[j]
+                if isnan(dc):
+                    dc = INFINITY
 
-            if dc < d1:
-                delta_td += (dc - d1)
-            elif dc < d2:
-                delta_arr[m] += (dc - d1)
-            else:
-                delta_arr[m] += (d2 - d1)
+                if dc < d1:
+                    delta_td += (dc - d1)
+                elif dc < d2:
+                    dbl_delta[m] += (dc - d1)
+                else:
+                    dbl_delta[m] += (d2 - d1)
 
-        best_val = delta_arr[0] + delta_td
-        delta_arr[0] = best_val
+            best_val = dbl_delta[0] + delta_td
+            dbl_delta[0] = best_val
 
-        for m in range(1, n_clusters):
-            delta_arr[m] += delta_td
-            if delta_arr[m] < best_val:
-                best_val = delta_arr[m]
-                best_m = m
+            for m in range(1, n_clusters):
+                dbl_delta[m] += delta_td
+                if dbl_delta[m] < best_val:
+                    best_val = dbl_delta[m]
+                    best_m = m
+
+            need_inf_resolve = not isfinite(delta_td)
+            if not need_inf_resolve:
+                for m in range(n_clusters):
+                    if not isfinite(dbl_delta[m]):
+                        need_inf_resolve = True
+                        break
+
+            if need_inf_resolve:
+                if n_clusters <= 512:
+                    inf_cnt = stack_inf
+                else:
+                    inf_cnt = <long long*>malloc(n_clusters * sizeof(long long))
+                    if inf_cnt == NULL:
+                        inf_mem_error = True
+                    else:
+                        inf_heap_allocated = True
+
+                if not inf_mem_error:
+                    delta_td = 0.0
+                    base_inf = 0
+                    for m in range(n_clusters):
+                        dbl_delta[m] = 0.0
+                        inf_cnt[m] = 0
+
+                    for j in range(n_samples):
+                        m = near_idx_map[j]
+                        d1 = <double>near_dist[j]
+                        d2 = <double>second_dist[j]
+                        dc = <double>d_xc[j]
+                        if isnan(d1):
+                            d1 = INFINITY
+                        if isnan(d2):
+                            d2 = INFINITY
+                        if isnan(dc):
+                            dc = INFINITY
+
+                        if dc < d1:
+                            if isinf(d1):
+                                base_inf -= 1
+                                delta_td += dc
+                            else:
+                                delta_td += (dc - d1)
+                        else:
+                            val = dc if dc < d2 else d2
+                            if isinf(d1):
+                                if not isinf(val):
+                                    inf_cnt[m] -= 1
+                                    dbl_delta[m] += val
+                            elif isinf(val):
+                                inf_cnt[m] += 1
+                                dbl_delta[m] -= d1
+                            else:
+                                dbl_delta[m] += (val - d1)
+
+                    best_m = 0
+                    best_inf = base_inf + inf_cnt[0]
+                    best_fin = delta_td + dbl_delta[0]
+                    if best_inf < 0:
+                        dbl_delta[0] = -INFINITY
+                    elif best_inf > 0:
+                        dbl_delta[0] = INFINITY
+                    else:
+                        dbl_delta[0] = best_fin
+
+                    for m in range(1, n_clusters):
+                        tot_inf = base_inf + inf_cnt[m]
+                        tot_fin = delta_td + dbl_delta[m]
+                        if tot_inf < 0:
+                            dbl_delta[m] = -INFINITY
+                        elif tot_inf > 0:
+                            dbl_delta[m] = INFINITY
+                        else:
+                            dbl_delta[m] = tot_fin
+
+                        if tot_inf < best_inf or (tot_inf == best_inf and tot_fin < best_fin):
+                            best_inf = tot_inf
+                            best_fin = tot_fin
+                            best_m = m
+
+                    best_val = dbl_delta[best_m]
+
+            if not inf_mem_error:
+                for m in range(n_clusters):
+                    delta_arr[m] = <floating>dbl_delta[m]
+
+        if inf_mem_error:
+            raise MemoryError(f"Failed to allocate {n_clusters} int64 inf-count buffer")
+    finally:
+        if heap_allocated:
+            free(dbl_delta)
+        if inf_heap_allocated:
+            free(inf_cnt)
 
     return best_m, best_val, total_delta_np if total_delta_np is not None else np.asarray(delta_arr)
 
@@ -217,39 +370,24 @@ def update_cache_2min(
         else:
             # Robust fallback path for nan_euclidean with missing values
             for i in range(n_samples):
-                if isnan(subD[i, 0]):
-                    m1_val = subD[i, 1]
-                    m1_idx = 1
-                    m2_val = subD[i, 0]
-                    m2_idx = 0
-                elif isnan(subD[i, 1]):
-                    m1_val = subD[i, 0]
-                    m1_idx = 0
-                    m2_val = subD[i, 1]
-                    m2_idx = 1
-                elif subD[i, 0] <= subD[i, 1]:
-                    m1_val = subD[i, 0]
-                    m1_idx = 0
-                    m2_val = subD[i, 1]
-                    m2_idx = 1
-                else:
-                    m1_val = subD[i, 1]
-                    m1_idx = 1
-                    m2_val = subD[i, 0]
-                    m2_idx = 0
+                m1_val = INFINITY
+                m2_val = INFINITY
+                m1_idx = 0
+                m2_idx = 1 if n_clusters > 1 else 0
 
-                for m in range(2, n_clusters):
+                for m in range(n_clusters):
                     d = subD[i, m]
                     if isnan(d):
                         continue
-                    if isnan(m1_val) or d < m1_val:
+                    if d < m1_val:
                         m2_val = m1_val
                         m2_idx = m1_idx
                         m1_val = d
                         m1_idx = m
-                    elif isnan(m2_val) or d < m2_val:
+                    elif d < m2_val:
                         m2_val = d
                         m2_idx = m
+
                 near_idx_map[i] = m1_idx
                 near_dist[i] = m1_val
                 second_dist[i] = m2_val
