@@ -1382,3 +1382,32 @@ class TestCriticalNaNAndSparseRefitRegressions(unittest.TestCase):
             ).fit(X_freeze)
         self.assertGreater(model_py.n_swaps_, 0)
         self.assertLess(model_py.inertia_, 400.0)
+
+    def test_clarans_nonfinite_swap_delta_python_fallback(self):
+        """Pure Python _evaluate_candidate_swap handles non-finite delta branches."""
+        model = CLARANS(n_clusters=2, random_state=42)
+        near_idx_map = np.array([0, 0, 1], dtype=np.intp)
+        cases = [
+            # (near_dist, second_dist, d_xc, current_cost, expected)
+            ([np.inf, 1.0, 0.0], [np.inf, 2.0, 1.0], [1.0, 0.0, 2.0], np.inf, -np.inf),
+            ([1.0, 1.0, 0.0], [np.inf, 2.0, 1.0], [np.inf, 0.0, 2.0], 2.0, np.inf),
+            ([np.inf, 1.0, 0.0], [np.inf, 2.0, 1.0], [np.nan, 0.0, 2.0], np.inf, -1.0),
+        ]
+        for near_vals, second_vals, dxc_vals, cost, expected in cases:
+            near_dist = np.array(near_vals, dtype=np.float64)
+            second_dist = np.array(second_vals, dtype=np.float64)
+            d_xc = np.array(dxc_vals, dtype=np.float64)
+            _, delta = model._evaluate_candidate_swap(
+                d_xc=d_xc,
+                near_idx_map=near_idx_map,
+                near_dist=near_dist,
+                second_dist=second_dist,
+                current_cost=cost,
+                can_use_cython=False,
+                n_samples=3,
+                medoid_pos=0,
+            )
+            self.assertEqual(delta, expected)
+            if HAS_CYTHON:
+                cy_delta = _core.clarans_delta(near_idx_map, near_dist, second_dist, d_xc, 0, 3)
+                self.assertEqual(delta, cy_delta)
