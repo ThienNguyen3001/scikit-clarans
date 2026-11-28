@@ -33,12 +33,14 @@ from ._initialization import (
 from .utils import (
     _SCIPY_METRIC_MAP,
     _core,
+    _is_cdist_unsupported_error,
     _is_valid_int,
     _map_scipy_metric,
     _nan_safe_argmin,
     _nan_safe_min,
     _nonfinite_swap_components,
     _pairwise_fast,
+    _resolve_metric_params,
     _to_dense,
     _warn_cython_unavailable,
     calculate_cost,
@@ -253,6 +255,13 @@ class CLARANS(ClusterMixin, TransformerMixin, BaseEstimator):
         self.verbose = verbose
         self.n_jobs = n_jobs
 
+    def _effective_metric_params(self) -> dict[str, Any]:
+        """Return effective metric parameters, preserving fitted state such as ``V``."""
+        cached = getattr(self, "_metric_params_", None)
+        if cached is not None:
+            return cached
+        return dict(self.metric_params) if self.metric_params is not None else {}
+
     def _prepare_initial_medoids(
         self, X: np.ndarray | "spmatrix", random_state: np.random.RandomState
     ) -> np.ndarray | None:
@@ -303,22 +312,19 @@ class CLARANS(ClusterMixin, TransformerMixin, BaseEstimator):
             Indices of the initial medoids.
         """
         n_samples, n_features = X.shape
+        params = self._effective_metric_params()
 
         if isinstance(self.init, str):
             if self.init == "random":
                 return random_state.choice(n_samples, self.n_clusters, replace=False)
             elif self.init == "k-medoids++":
                 return initialize_k_medoids_plus_plus(
-                    X, self.n_clusters, random_state, self.metric, metric_params=self.metric_params
+                    X, self.n_clusters, random_state, self.metric, metric_params=params
                 )
             elif self.init == "heuristic":
-                return initialize_heuristic(
-                    X, self.n_clusters, self.metric, metric_params=self.metric_params
-                )
+                return initialize_heuristic(X, self.n_clusters, self.metric, metric_params=params)
             elif self.init == "build":
-                return initialize_build(
-                    X, self.n_clusters, self.metric, metric_params=self.metric_params
-                )
+                return initialize_build(X, self.n_clusters, self.metric, metric_params=params)
             else:
                 raise ValueError(f"Unknown init method: {self.init!r}")
 
@@ -328,7 +334,7 @@ class CLARANS(ClusterMixin, TransformerMixin, BaseEstimator):
             random_state,
             self.n_clusters,
             metric=self.metric,
-            metric_params=self.metric_params,
+            metric_params=params,
         )
 
     def __sklearn_tags__(self):
@@ -462,6 +468,7 @@ class CLARANS(ClusterMixin, TransformerMixin, BaseEstimator):
         """
         _warn_cython_unavailable()
         X, random_state, n_samples, n_features = self._validate_input_and_params(X)
+        self._metric_params_ = _resolve_metric_params(X, self.metric, self.metric_params)
 
         self._init_search_budget(n_samples)
 
@@ -714,7 +721,10 @@ class CLARANS(ClusterMixin, TransformerMixin, BaseEstimator):
         else:
             medoids_dist = None
             current_cost = calculate_cost(
-                X, current_medoids_indices, self.metric, metric_params=self.metric_params
+                X,
+                current_medoids_indices,
+                self.metric,
+                metric_params=self._effective_metric_params(),
             )
             near_idx_map = None
             near_dist = None
@@ -821,7 +831,7 @@ class CLARANS(ClusterMixin, TransformerMixin, BaseEstimator):
                     X,
                     neighbor_medoids_indices,
                     self.metric,
-                    metric_params=self.metric_params,
+                    metric_params=self._effective_metric_params(),
                 )
 
                 if neighbor_cost < current_cost + delta_tol:
@@ -906,7 +916,7 @@ class CLARANS(ClusterMixin, TransformerMixin, BaseEstimator):
                     self._X_csc = None
             return
 
-        params = self.metric_params if self.metric_params is not None else {}
+        params = self._effective_metric_params()
 
         # Dense arrays: prefer SciPy cdist
         if isinstance(X, np.ndarray) and not issparse(X) and isinstance(self.metric, str):
@@ -917,8 +927,9 @@ class CLARANS(ClusterMixin, TransformerMixin, BaseEstimator):
                 self._scipy_metric = mapped_metric
                 self._dm_instance = None
                 return
-            except Exception:
-                pass
+            except Exception as err:
+                if not _is_cdist_unsupported_error(err):
+                    raise
 
         # Sparse arrays with string metric or dense arrays with custom metrics: DistanceMetric.
         # Note: PyFuncDistance in DistanceMetric does not support sparse matrices (returns -999.0).
@@ -930,10 +941,12 @@ class CLARANS(ClusterMixin, TransformerMixin, BaseEstimator):
                     self._dist_engine = "distance_metric"
                     self._scipy_metric = None
                     return
-            except Exception:
+            except (ValueError, TypeError):
                 pass
 
         # Fallback to pairwise_distances
+        if X.shape[0] > 0:
+            pairwise_distances(X[:1], X[:1], metric=self.metric, **params)
         self._dist_engine = "pairwise"
         self._scipy_metric = None
         self._dm_instance = None
@@ -948,7 +961,7 @@ class CLARANS(ClusterMixin, TransformerMixin, BaseEstimator):
     ) -> np.ndarray:
         """Compute distances from all samples in X to a single candidate sample."""
         engine = getattr(self, "_dist_engine", "pairwise")
-        params = self.metric_params if self.metric_params is not None else {}
+        params = self._effective_metric_params()
         if engine == "cdist":
             if out is not None and out.dtype == np.float64 and out.flags.c_contiguous:
                 dest = out_2d if out_2d is not None else out.reshape(1, -1)
@@ -1011,7 +1024,10 @@ class CLARANS(ClusterMixin, TransformerMixin, BaseEstimator):
         if self.metric == "precomputed":
             return _to_dense(X[:, medoids_indices])
         return _pairwise_fast(
-            X, X[medoids_indices], metric=self.metric, metric_params=self.metric_params
+            X,
+            X[medoids_indices],
+            metric=self.metric,
+            metric_params=self._effective_metric_params(),
         )
 
     def _compute_2min(
@@ -1195,7 +1211,10 @@ class CLARANS(ClusterMixin, TransformerMixin, BaseEstimator):
     def _assign_cluster_labels(self, X: Any) -> np.ndarray:
         """Assign each sample in X to the nearest cluster center."""
         D = _pairwise_fast(
-            X, self.cluster_centers_, metric=self.metric, metric_params=self.metric_params
+            X,
+            self.cluster_centers_,
+            metric=self.metric,
+            metric_params=self._effective_metric_params(),
         )
         return _nan_safe_argmin(D)
 
@@ -1297,7 +1316,7 @@ class CLARANS(ClusterMixin, TransformerMixin, BaseEstimator):
 
         X = self._validate_data_compat(X, reset=False, ensure_min_samples=1)
 
-        params = self.metric_params if self.metric_params is not None else {}
+        params = self._effective_metric_params()
         return _pairwise_fast(X, self.cluster_centers_, metric=self.metric, metric_params=params)
 
     def score(self, X: ArrayLike | "spmatrix", y: Any = None) -> float:

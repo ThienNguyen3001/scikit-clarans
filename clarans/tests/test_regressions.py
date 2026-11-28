@@ -1496,3 +1496,62 @@ class TestSymmetryConsistencyRegressions(unittest.TestCase):
         m_sparse_nan = CLARANS(n_clusters=2, metric="precomputed", random_state=42)
         m_sparse_nan._setup_distance_engine(sparse.csr_matrix(A_diag_nan))
         self.assertFalse(m_sparse_nan._precomputed_is_sym)
+
+
+class TestSeuclideanAndErrorPropagationRegressions(unittest.TestCase):
+    """Regressions for seuclidean variance caching and narrow backend fallbacks."""
+
+    def test_seuclidean_without_V_is_batch_consistent(self):
+        """seuclidean without explicit V must cache training variance for transform/score/fit."""
+        from sklearn.base import clone
+
+        rng = np.random.RandomState(42)
+        X_train = rng.randn(30, 3) * np.array([1.0, 5.0, 20.0])
+        X_test = rng.randn(8, 3) * np.array([2.0, 0.5, 10.0]) + 3.0
+        V_train = np.var(X_train, axis=0, ddof=1)
+
+        for ModelClass in [CLARANS, FastCLARANS]:
+            model = ModelClass(n_clusters=3, metric="seuclidean", random_state=42).fit(X_train)
+            ref = ModelClass(
+                n_clusters=3, metric="seuclidean", metric_params={"V": V_train}, random_state=42
+            ).fit(X_train)
+
+            # Batch vs single-sample transform must be identical
+            t_all = model.transform(X_test)
+            t_first = model.transform(X_test[:1])
+            np.testing.assert_allclose(t_all[0], t_first[0], rtol=1e-12, atol=1e-12)
+
+            # Matches explicit V from training data without mutating estimator hyperparams
+            np.testing.assert_array_equal(model.medoid_indices_, ref.medoid_indices_)
+            self.assertAlmostEqual(model.inertia_, ref.inertia_, places=10)
+            np.testing.assert_allclose(t_all, ref.transform(X_test), rtol=1e-12, atol=1e-12)
+            self.assertAlmostEqual(
+                calculate_cost(X_train, model.medoid_indices_, metric="seuclidean"),
+                model.inertia_,
+                places=10,
+            )
+            self.assertIsNone(model.metric_params)
+            self.assertIsNone(clone(model).get_params()["metric_params"])
+
+    def test_backend_errors_not_masked_by_fallback(self):
+        """Parameter/domain errors from cdist must not be masked by pairwise fallback."""
+        X_prob = np.array([[0.2, 0.8], [0.5, 0.5], [0.9, 0.1], [0.4, 0.6]])
+
+        with self.assertRaises(TypeError) as ctx1:
+            CLARANS(
+                n_clusters=2,
+                metric="jensenshannon",
+                metric_params={"base": -1},
+                random_state=42,
+            ).fit(X_prob)
+        self.assertNotIn("pairwise_distances", str(ctx1.exception))
+
+        with self.assertRaises(TypeError) as ctx2:
+            calculate_cost(X_prob, [0, 1], metric="jensenshannon", metric_params={"base": -1})
+        self.assertNotIn("pairwise_distances", str(ctx2.exception))
+
+        # Metrics not known to cdist (like nan_euclidean and haversine) must still fall back
+        m_hav = CLARANS(n_clusters=2, metric="haversine", random_state=42).fit(
+            np.array([[0.1, 0.2], [0.2, 0.3], [1.0, 1.1], [1.1, 1.2]])
+        )
+        self.assertEqual(len(m_hav.medoid_indices_), 2)

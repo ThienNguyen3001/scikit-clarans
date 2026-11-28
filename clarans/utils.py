@@ -58,6 +58,13 @@ _SCIPY_METRIC_MAP = {
 }
 
 
+def _is_cdist_unsupported_error(err: Exception) -> bool:
+    """Return True if cdist failed due to an unsupported metric rather than invalid args/data."""
+    if isinstance(err, ValueError) and "Unknown Distance Metric" in str(err):
+        return True
+    return not isinstance(err, (ValueError, TypeError))
+
+
 def _pairwise_fast(
     X: Any,
     Y: Any = None,
@@ -71,13 +78,14 @@ def _pairwise_fast(
         mapped = _map_scipy_metric(metric)
         try:
             return cdist(X, Y_eff, metric=mapped, **params)
-        except Exception:
-            pass
+        except Exception as err:
+            if not _is_cdist_unsupported_error(err):
+                raise
     if not issparse(X) or isinstance(metric, str):
         try:
             dm = DistanceMetric.get_metric(metric, **params)
             return dm.pairwise(X) if Y is None else dm.pairwise(X, Y_eff)
-        except Exception:
+        except (ValueError, TypeError):
             pass
     return pairwise_distances(X, Y, metric=metric, **params)
 
@@ -182,6 +190,22 @@ def check_medoids(
     return arr
 
 
+def _resolve_metric_params(
+    X: Any, metric: str | Callable, metric_params: dict[str, Any] | None
+) -> dict[str, Any]:
+    """Return copied metric_params, freezing feature variance V for seuclidean when omitted."""
+    params = dict(metric_params) if metric_params is not None else {}
+    if metric == "seuclidean" and "V" not in params and X.shape[0] > 1:
+        n_rows = X.shape[0]
+        if issparse(X):
+            mean = np.asarray(X.mean(axis=0)).ravel()
+            mean_sq = np.asarray(X.power(2).mean(axis=0)).ravel()
+            params["V"] = np.maximum(0.0, mean_sq - mean**2) * (n_rows / (n_rows - 1))
+        else:
+            params["V"] = np.var(X, axis=0, ddof=1)
+    return params
+
+
 def calculate_cost(
     X: Any,
     medoid_indices: Sequence[int] | np.ndarray,
@@ -218,7 +242,8 @@ def calculate_cost(
         return float(np.sum(_nan_safe_min(dist_sub), dtype=np.float64))
 
     medoids = X_arr[medoid_indices]
-    D = _pairwise_fast(X_arr, medoids, metric=metric, metric_params=metric_params)
+    params = _resolve_metric_params(X_arr, metric, metric_params)
+    D = _pairwise_fast(X_arr, medoids, metric=metric, metric_params=params)
     return float(np.sum(_nan_safe_min(D), dtype=np.float64))
 
 
