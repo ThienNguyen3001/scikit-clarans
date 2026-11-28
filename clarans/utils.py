@@ -2,14 +2,11 @@ from __future__ import annotations
 
 import threading
 import warnings
-from typing import TYPE_CHECKING, Any, Callable, Sequence
+from typing import Any, Callable, Sequence
 import numpy as np
 from scipy.spatial.distance import cdist
 from scipy.sparse import issparse
 from sklearn.metrics import DistanceMetric, pairwise_distances
-
-if TYPE_CHECKING:
-    from scipy.sparse import spmatrix
 
 try:
     from . import _core
@@ -88,6 +85,20 @@ def _pairwise_fast(
 def _to_dense(arr: Any) -> np.ndarray:
     """Convert an array or sparse matrix to a dense NumPy array."""
     return arr.toarray() if hasattr(arr, "toarray") else np.asarray(arr)
+
+
+def _ensure_2d_input(X: Any) -> Any:
+    """Normalize array-like or sparse inputs to 2D ndarrays or CSR/CSC sparse matrices."""
+    if issparse(X):
+        if len(X.shape) != 2:
+            raise ValueError(f"Expected 2D sparse matrix, got shape {X.shape}")
+        if getattr(X, "format", None) not in ("csr", "csc"):
+            return X.tocsr()
+        return X
+    arr = np.asarray(X)
+    if arr.ndim != 2:
+        raise ValueError(f"Expected 2D array, got {arr.ndim}D array with shape {arr.shape}")
+    return arr
 
 
 def _nan_safe_argmin(D: np.ndarray) -> np.ndarray:
@@ -172,7 +183,7 @@ def check_medoids(
 
 
 def calculate_cost(
-    X: np.ndarray | spmatrix,
+    X: Any,
     medoid_indices: Sequence[int] | np.ndarray,
     metric: str | Callable = "euclidean",
     metric_params: dict | None = None,
@@ -199,14 +210,15 @@ def calculate_cost(
     cost : float
         The total sum of distances from each point to its nearest medoid.
     """
-    medoid_indices = check_medoids(medoid_indices, n_samples=X.shape[0])
+    X_arr = _ensure_2d_input(X)
+    medoid_indices = check_medoids(medoid_indices, n_samples=X_arr.shape[0])
 
     if metric == "precomputed":
-        dist_sub = _to_dense(X[:, medoid_indices])
+        dist_sub = _to_dense(X_arr[:, medoid_indices])
         return float(np.sum(_nan_safe_min(dist_sub), dtype=np.float64))
 
-    medoids = X[medoid_indices]
-    D = _pairwise_fast(X, medoids, metric=metric, metric_params=metric_params)
+    medoids = X_arr[medoid_indices]
+    D = _pairwise_fast(X_arr, medoids, metric=metric, metric_params=metric_params)
     return float(np.sum(_nan_safe_min(D), dtype=np.float64))
 
 

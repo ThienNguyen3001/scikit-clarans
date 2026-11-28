@@ -17,7 +17,7 @@ import pytest
 from sklearn.datasets import make_blobs
 from sklearn.metrics import pairwise_distances
 
-from clarans import CLARANS
+from clarans import CLARANS, calculate_cost
 from clarans._initialization import (
     initialize_build,
     initialize_from_array,
@@ -187,3 +187,68 @@ class TestInitializationDeep(unittest.TestCase):
             model.fit(self.X)
         self.assertEqual(len(model.medoid_indices_), 3)
         self.assertEqual(len(np.unique(model.medoid_indices_)), 3)
+
+    def test_initializers_and_calculate_cost_accept_list_dataframe_coo(self):
+        """Initialization helpers and calculate_cost must handle list, DataFrame, and coo_matrix."""
+        import pandas as pd
+        from scipy import sparse
+
+        X_small = self.X[:20]
+        X_list = X_small.tolist()
+        X_df = pd.DataFrame(X_small, columns=["f0", "f1"])
+        X_coo = sparse.coo_matrix(X_small)
+
+        expected_cost = calculate_cost(X_small, [0, 5, 10])
+        for X_in in (X_list, X_df, X_coo):
+            self.assertAlmostEqual(calculate_cost(X_in, [0, 5, 10]), expected_cost, places=10)
+            np.testing.assert_array_equal(
+                initialize_heuristic(X_in, 3),
+                initialize_heuristic(X_small, 3),
+            )
+            np.testing.assert_array_equal(
+                initialize_build(X_in, 3),
+                initialize_build(X_small, 3),
+            )
+            m_pp = initialize_k_medoids_plus_plus(X_in, 3, np.random.RandomState(42))
+            self.assertEqual(len(m_pp), 3)
+            self.assertEqual(len(np.unique(m_pp)), 3)
+            m_arr = initialize_from_array(X_small[[0, 5, 10]], X_in, np.random.RandomState(42), 3)
+            np.testing.assert_array_equal(m_arr, [0, 5, 10])
+
+        D_small = self.D[:20, :20]
+        for D_in in (D_small.tolist(), pd.DataFrame(D_small), sparse.coo_matrix(D_small)):
+            self.assertAlmostEqual(
+                calculate_cost(D_in, [0, 5, 10], metric="precomputed"),
+                calculate_cost(D_small, [0, 5, 10], metric="precomputed"),
+                places=10,
+            )
+
+    def test_initializers_reject_invalid_n_clusters_and_dim(self):
+        """Initialization helpers must reject n_clusters <= 0, non-int, or non-2D inputs."""
+        rng = np.random.RandomState(42)
+        for bad_k in (0, -1, False, 1.5):
+            with self.assertRaises(ValueError):
+                initialize_heuristic(self.X, bad_k)
+            with self.assertRaises(ValueError):
+                initialize_build(self.X, bad_k)
+            with self.assertRaises(ValueError):
+                initialize_k_medoids_plus_plus(self.X, bad_k, rng)
+            with self.assertRaises(ValueError):
+                initialize_from_array(np.zeros((1, 2)), self.X, rng, bad_k)
+
+        with self.assertRaises(ValueError):
+            initialize_heuristic([1.0, 2.0, 3.0], 1)
+
+    def test_initialize_from_array_asymmetric_metric_direction(self):
+        """initialize_from_array must snap using d(sample -> center) for asymmetric metrics."""
+
+        def asym_dist(u, v):
+            return float(max(0.0, u[0] - v[0]) * 100.0 + max(0.0, v[0] - u[0]))
+
+        X_pts = np.array([[0.0], [9.0], [11.0], [20.0]])
+        init_centers = np.array([[10.0]])
+        idx = initialize_from_array(
+            init_centers, X_pts, np.random.RandomState(42), n_clusters=1, metric=asym_dist
+        )
+        # d(sample=9 -> center=10) = 1.0 < d(sample=11 -> center=10) = 100.0
+        np.testing.assert_array_equal(idx, [1])

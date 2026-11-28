@@ -15,11 +15,23 @@ import numpy as np
 from scipy.sparse import issparse
 from sklearn.utils import check_array, check_random_state
 
-from .utils import _core, _nan_safe_argmin, _pairwise_fast, _to_dense, check_medoids
+from .utils import (
+    _core,
+    _ensure_2d_input,
+    _is_valid_int,
+    _nan_safe_argmin,
+    _pairwise_fast,
+    _to_dense,
+    check_medoids,
+)
 
 
 def _check_init_args(X: Any, n_clusters: int) -> int:
     """Validate dataset shape and cluster count for initialization."""
+    if not _is_valid_int(n_clusters, min_val=1):
+        raise ValueError(f"n_clusters must be a positive integer (>= 1); got {n_clusters!r}")
+    if len(X.shape) != 2:
+        raise ValueError(f"Expected 2D array, got shape {X.shape}")
     n_samples = X.shape[0]
     if n_clusters >= n_samples:
         raise ValueError(f"n_clusters must be less than n_samples ({n_samples}); got {n_clusters}")
@@ -66,6 +78,7 @@ def initialize_heuristic(
     Adapted from the scikit-learn-extra KMedoids implementation:
     https://scikit-learn-extra.readthedocs.io/en/stable/generated/sklearn_extra.cluster.KMedoids.html
     """
+    X = _ensure_2d_input(X)
     _check_init_args(X, n_clusters)
 
     if metric == "precomputed":
@@ -131,6 +144,7 @@ def initialize_build(
     Adapted from the scikit-learn-extra KMedoids implementation:
     https://scikit-learn-extra.readthedocs.io/en/stable/generated/sklearn_extra.cluster.KMedoids.html
     """
+    X = _ensure_2d_input(X)
     n_samples = _check_init_args(X, n_clusters)
 
     medoid_indices = np.empty(n_clusters, dtype=int)
@@ -268,6 +282,7 @@ def initialize_k_medoids_plus_plus(
     https://scikit-learn-extra.readthedocs.io/en/stable/generated/sklearn_extra.cluster.KMedoids.html
     """
     rng = check_random_state(random_state)
+    X = _ensure_2d_input(X)
     n_samples = _check_init_args(X, n_clusters)
     medoid_indices = np.empty(n_clusters, dtype=int)
 
@@ -440,7 +455,10 @@ def initialize_from_array(
     current_medoids_indices : ndarray of shape (n_clusters,), dtype int
         Indices of the selected medoids in the dataset.
     """
-    n_samples, n_features = X.shape
+    rng = check_random_state(random_state)
+    X = _ensure_2d_input(X)
+    n_samples = _check_init_args(X, n_clusters)
+    n_features = X.shape[1]
 
     init_arr = np.asarray(init)
 
@@ -482,7 +500,7 @@ def initialize_from_array(
             raise ValueError("init array must not contain rows with all NaN values.")
 
         params = metric_params if metric_params is not None else {}
-        D = _pairwise_fast(init_centers, X, metric=metric, metric_params=params)
+        D = _pairwise_fast(X, init_centers, metric=metric, metric_params=params).T
         if np.issubdtype(D.dtype, np.floating) and np.isnan(D).all(axis=1).any():
             raise ValueError(
                 "Each row in init must have a finite distance to at least one sample in X."
@@ -505,7 +523,7 @@ def initialize_from_array(
         if len(available) < remaining:
             raise ValueError("Not enough unique points to fill up to n_clusters.")
 
-        fillers = random_state.choice(available, remaining, replace=False)
+        fillers = rng.choice(available, remaining, replace=False)
         current_medoids_indices = np.concatenate([current_medoids_indices, fillers])
 
     return current_medoids_indices
