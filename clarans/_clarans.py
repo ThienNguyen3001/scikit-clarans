@@ -15,6 +15,11 @@ from sklearn.metrics.pairwise import PAIRWISE_DISTANCE_FUNCTIONS, _VALID_METRICS
 from sklearn.utils.validation import check_array, check_is_fitted, check_random_state
 
 try:
+    from sklearn.utils.validation import _check_feature_names_in
+except ImportError:
+    _check_feature_names_in = None  # type: ignore[assignment]
+
+try:
     from sklearn.utils.validation import validate_data
 except ImportError:
     validate_data = None
@@ -40,6 +45,8 @@ from .utils import (
 )
 
 _EXCLUDED_METRICS = {"kulczynski1", "wminkowski"}
+
+_VALID_INIT_METHODS = frozenset({"k-medoids++", "random", "heuristic", "build"})
 
 _ALL_VALID_METRICS = frozenset(
     (
@@ -259,6 +266,7 @@ class CLARANS(ClusterMixin, TransformerMixin, BaseEstimator):
             isinstance(self.init, str) and self.init in ("build", "heuristic")
         ) or not isinstance(self.init, str)
         if is_deterministic:
+            medoids = self._initialize_medoids(X, random_state)
             if self.num_local > 1:
                 subject = (
                     f"The '{self.init}' initialization is deterministic"
@@ -273,7 +281,7 @@ class CLARANS(ClusterMixin, TransformerMixin, BaseEstimator):
                     UserWarning,
                     stacklevel=2,
                 )
-            return self._initialize_medoids(X, random_state)
+            return medoids
         return None
 
     def _initialize_medoids(
@@ -1144,6 +1152,21 @@ class CLARANS(ClusterMixin, TransformerMixin, BaseEstimator):
                     f"{options_repr} or a callable. Got {self.metric!r} instead."
                 )
 
+        if self.init is None:
+            init_opts = ", ".join(repr(m) for m in sorted(_VALID_INIT_METHODS))
+            raise ValueError(
+                f"The 'init' parameter of {self.__class__.__name__} must not be None. "
+                f"Expected one of {{{init_opts}}} or an explicit array-like."
+            )
+        if isinstance(self.init, str):
+            if self.init not in _VALID_INIT_METHODS:
+                raise ValueError(f"Unknown init method: {self.init!r}")
+        elif np.isscalar(self.init):
+            raise ValueError(
+                f"The 'init' parameter of {self.__class__.__name__} must be a supported init "
+                f"method name or an array-like of initial centers. Got {self.init!r} instead."
+            )
+
     def _validate_input_and_params(
         self, X: ArrayLike | "spmatrix"
     ) -> tuple[np.ndarray | "spmatrix", np.random.RandomState, int, int]:
@@ -1320,12 +1343,21 @@ class CLARANS(ClusterMixin, TransformerMixin, BaseEstimator):
             Transformed feature names.
         """
         check_is_fitted(self, "_n_features_out")
-        if input_features is not None and hasattr(self, "feature_names_in_"):
-            if len(input_features) != len(self.feature_names_in_):
+        if input_features is not None:
+            if isinstance(input_features, str):
+                raise ValueError("input_features must be an array-like of strings, not a str.")
+            n_features_in = getattr(self, "n_features_in_", None)
+            if n_features_in is not None and len(input_features) != n_features_in:
                 raise ValueError(
                     f"input_features should have length equal to the number of "
-                    f"features ({len(self.feature_names_in_)}), got {len(input_features)}"
+                    f"features ({n_features_in}), got {len(input_features)}"
                 )
+            if _check_feature_names_in is not None:
+                _check_feature_names_in(self, input_features)
+            elif hasattr(self, "feature_names_in_") and not np.array_equal(
+                np.asarray(input_features), self.feature_names_in_
+            ):
+                raise ValueError("input_features is not equal to feature_names_in_")
         class_name = self.__class__.__name__.lower()
         return np.asarray(
             [f"{class_name}{i}" for i in range(self._n_features_out)],

@@ -88,6 +88,22 @@ class TestCommonEstimators:
         with pytest.raises(ValueError):
             model.fit(self.X)
 
+    def test_early_init_validation_and_no_spurious_warning(self, estimator_cls):
+        import warnings
+
+        for bad_init in ("invalid_method", None, 123, True):
+            model = estimator_cls(n_clusters=3, init=bad_init, num_local=2)
+            with pytest.raises(ValueError):
+                model._validate_params()
+
+        for bad_fit_init in (123, np.zeros((3, self.X.shape[1] + 5))):
+            model = estimator_cls(n_clusters=3, init=bad_fit_init, num_local=2)
+            with warnings.catch_warnings(record=True) as caught:
+                warnings.simplefilter("always")
+                with pytest.raises(ValueError):
+                    model.fit(self.X)
+                assert [w for w in caught if issubclass(w.category, UserWarning)] == []
+
     def test_transform(self, estimator_cls):
         model = estimator_cls(n_clusters=3, num_local=1, max_neighbors=10, random_state=42)
         model.fit(self.X)
@@ -199,6 +215,29 @@ class TestCommonEstimators:
 
         with pytest.raises(ValueError, match="input_features should have length equal"):
             model.get_feature_names_out(["col_0"])
+
+        wrong_names = [f"wrong_{i}" for i in range(self.X.shape[1])]
+        with pytest.raises(ValueError, match="feature_names_in_"):
+            model.get_feature_names_out(wrong_names)
+
+    def test_get_feature_names_out_ndarray_length_validation(self, estimator_cls):
+        model = estimator_cls(n_clusters=3, random_state=42).fit(self.X)
+        assert not hasattr(model, "feature_names_in_")
+
+        with pytest.raises(ValueError, match="input_features should have length equal"):
+            model.get_feature_names_out(["only_one"])
+
+        with pytest.raises(ValueError, match="input_features should have length equal"):
+            model.get_feature_names_out([f"f{i}" for i in range(self.X.shape[1] + 2)])
+
+        with pytest.raises(ValueError):
+            model.get_feature_names_out("x" * self.X.shape[1])
+
+        ok_names = model.get_feature_names_out([f"f{i}" for i in range(self.X.shape[1])])
+        prefix = estimator_cls.__name__.lower()
+        np.testing.assert_array_equal(
+            ok_names, np.array([f"{prefix}0", f"{prefix}1", f"{prefix}2"], dtype=object)
+        )
 
     def test_pandas_output(self, estimator_cls):
         try:
