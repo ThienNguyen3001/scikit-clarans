@@ -872,11 +872,22 @@ class CLARANS(ClusterMixin, TransformerMixin, BaseEstimator):
                 self._precomputed_is_sym = bool(is_sym)
             else:
                 try:
-                    diff = X - X.T
-                    if diff.nnz == 0:
-                        is_sym = True
+                    data = getattr(X, "data", None)
+                    if (
+                        data is not None
+                        and np.issubdtype(data.dtype, np.floating)
+                        and np.isnan(data).any()
+                    ):
+                        is_sym = False
                     else:
-                        is_sym = bool(np.all(np.abs(diff.data) <= 1e-8))
+                        diff = (X - X.T).tocoo()
+                        if diff.nnz == 0:
+                            is_sym = True
+                        else:
+                            rows, cols = diff.row, diff.col
+                            a_vals = np.asarray(X[rows, cols]).ravel()
+                            b_vals = np.asarray(X.T[rows, cols]).ravel()
+                            is_sym = bool(np.allclose(a_vals, b_vals, rtol=1e-5, atol=1e-8))
                 except Exception:
                     is_sym = False
 

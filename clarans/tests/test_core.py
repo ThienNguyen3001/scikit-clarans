@@ -363,3 +363,65 @@ class TestCythonCore:
         near_sym[10, 20] += 1e-8
         near_sym[20, 10] -= 1e-8
         assert _core.is_matrix_symmetric(near_sym, n_samples, 1e-6)
+
+    def test_is_matrix_symmetric_rejects_diagonal_nan(self):
+        """Diagonal NaNs must cause is_matrix_symmetric to return False like np.allclose."""
+        for dtype in (np.float64, np.float32):
+            mat = np.array([[np.nan, 1.0], [1.0, 0.0]], dtype=dtype)
+            assert _core.is_matrix_symmetric(mat, 2, 1e-5, 1e-8) is False
+
+    def test_kernels_validate_bounds_and_shapes(self):
+        """All 6 Cython kernels must raise ValueError on invalid sizes or out-of-bounds indices."""
+        idx_ok = np.array([0, 1, 0, 1], dtype=np.intp)
+        vec_ok = np.array([1.0, 2.0, 3.0, 4.0], dtype=np.float64)
+        sub_ok = np.ones((4, 2), dtype=np.float64)
+        D_ok = np.ones((4, 4), dtype=np.float64)
+
+        # 1. clarans_delta: negative n_samples or undersized vectors
+        with pytest.raises(ValueError):
+            _core.clarans_delta(idx_ok, vec_ok, vec_ok, vec_ok, 0, -1)
+        with pytest.raises(ValueError):
+            _core.clarans_delta(idx_ok[:2], vec_ok, vec_ok, vec_ok, 0, 4)
+
+        # 2. fastpam1_delta: n_clusters < 1, undersized vectors, and out-of-bounds near_idx_map
+        with pytest.raises(ValueError):
+            _core.fastpam1_delta(idx_ok, vec_ok, vec_ok, vec_ok, 4, 0)
+        with pytest.raises(ValueError):
+            _core.fastpam1_delta(idx_ok[:2], vec_ok, vec_ok, vec_ok, 4, 2)
+        bad_map = np.array([0, 3, 1, 0], dtype=np.intp)
+        with pytest.raises(ValueError):
+            _core.fastpam1_delta(bad_map, vec_ok, vec_ok, vec_ok, 4, 2)
+
+        # 3. update_cache_2min: n_clusters < 1, n_samples < 0, subD too small
+        with pytest.raises(ValueError):
+            _core.update_cache_2min(sub_ok, 4, 0)
+        with pytest.raises(ValueError):
+            _core.update_cache_2min(sub_ok, 5, 2)
+        with pytest.raises(ValueError):
+            _core.update_cache_2min(sub_ok, 4, 3)
+
+        # 4. pam_build_step: mismatched dimensions or out-of-bounds candidate index
+        cand_ok = np.array([1, 2], dtype=np.intp)
+        with pytest.raises(ValueError):
+            _core.pam_build_step(D_ok, cand_ok, vec_ok, 5, 2)
+        with pytest.raises(ValueError):
+            _core.pam_build_step(D_ok, np.array([4], dtype=np.intp), vec_ok, 4, 1)
+        with pytest.raises(ValueError):
+            _core.pam_build_step(D_ok, np.array([-1], dtype=np.intp), vec_ok, 4, 1)
+
+        # 5. kmedoids_pp_trials: mismatched array shapes
+        cands_2d = np.ones((2, 4), dtype=np.float64)
+        with pytest.raises(ValueError):
+            _core.kmedoids_pp_trials(
+                vec_ok[:2], cands_2d, cand_ok, np.array([0], dtype=np.intp), 4, 2, 1
+            )
+        with pytest.raises(ValueError):
+            _core.kmedoids_pp_trials(
+                vec_ok, cands_2d, cand_ok, np.array([0], dtype=np.intp), 4, 3, 1
+            )
+
+        # 6. is_matrix_symmetric: negative n_samples or D smaller than n_samples
+        with pytest.raises(ValueError):
+            _core.is_matrix_symmetric(D_ok, -1)
+        with pytest.raises(ValueError):
+            _core.is_matrix_symmetric(D_ok, 5)

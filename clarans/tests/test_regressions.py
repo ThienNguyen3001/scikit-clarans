@@ -1438,3 +1438,61 @@ class TestFloat32PrecisionHardening(unittest.TestCase):
                 ).fit(D_f32)
                 expected = calculate_cost(D_f32, model.medoid_indices_, metric="precomputed")
                 self.assertAlmostEqual(model.inertia_, expected, places=4)
+
+
+class TestSymmetryConsistencyRegressions(unittest.TestCase):
+    """Regressions for dense/sparse precomputed matrix symmetry parity."""
+
+    def test_sparse_precomputed_uses_rtol_atol_like_dense(self):
+        """Sparse precomputed check must honor rtol=1e-5, atol=1e-8 and reject NaNs."""
+        from scipy import sparse
+
+        # Large distance 1000.0 with 1e-3 perturbation: within rtol=1e-5 * 1000 = 0.01
+        A = np.array(
+            [
+                [0.0, 1000.0, 2000.0, 3000.0],
+                [1000.0 + 1e-3, 0.0, 500.0, 600.0],
+                [2000.0, 500.0, 0.0, 700.0],
+                [3000.0, 600.0, 700.0, 0.0],
+            ],
+            dtype=np.float64,
+        )
+        m_dense = CLARANS(n_clusters=2, metric="precomputed", random_state=42).fit(A)
+        self.assertTrue(m_dense._precomputed_is_sym)
+
+        for sp_cls in (sparse.csr_matrix, sparse.csc_matrix):
+            S = sp_cls(A)
+            m_sparse = CLARANS(n_clusters=2, metric="precomputed", random_state=42).fit(S)
+            self.assertEqual(
+                m_sparse._precomputed_is_sym,
+                m_dense._precomputed_is_sym,
+                f"Symmetry parity failed for {sp_cls.__name__}",
+            )
+
+        # Matching +inf pairs should count as symmetric just like np.allclose / is_matrix_symmetric
+        A_inf = np.array(
+            [
+                [0.0, np.inf, 1.0, 2.0],
+                [np.inf, 0.0, 1.0, 2.0],
+                [1.0, 1.0, 0.0, 1.0],
+                [2.0, 2.0, 1.0, 0.0],
+            ]
+        )
+        m_dense_inf = CLARANS(n_clusters=2, metric="precomputed", random_state=42)
+        m_dense_inf._setup_distance_engine(A_inf)
+        self.assertTrue(m_dense_inf._precomputed_is_sym)
+
+        m_sparse_inf = CLARANS(n_clusters=2, metric="precomputed", random_state=42)
+        m_sparse_inf._setup_distance_engine(sparse.csr_matrix(A_inf))
+        self.assertTrue(m_sparse_inf._precomputed_is_sym)
+
+        # Symmetric matrix with a NaN on the diagonal must not be marked symmetric
+        A_diag_nan = A.copy()
+        A_diag_nan[0, 0] = np.nan
+        m_dense_nan = CLARANS(n_clusters=2, metric="precomputed", random_state=42)
+        m_dense_nan._setup_distance_engine(A_diag_nan)
+        self.assertFalse(m_dense_nan._precomputed_is_sym)
+
+        m_sparse_nan = CLARANS(n_clusters=2, metric="precomputed", random_state=42)
+        m_sparse_nan._setup_distance_engine(sparse.csr_matrix(A_diag_nan))
+        self.assertFalse(m_sparse_nan._precomputed_is_sym)
