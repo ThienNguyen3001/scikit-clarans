@@ -266,7 +266,7 @@ class FastCLARANS(CLARANS):
             )
             return int(best_m), float(min_delta_val)
         if self.n_clusters == 1:
-            candidate_cost = float(np.sum(d_xc))
+            candidate_cost = float(np.sum(d_xc, dtype=np.float64))
             return 0, candidate_cost - current_cost
 
         assert near_idx_map is not None

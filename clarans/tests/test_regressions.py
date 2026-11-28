@@ -1411,3 +1411,30 @@ class TestCriticalNaNAndSparseRefitRegressions(unittest.TestCase):
             if HAS_CYTHON:
                 cy_delta = _core.clarans_delta(near_idx_map, near_dist, second_dist, d_xc, 0, 3)
                 self.assertEqual(delta, cy_delta)
+
+
+class TestFloat32PrecisionHardening(unittest.TestCase):
+    """Regressions for float32 sum accumulation in cost tracking and k=1 swaps."""
+
+    def test_float32_precomputed_inertia_uses_float64_sum(self):
+        """Cost summation on float32 precomputed matrices must match float64 calculate_cost."""
+        n_samples = 2000
+        D_f32 = np.full((n_samples, n_samples), 0.01, dtype=np.float32)
+        np.fill_diagonal(D_f32, 0.0)
+        # Large distance entry at sample 0 to trigger float32 ulp loss in naive float32 sums
+        D_f32[0, :] = np.float32(1e6)
+        D_f32[:, 0] = np.float32(1e6)
+        D_f32[0, 0] = np.float32(0.0)
+
+        for ModelClass in [CLARANS, FastCLARANS]:
+            for k in (1, 2):
+                model = ModelClass(
+                    n_clusters=k,
+                    metric="precomputed",
+                    init=np.arange(1, 1 + k),
+                    num_local=1,
+                    max_neighbors=5,
+                    random_state=42,
+                ).fit(D_f32)
+                expected = calculate_cost(D_f32, model.medoid_indices_, metric="precomputed")
+                self.assertAlmostEqual(model.inertia_, expected, places=4)

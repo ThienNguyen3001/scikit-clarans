@@ -640,7 +640,7 @@ class CLARANS(ClusterMixin, TransformerMixin, BaseEstimator):
         if self.n_clusters == 1:
             assert medoid_pos is not None
             clean_d = np.where(np.isnan(d_xc), np.inf, d_xc) if np.isnan(d_xc).any() else d_xc
-            candidate_cost = float(np.sum(clean_d))
+            candidate_cost = float(np.sum(clean_d, dtype=np.float64))
             if not np.isfinite(current_cost) and np.isfinite(candidate_cost):
                 return medoid_pos, -np.inf
             if not np.isfinite(current_cost) and not np.isfinite(candidate_cost):
@@ -702,7 +702,7 @@ class CLARANS(ClusterMixin, TransformerMixin, BaseEstimator):
             if not medoids_dist.flags.c_contiguous:
                 medoids_dist = np.ascontiguousarray(medoids_dist)
             near_idx_map, near_dist, second_dist = self._compute_2min(medoids_dist)
-            current_cost = float(np.sum(near_dist))
+            current_cost = float(np.sum(near_dist, dtype=np.float64))
         else:
             medoids_dist = None
             current_cost = calculate_cost(
@@ -788,7 +788,7 @@ class CLARANS(ClusterMixin, TransformerMixin, BaseEstimator):
                         near_dist_buf=near_dist,
                         second_dist_buf=second_dist,
                     )
-                    current_cost = float(np.sum(near_dist))
+                    current_cost = float(np.sum(near_dist, dtype=np.float64))
                     delta_tol = self._delta_tolerance(current_cost, buf_dtype)
 
                     available_candidates = self._update_candidate_pool(

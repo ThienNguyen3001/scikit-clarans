@@ -233,6 +233,36 @@ class TestCythonCore:
         assert ref_best_idx == cy_best_idx
         assert np.isclose(ref_max_gain, cy_max_gain, atol=10 ** (-places))
 
+    def test_pam_build_step_float32_double_accumulation(self):
+        """pam_build_step must accumulate gains in float64 to avoid float32 cancellation drift."""
+        n_samples = 20000
+        dist_to_nearest = np.full(n_samples, 2.0, dtype=np.float32)
+        dist_to_nearest[0] = np.float32(10002.0)
+
+        D = np.full((n_samples, 3), 2.0, dtype=np.float32)
+        # Candidate 1 gains 10000.0 at sample 0 plus ~5.9997 across remaining samples
+        D[0, 1] = np.float32(2.0)
+        D[1:, 1] = np.float32(1.9997)
+        # Candidate 2 gains 10002.0 at sample 0 and 0 elsewhere (< Candidate 1 true gain)
+        D[0, 2] = np.float32(0.0)
+        D[1:, 2] = np.float32(2.0)
+
+        candidate_indices = np.array([1, 2], dtype=np.intp)
+        diffs64 = np.maximum(
+            0.0,
+            dist_to_nearest.astype(np.float64)[:, None]
+            - D[:, candidate_indices].astype(np.float64),
+        )
+        gains64 = np.sum(diffs64, axis=0)
+        ref_best_idx = int(np.argmax(gains64))
+        ref_max_gain = float(gains64[ref_best_idx])
+
+        cy_best_idx, cy_max_gain = _core.pam_build_step(
+            D, candidate_indices, dist_to_nearest, n_samples, len(candidate_indices)
+        )
+        assert cy_best_idx == ref_best_idx == 0
+        assert np.isclose(cy_max_gain, ref_max_gain, rtol=1e-6)
+
     # -----------------------------------------------------------------------
     # 5. kmedoids_pp_trials vs NumPy
     # -----------------------------------------------------------------------
@@ -282,6 +312,37 @@ class TestCythonCore:
         assert ref_best_cand == cy_best_cand
         assert np.isclose(ref_best_pot, cy_best_pot, atol=10 ** (-places))
         np.testing.assert_allclose(ref_best_dist_sq, cy_best_dist_sq, rtol=rtol)
+
+    def test_kmedoids_pp_trials_float32_double_accumulation(self):
+        """kmedoids_pp_trials must accumulate potentials in float64 for float32 inputs."""
+        n_samples = 20000
+        closest_dist_sq = np.full(n_samples, 0.01, dtype=np.float32)
+        closest_dist_sq[0] = np.float32(500000.0)
+
+        dists_candidates = np.empty((2, n_samples), dtype=np.float32)
+        # Trial 0 reduces remaining 19999 entries from 0.01 to 0.001 (~180 reduction)
+        dists_candidates[0, 0] = np.float32(500000.0)
+        dists_candidates[0, 1:] = np.float32(0.001)
+        # Trial 1 only reduces entry 0 by 10.0 (far worse overall than Trial 0)
+        dists_candidates[1, 0] = np.float32(499990.0)
+        dists_candidates[1, 1:] = np.float32(0.01)
+
+        candidate_ids = np.array([1, 2], dtype=np.intp)
+        current_medoids = np.array([0], dtype=np.intp)
+
+        ref_pot0 = float(np.sum(np.minimum(closest_dist_sq, dists_candidates[0]), dtype=np.float64))
+        cy_best_cand, cy_best_pot, cy_best_dist_sq = _core.kmedoids_pp_trials(
+            closest_dist_sq,
+            dists_candidates,
+            candidate_ids,
+            current_medoids,
+            n_samples,
+            2,
+            1,
+        )
+        assert cy_best_cand == 1
+        assert np.isclose(cy_best_pot, ref_pot0, rtol=1e-7)
+        assert cy_best_dist_sq.dtype == np.float32
 
     # -----------------------------------------------------------------------
     # 6. is_matrix_symmetric vs NumPy

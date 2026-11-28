@@ -406,16 +406,16 @@ def pam_build_step(
     """Compute distance reduction gains for candidate medoids in PAM BUILD."""
     cdef:
         Py_ssize_t best_idx_in_cand = 0
-        floating max_gain = -1.0
+        double max_gain = -1.0
         Py_ssize_t c, i, cand
-        floating gain, diff
+        double gain, diff
 
     with nogil:
         for c in range(n_candidates):
             cand = candidate_indices[c]
             gain = 0.0
             for i in range(n_samples):
-                diff = dist_to_nearest[i] - D[i, cand]
+                diff = <double>dist_to_nearest[i] - <double>D[i, cand]
                 if diff > 0.0:
                     gain += diff
             if gain > max_gain:
@@ -438,7 +438,7 @@ def kmedoids_pp_trials(
     """Evaluate candidate medoid potential across trials."""
     cdef:
         intp_t best_cand = -1
-        floating best_pot = -1.0
+        double best_pot = -1.0
         cnp.ndarray[floating, ndim=1] best_dist_sq = np.empty(
             n_samples, dtype=np.float64 if floating is double else np.float32
         )
@@ -450,7 +450,8 @@ def kmedoids_pp_trials(
 
         Py_ssize_t t, i, m, cand_id
         int in_medoids
-        floating pot, val
+        double pot
+        floating val
 
     with nogil:
         for t in range(n_local_trials):
@@ -469,7 +470,7 @@ def kmedoids_pp_trials(
                 if dists_candidates[t, i] < val:
                     val = dists_candidates[t, i]
                 temp_v[i] = val
-                pot += val
+                pot += <double>val
 
             if best_pot < 0.0 or pot < best_pot:
                 best_pot = pot

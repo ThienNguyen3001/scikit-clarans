@@ -73,14 +73,14 @@ def initialize_heuristic(
     else:
         D = _pairwise_fast(X, metric=metric, metric_params=metric_params)
 
-    dist_sums = np.asarray(D.sum(axis=0)).ravel()
+    dist_sums = np.asarray(D.sum(axis=0, dtype=np.float64)).ravel()
     if (
         isinstance(D, np.ndarray)
         and np.issubdtype(dist_sums.dtype, np.floating)
         and np.isnan(dist_sums).any()
     ):
         nan_counts = np.isnan(D).sum(axis=0)
-        finite_sums = np.nansum(D, axis=0)
+        finite_sums = np.nansum(D, axis=0, dtype=np.float64)
         order = np.lexsort((finite_sums, nan_counts))
         current_medoids_indices = np.sort(order[:n_clusters])
     else:
@@ -150,14 +150,14 @@ def initialize_build(
     else:
         D = _pairwise_fast(X, metric=metric, metric_params=metric_params)
 
-    dist_sums = np.asarray(D.sum(axis=0)).ravel()
+    dist_sums = np.asarray(D.sum(axis=0, dtype=np.float64)).ravel()
     if (
         isinstance(D, np.ndarray)
         and np.issubdtype(dist_sums.dtype, np.floating)
         and np.isnan(dist_sums).any()
     ):
         nan_counts = np.isnan(D).sum(axis=0)
-        finite_sums = np.nansum(D, axis=0)
+        finite_sums = np.nansum(D, axis=0, dtype=np.float64)
         first_medoid = int(np.lexsort((finite_sums, nan_counts))[0])
         finite_vals = D[~np.isnan(D)]
         max_d = float(np.max(finite_vals)) if finite_vals.size > 0 else 1.0
@@ -195,7 +195,7 @@ def initialize_build(
         else:
             D_candidates = D_build[:, candidate_indices]
             diffs = dist_to_nearest[:, np.newaxis] - D_candidates
-            gains = np.sum(np.maximum(diffs, 0), axis=0)
+            gains = np.sum(np.maximum(diffs, 0), axis=0, dtype=np.float64)
             best_candidate = int(candidate_indices[np.argmax(gains)])
 
         medoid_indices[c] = best_candidate
@@ -289,10 +289,10 @@ def initialize_k_medoids_plus_plus(
         ).flatten()
 
     closest_dist_sq = closest**2
-    current_pot = float(closest_dist_sq.sum())
+    current_pot = float(closest_dist_sq.sum(dtype=np.float64))
     has_nan_closest = bool(np.isnan(current_pot))
     if has_nan_closest:
-        current_pot = float(np.nansum(closest_dist_sq))
+        current_pot = float(np.nansum(closest_dist_sq, dtype=np.float64))
 
     for c in range(1, n_clusters):
         if has_nan_closest:
@@ -301,7 +301,7 @@ def initialize_k_medoids_plus_plus(
             max_finite = float(np.max(finite_vals)) if finite_vals.size > 0 else 0.0
             fallback_w = max_finite if max_finite > 1e-16 else 1.0
             weights = np.where(nan_mask, fallback_w, closest_dist_sq)
-            sampling_pot = float(weights.sum())
+            sampling_pot = float(weights.sum(dtype=np.float64))
         else:
             if current_pot <= 1e-16:
                 medoid_indices[c] = _sample_distinct_candidate(rng, n_samples, medoid_indices[:c])
@@ -311,7 +311,7 @@ def initialize_k_medoids_plus_plus(
 
         rand_vals = rng.random_sample(n_local_trials) * sampling_pot
 
-        cumsum_dist = np.cumsum(weights)
+        cumsum_dist = np.cumsum(weights, dtype=np.float64)
 
         candidate_ids = np.searchsorted(cumsum_dist, rand_vals)
         np.clip(candidate_ids, 0, n_samples - 1, out=candidate_ids)
@@ -329,7 +329,7 @@ def initialize_k_medoids_plus_plus(
         best_dist_sq = None
         has_nan_cands = bool(
             (metric in ("nan_euclidean", "precomputed") or callable(metric))
-            and np.isnan(float(dists_candidates.sum()))
+            and np.isnan(float(dists_candidates.sum(dtype=np.float64)))
         )
 
         use_cython_pp = (
@@ -370,11 +370,11 @@ def initialize_k_medoids_plus_plus(
                 if has_nan_closest or has_nan_cands:
                     new_dist_sq = np.fmin(closest_dist_sq, dists_candidates[i])
                     n_uncovered = int(np.isnan(new_dist_sq).sum())
-                    new_pot = float(np.nansum(new_dist_sq))
+                    new_pot = float(np.nansum(new_dist_sq, dtype=np.float64))
                 else:
                     new_dist_sq = np.minimum(closest_dist_sq, dists_candidates[i])
                     n_uncovered = 0
-                    new_pot = float(new_dist_sq.sum())
+                    new_pot = float(new_dist_sq.sum(dtype=np.float64))
                 score = (n_uncovered, new_pot)
 
                 if best_score is None or score < best_score:
@@ -393,14 +393,15 @@ def initialize_k_medoids_plus_plus(
                     X, cand_row, metric=metric, metric_params=metric_params
                 ).ravel()
             best_dist_sq = np.fmin(closest_dist_sq, row_dist**2)
-            best_pot = float(np.nansum(best_dist_sq))
+            best_pot = float(np.nansum(best_dist_sq, dtype=np.float64))
 
         assert best_pot is not None and best_dist_sq is not None
         medoid_indices[c] = best_candidate
         current_pot = best_pot
         closest_dist_sq = best_dist_sq
         has_nan_closest = bool(
-            (has_nan_closest or has_nan_cands) and np.isnan(float(closest_dist_sq.sum()))
+            (has_nan_closest or has_nan_cands)
+            and np.isnan(float(closest_dist_sq.sum(dtype=np.float64)))
         )
 
     return medoid_indices
